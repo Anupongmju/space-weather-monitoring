@@ -1,0 +1,61 @@
+services:
+  # 1. ตัวจำลองฐานข้อมูล PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: space_weather_db
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: space_weather
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # ➕ เพิ่มฟังก์ชันตรวจสอบว่าฐานข้อมูลตื่นมาพร้อมทำงานจริงๆ แล้วหรือยัง
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d space_weather"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  # 2. ตัว Backend (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: space_weather_backend
+    restart: always # ➕ restart ทุกครั้งที่ crash ไม่จำกัดจำนวน
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /app/venv
+    environment:
+      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/space_weather
+      - ADMIN_PASSWORD=admin123
+    depends_on:
+      db:
+        condition: service_healthy # ➕ บังคับให้รอจนกว่า db จะผ่านการตรวจสุขภาพ (Healthcheck) ถึงจะเริ่มรัน Backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # 3. ตัว Frontend (Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: space_weather_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - backend
+    command: npm run dev -- --host
+
+# ประกาศที่เก็บข้อมูลถาวรสำหรับ Database
+volumes:
+  pgdata:

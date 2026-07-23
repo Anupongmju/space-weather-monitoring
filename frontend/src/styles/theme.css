@@ -1,0 +1,80 @@
+:root {
+  /* === OCEAN SKY BLUE THEME === */
+  --primary: #3498DB;
+  --primary-dark: #2980B9;
+  --primary-light: #89CFF0;
+  --primary-glow: rgba(52, 152, 219, 0.3);
+
+  /* Backgrounds — Subtle Deep Ocean Atmosphere */
+  --bg-base: #03060C;
+  --bg-surface: #050A14;
+  --bg-card: #060E1A;
+  --bg-card-hover: #0A1628;
+  --bg-sidebar: #040810;
+
+  /* Borders */
+  --border: rgba(52, 152, 219, 0.15);
+  --border-active: rgba(93, 173, 226, 0.4);
+
+  /* Text */
+  --text-primary: #F8F8FF;
+  --text-secondary: #A0B4CC;
+  --text-muted: #526A8A;
+  --text-accent: #5DADE2;
+
+  /* Status colors */
+  --status-normal: #22C55E;
+  --status-warning: #F59E0B;
+  --status-danger: #EF4444;
+  --status-info: #3B82F6;
+
+  /* Fonts */
+  --font-display: 'Orbitron', monospace;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+
+  /* Spacing */
+  --sidebar-width: 260px;
+  --navbar-height: 64px;
+
+  /* Effects */
+  --shadow-glow: 0 0 20px rgba(52, 152, 219, 0.2);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --transition: all 0.2s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { 
+  background: var(--primary-dark); 
+  border-radius: 3px; 
+}
+
+/* Glow text utility */
+.glow-text {
+  text-shadow: 0 0 20px var(--primary-glow);
+}
+
+/* Grid background */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(52, 152, 219, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 152, 219, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}

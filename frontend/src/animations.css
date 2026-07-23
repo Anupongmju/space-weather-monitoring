@@ -1,0 +1,148 @@
+/* ILRS NARIT Style Animations */
+@keyframes spin-slow {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes spin-reverse-slow {
+    0% { transform: translate(-50%, -50%) rotate(360deg); }
+    100% { transform: translate(-50%, -50%) rotate(0deg); }
+}
+
+@keyframes glow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-10px); }
+}
+
+@keyframes star-twinkle {
+    0%, 100% {
+        opacity: 0.1;
+        transform: scale(0.5);
+        filter: drop-shadow(0 0 0px rgba(137, 207, 240, 0));
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.6);
+        filter: drop-shadow(0 0 8px rgba(162, 213, 242, 1)) drop-shadow(0 0 18px rgba(52, 152, 219, 0.8));
+    }
+}
+
+.twinkle-star-1 { animation: star-twinkle 2.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.twinkle-star-2 { animation: star-twinkle 3.4s ease-in-out 0.6s infinite; transform-origin: center; transform-box: fill-box; }
+.twinkle-star-3 { animation: star-twinkle 4.2s ease-in-out 1.4s infinite; transform-origin: center; transform-box: fill-box; }
+.twinkle-star-4 { animation: star-twinkle 1.9s ease-in-out 0.9s infinite; transform-origin: center; transform-box: fill-box; }
+.twinkle-star-5 { animation: star-twinkle 2.8s ease-in-out 1.8s infinite; transform-origin: center; transform-box: fill-box; }
+
+.animate-spin-slow {
+    animation: spin-slow 60s linear infinite;
+}
+
+.animate-spin-reverse-slow {
+    animation: spin-reverse-slow 45s linear infinite;
+}
+
+.animate-glow {
+    animation: glow 4s ease-in-out infinite;
+}
+
+.animate-bounce-indicator {
+    animation: bounce 2s infinite;
+}
+
+.bg-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 3s infinite;
+}
+
+/* Glass Card Expanding Flex Grid */
+.flex-expanding-container {
+    display: flex;
+    gap: 16px;
+    height: 600px;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+    .flex-expanding-container {
+        flex-direction: column;
+        height: auto;
+    }
+}
+
+.glass-card {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.7s cubic-bezier(0.2, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    /* Default collapsed flex */
+    flex: 1;
+}
+
+.glass-card:hover, .glass-card.active {
+    flex: 4;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(52, 152, 219, 0.3); /* Blue accent */
+}
+
+@media (max-width: 1024px) {
+    .glass-card {
+        flex: none;
+        width: 100%;
+        height: auto;
+    }
+}
+
+/* Background gradient on hover */
+.glass-card .bg-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(8, 8, 10, 1), transparent);
+    opacity: 0;
+    transition: opacity 0.7s;
+    z-index: 0;
+}
+.glass-card:hover .bg-gradient, .glass-card.active .bg-gradient {
+    opacity: 1;
+}
+
+/* Content visibility transitions */
+.glass-card .content-hidden {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.7s;
+    pointer-events: none;
+    flex: 1;
+}
+
+.glass-card:hover .content-hidden, .glass-card.active .content-hidden {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

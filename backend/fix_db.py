@@ -1,0 +1,10 @@
+from database import get_conn
+conn = get_conn()
+c = conn.cursor()
+c.execute("DELETE FROM ace_swepam WHERE time_tag NOT LIKE '%Z'")
+c.execute("DELETE FROM ace_mag WHERE time_tag NOT LIKE '%Z'")
+c.execute("DELETE FROM ace_epam WHERE time_tag NOT LIKE '%Z'")
+c.execute("DELETE FROM ace_sis WHERE time_tag NOT LIKE '%Z'")
+conn.commit()
+conn.close()
+print("Fixed ACE tables")
