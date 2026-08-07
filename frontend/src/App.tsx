@@ -31,6 +31,7 @@ import MawTubes from './pages/cosmic/MawTubes'
 import MawScatter from './pages/cosmic/MawScatter'
 
 import SpaceWeatherOverview from './pages/analysis/SpaceWeatherOverview'
+import RadiationMonitoring from './pages/RadiationMonitoring'
 import NoaaReport from './pages/reports/NoaaReport'
 import News from './pages/News'
 import NewsDetail from './pages/NewsDetail'
@@ -95,6 +96,7 @@ export default function App() {
             <Route path='cosmic/maw/pressure' element={<MawPressure />} />
             <Route path='/cosmic/maw/tubes' element={<MawTubes />} />
             <Route path='/cosmic/maw/scatter' element={<MawScatter />} />
+            <Route path="/radiation" element={<RadiationMonitoring />} />
             <Route path="/analysis" element={<SpaceWeatherOverview />} />
             <Route path="/report" element={<NoaaReport />} />
             <Route path="/news" element={<News />} />

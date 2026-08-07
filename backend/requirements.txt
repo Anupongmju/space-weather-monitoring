@@ -3,3 +3,7 @@ uvicorn
 httpx
 psycopg2-binary
 python-dotenv
+cdflib
+netCDF4
+imageio
+imageio-ffmpeg

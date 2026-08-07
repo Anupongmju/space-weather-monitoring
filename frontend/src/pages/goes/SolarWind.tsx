@@ -1,22 +1,88 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveGoesWind, loadGoesWind } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import { useLineDrawing } from '../../hooks/useLineDrawing'
+
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 export default function SolarWind(){
   const [data,setData] = useState<any[]>([])
   const [loading,setLoading] = useState(true)
   const [fetching,setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
-  const chartRef = useRef(null)
+  const chartRef = useRef<any>(null)
 
-  const load = async () => {
-    const d = await loadGoesWind(limit);setData(d);setLoading(false)
+  // ── Trend Line Drawing ───────────────────────────────────────────────
+  const { lines, drawingMode, pendingP1, toggleDrawingMode, handleClick, removeLine, clearLines } = useLineDrawing()
+
+  // Wrapper div ref — used to compute pixel ↔ chart-coordinate conversion
+  const chartWrapperRef = useRef<HTMLDivElement>(null)
+  // Mouse position for the SVG ghost-line preview
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
+
+  // ── ECharts coordinate helpers ──────────────────────────────────────
+
+  /** Detect which ECharts grid (0–2) the mouse is inside using containPixel */
+  const detectGrid = useCallback((clientX: number, clientY: number): number | null => {
+    const instance = (chartRef.current as any)?.getEchartsInstance?.()
+    if (!instance) return null
+    const rect = chartWrapperRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const px = clientX - rect.left
+    const py = clientY - rect.top
+    for (let i = 0; i < 3; i++) {
+      try { if (instance.containPixel({ gridIndex: i }, [px, py])) return i } catch {}
+    }
+    return null
+  }, [])
+
+  /** client pixel → { time (ms), value } for a given gridIndex */
+  const pixelToCoord = useCallback((clientX: number, clientY: number, gridIndex: number) => {
+    const instance = (chartRef.current as any)?.getEchartsInstance?.()
+    if (!instance) return null
+    const rect = chartWrapperRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const result = instance.convertFromPixel({ gridIndex }, [clientX - rect.left, clientY - rect.top])
+    if (!Array.isArray(result)) return null
+    return { time: result[0] as number, value: result[1] as number }
+  }, [])
+
+  /** { time, value } → { x, y } pixel offset from chartWrapper top-left */
+  const coordToPixel = useCallback((time: number, value: number, gridIndex: number) => {
+    const instance = (chartRef.current as any)?.getEchartsInstance?.()
+    if (!instance) return null
+    const result = instance.convertToPixel({ gridIndex }, [time, value])
+    if (!Array.isArray(result)) return null
+    return { x: result[0] as number, y: result[1] as number }
+  }, [])
+
+  // ── P1 pixel position (for ghost line anchor) ────────────────────────
+  const p1Pixel = pendingP1
+    ? coordToPixel(pendingP1.time, pendingP1.value, pendingP1.gridIndex)
+    : null
+
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    try {
+      const sDate = appliedRange ? appliedRange.startDate : undefined
+      const eDate = appliedRange ? appliedRange.endDate : undefined
+      const d = await loadGoesWind(limit, sDate, eDate)
+      if (Array.isArray(d)) {
+        setData(d)
+      }
+    } catch (err) {
+      console.error('Failed to load solar wind data:', err)
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }
   
   const fetch_ = async () => {
@@ -24,17 +90,26 @@ export default function SolarWind(){
     try {
       await fetchAndSaveGoesWind()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadGoesWind(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-    await load()
-  }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
 
@@ -70,8 +145,6 @@ export default function SolarWind(){
       {
         gridIndex: 0,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -79,8 +152,6 @@ export default function SolarWind(){
       {
         gridIndex: 1,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -88,8 +159,6 @@ export default function SolarWind(){
       {
         gridIndex: 2,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -113,14 +182,14 @@ export default function SolarWind(){
         name: 'Speed (km/s)',
         nameLocation: 'middle',
         nameGap: 45,
-        nameTextStyle: { color: '#FB923C', fontSize: 10, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
+        nameTextStyle: { color: '#F59E0B', fontSize: 10, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
       },
       {
         gridIndex: 2,
-        type: 'log',
+        type: 'value',
         name: 'Temp (K)',
         nameLocation: 'middle',
         nameGap: 45,
@@ -134,78 +203,109 @@ export default function SolarWind(){
       {
         type: 'inside',
         xAxisIndex: [0, 1, 2],
-        filterMode: 'none'
+        filterMode: 'none',
+        rangeMode: ['value', 'value'],
+        zoomOnMouseWheel: !drawingMode,
+        moveOnMouseMove: !drawingMode,
+        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
     series: [
       {
         name: 'Density',
         type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
+        xAxisIndex: 0, yAxisIndex: 0,
         showSymbol: false,
         itemStyle: { color: '#FBBF24' },
         lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.density])
+        data: data.map(d => [d.time_tag, d.density]),
+        markLine: lines.filter(l => l.gridIndex === 0).length > 0 ? {
+          silent: true, symbol: ['circle', 'circle'],
+          symbolSize: 6,
+          data: lines.filter(l => l.gridIndex === 0).map(l => [
+            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
+            { coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
+              lineStyle: { color: l.color, width: 1.5, opacity: 0.9 },
+              label: { show: false } }
+          ])
+        } : undefined,
       },
       {
         name: 'Speed',
         type: 'line',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
+        xAxisIndex: 1, yAxisIndex: 1,
         showSymbol: false,
         itemStyle: { color: '#FB923C' },
         lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.speed])
+        data: data.map(d => [d.time_tag, d.speed]),
+        markLine: lines.filter(l => l.gridIndex === 1).length > 0 ? {
+          silent: true, symbol: ['circle', 'circle'],
+          symbolSize: 6,
+          data: lines.filter(l => l.gridIndex === 1).map(l => [
+            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
+            { coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
+              lineStyle: { color: l.color, width: 1.5, opacity: 0.9 },
+              label: { show: false } }
+          ])
+        } : undefined,
       },
       {
         name: 'Temperature',
         type: 'line',
-        xAxisIndex: 2,
-        yAxisIndex: 2,
+        xAxisIndex: 2, yAxisIndex: 2,
         showSymbol: false,
         itemStyle: { color: '#38BDF8' },
         lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.temperature])
-      }
+        data: data.map(d => [d.time_tag, d.temperature]),
+        markLine: lines.filter(l => l.gridIndex === 2).length > 0 ? {
+          silent: true, symbol: ['circle', 'circle'],
+          symbolSize: 6,
+          data: lines.filter(l => l.gridIndex === 2).map(l => [
+            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
+            { coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
+              lineStyle: { color: l.color, width: 1.5, opacity: 0.9 },
+              label: { show: false } }
+          ])
+        } : undefined,
+      },
     ]
+  }
+
+  // ── Stats for each committed line ──────────────────────────────────────
+  const GRID_UNITS = ['p/cc', 'km/s', 'K']
+
+  function fmtDuration(ms: number) {
+    const totalMin = Math.round(Math.abs(ms) / 60000)
+    const h = Math.floor(totalMin / 60), m = totalMin % 60
+    return h > 0 ? `${h}h ${m}m` : `${m}m`
+  }
+  function fmtValue(v: number, gridIndex: number) {
+    return gridIndex === 2 ? Math.round(v).toLocaleString() : v.toFixed(2)
   }
 
   return(
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
       
-      {/* Seamless Header */}
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
         marginBottom: 28, flexWrap: 'wrap', gap: 16,
         paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
-            GOES / SOLAR WIND
+          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F59E0B', margin: 0, letterSpacing: -0.5 }}>
+            GOES / SOLAR WIND PLASMA
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Solar Wind Plasma — Density, Speed, Temperature · GEO Orbit
+            Real-Time Solar Wind Density, Speed & Temperature (GOES Spacecraft)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #F59E0B' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#F59E0B', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
@@ -221,16 +321,28 @@ export default function SolarWind(){
         </div>
       </div>
 
-      {/* Transparent Telemetry Metrics Strip */}
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#F59E0B"
+          loading={loading}
+        />
+      </div>
+
+      {/* Metric Cards Banner */}
       {latest && (
         <div style={{
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, marginBottom: 24, padding: '0 8px', background: 'transparent', border: 'none'
+          gap: 24, marginBottom: 28, padding: '0 8px', background: 'transparent', border: 'none'
         }}>
           {[
-            { label: 'PROTON DENSITY', value: latest.density?.toFixed(1), unit: 'p/cc', color: '#FBBF24' },
-            { label: 'SOLAR WIND SPEED', value: latest.speed?.toFixed(0), unit: 'km/s', color: '#FB923C' },
-            { label: 'PLASMA TEMP', value: latest.temperature ? (latest.temperature/1000).toFixed(0)+'k' : '—', unit: 'K', color: '#38BDF8' },
+            { label: 'DENSITY (p/cc)', value: latest.density?.toFixed(1) ?? '—', color: '#FBBF24', unit: 'p/cm³' },
+            { label: 'SPEED (km/s)', value: latest.speed?.toFixed(0) ?? '—', color: '#FB923C', unit: 'km/s' },
+            { label: 'TEMPERATURE (K)', value: latest.temperature ? Math.round(latest.temperature).toLocaleString() : '—', color: '#38BDF8', unit: 'K' },
           ].map((s, idx) => (
             <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
               <div>
@@ -239,7 +351,7 @@ export default function SolarWind(){
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
                   <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: s.color }}>
-                    {s.value ?? '—'}
+                    {s.value}
                   </span>
                   <span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
                     {s.unit}
@@ -254,8 +366,189 @@ export default function SolarWind(){
 
       {/* Combined Multi-Grid Chart Block */}
       {loading ? <LoadingSpinner /> : (
-        <Card title="GOES SOLAR WIND PLASMA METRICS (REAL-TIME)" style={{ marginBottom: 16 }}>
-          <ReactECharts ref={chartRef} option={option} style={{ height: 500, width: '100%' }} notMerge={true} />
+        <Card
+          title="GOES SOLAR WIND PLASMA METRICS (REAL-TIME)"
+          style={{ marginBottom: 16 }}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {panLoading && (
+                <span style={{ fontSize: 11, color: '#F59E0B', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              {/* ── Trend Line Toolbar ── */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Status hint while drawing */}
+                {drawingMode && (
+                  <span style={{
+                    fontSize: 10, fontFamily: 'var(--font-mono)', color: pendingP1 ? '#FBBF24' : '#A78BFA',
+                    fontWeight: 600, letterSpacing: 0.3,
+                  }}>
+                    {pendingP1 ? '● P1 SET — CLICK P2' : '○ CLICK P1 ON ANY CHART'}
+                  </span>
+                )}
+                <button
+                  onClick={toggleDrawingMode}
+                  title="วาดเส้น trend line: คลิก P1 → คลิก P2"
+                  style={{
+                    padding: '4px 10px',
+                    background: drawingMode ? 'rgba(167,139,250,0.2)' : 'transparent',
+                    border: `1px solid ${drawingMode ? '#A78BFA' : 'rgba(255,255,255,0.2)'}`,
+                    color: drawingMode ? '#A78BFA' : '#94A3B8',
+                    fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                    cursor: 'pointer', letterSpacing: 0.5,
+                    transition: 'all 0.2s', borderRadius: 2,
+                  }}
+                >
+                  {drawingMode ? '╱ DRAWING ON' : '╱ DRAW LINE'}
+                </button>
+                {lines.length > 0 && (
+                  <button
+                    onClick={clearLines}
+                    style={{
+                      padding: '4px 10px', background: 'transparent',
+                      border: '1px solid rgba(248,113,113,0.4)', color: '#F87171',
+                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                      cursor: 'pointer', letterSpacing: 0.5, borderRadius: 2,
+                    }}
+                  >
+                    CLEAR ({lines.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          }
+        >
+          {/* ── Chart wrapper with interactive SVG overlay ── */}
+          <div
+            ref={chartWrapperRef}
+            style={{
+              position: 'relative', height: 500, width: '100%',
+              cursor: drawingMode ? 'crosshair' : 'default',
+            }}
+            onClick={(e) => {
+              if (!drawingMode) return
+              const gIdx = detectGrid(e.clientX, e.clientY)
+              if (gIdx == null) return
+              const coord = pixelToCoord(e.clientX, e.clientY, gIdx)
+              if (coord == null) return
+              handleClick(coord.time, coord.value, gIdx)
+            }}
+            onMouseMove={(e) => {
+              if (!drawingMode || !pendingP1) { setMousePos(null); return }
+              const rect = chartWrapperRef.current?.getBoundingClientRect()
+              if (!rect) return
+              setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+            }}
+            onMouseLeave={() => setMousePos(null)}
+          >
+            <ReactECharts
+              ref={chartRef}
+              option={option}
+              style={{ height: 500, width: '100%' }}
+              onChartReady={onChartReady}
+              onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+            />
+
+            {/* ── SVG overlay: ghost line + committed line endpoints + stats ── */}
+            <svg
+              style={{
+                position: 'absolute', top: 0, left: 0,
+                width: '100%', height: '100%',
+                pointerEvents: 'none', overflow: 'visible',
+              }}
+            >
+              {/* Ghost preview line from P1 to mouse */}
+              {drawingMode && p1Pixel && mousePos && (
+                <line
+                  x1={p1Pixel.x} y1={p1Pixel.y}
+                  x2={mousePos.x} y2={mousePos.y}
+                  stroke="rgba(255,255,255,0.35)"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                />
+              )}
+              {/* P1 pending dot */}
+              {drawingMode && p1Pixel && (
+                <circle cx={p1Pixel.x} cy={p1Pixel.y} r={5}
+                  fill="#A78BFA" stroke="rgba(255,255,255,0.6)" strokeWidth={1.5}
+                />
+              )}
+            </svg>
+
+            {/* ── Stats panels for each committed line ── */}
+            {lines.map(l => {
+              const px1 = coordToPixel(l.p1.time, l.p1.value, l.gridIndex)
+              const px2 = coordToPixel(l.p2.time, l.p2.value, l.gridIndex)
+              if (!px1 || !px2) return null
+
+              const pct = l.p1.value !== 0
+                ? ((l.p2.value - l.p1.value) / Math.abs(l.p1.value)) * 100
+                : 0
+              const delta = l.p2.value - l.p1.value
+              const duration = fmtDuration(l.p2.time - l.p1.time)
+              const pctColor = pct >= 0 ? '#34D399' : '#F87171'
+              const unit = GRID_UNITS[l.gridIndex]
+
+              // Place stats label at midpoint of line
+              const midX = (px1.x + px2.x) / 2
+              const midY = (px1.y + px2.y) / 2
+
+              return (
+                <div key={l.id} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                  {/* Endpoint dots (double-click to remove) */}
+                  {[px1, px2].map((pt, i) => (
+                    <div
+                      key={i}
+                      title="ดับเบิลคลิกเพื่อลบเส้น"
+                      onDoubleClick={(e) => { e.stopPropagation(); removeLine(l.id) }}
+                      style={{
+                        position: 'absolute',
+                        left: pt.x - 5, top: pt.y - 5,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: l.color,
+                        border: '1.5px solid rgba(255,255,255,0.5)',
+                        boxShadow: `0 0 6px ${l.color}`,
+                        cursor: 'pointer',
+                        pointerEvents: 'all',
+                        zIndex: 10,
+                      }}
+                    />
+                  ))}
+
+                  {/* Stats badge at midpoint */}
+                  <div style={{
+                    position: 'absolute',
+                    left: midX + 8,
+                    top: midY - 36,
+                    background: 'rgba(5,10,20,0.92)',
+                    border: `1px solid ${l.color}66`,
+                    borderRadius: 4,
+                    padding: '5px 8px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    zIndex: 20,
+                    boxShadow: `0 2px 12px rgba(0,0,0,0.6), 0 0 8px ${l.color}22`,
+                  }}>
+                    <div style={{ color: l.color, fontWeight: 700, marginBottom: 2, letterSpacing: 0.3 }}>
+                      ▲ {fmtValue(l.p1.value, l.gridIndex)} → {fmtValue(l.p2.value, l.gridIndex)} {unit}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <span style={{ color: pctColor, fontWeight: 700 }}>
+                        {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                      </span>
+                      <span style={{ color: '#94A3B8' }}>
+                        {delta >= 0 ? '+' : ''}{fmtValue(delta, l.gridIndex)}
+                      </span>
+                      <span style={{ color: '#64748B' }}>{duration}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </Card>
       )}
 

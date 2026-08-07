@@ -5,34 +5,53 @@ import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 export default function Epam() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
 
-  const load = async () => { const d = await loadEpam(limit); setData(d); setLoading(false) }
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    const sDate = appliedRange ? appliedRange.startDate : undefined
+    const eDate = appliedRange ? appliedRange.endDate : undefined
+    const d = await loadEpam(limit, sDate, eDate)
+    setData(d)
+    if (showLoading) setLoading(false)
+  }
   
   const fetch_ = async () => {
     setFetching(true)
     try {
       await fetchAndSaveEpam()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadEpam(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-    await load()
-  }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
 
@@ -67,8 +86,6 @@ export default function Epam() {
       {
         gridIndex: 0,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -76,8 +93,6 @@ export default function Epam() {
       {
         gridIndex: 1,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -111,7 +126,11 @@ export default function Epam() {
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        filterMode: 'none'
+        filterMode: 'none',
+        rangeMode: ['value', 'value'],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
     series: [
@@ -126,38 +145,26 @@ export default function Epam() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
       
-      {/* Seamless Header */}
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
         marginBottom: 28, flexWrap: 'wrap', gap: 16,
         paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#C084FC', margin: 0, letterSpacing: -0.5 }}>
             ACE / EPAM
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Electron Proton Alpha Monitor — Energetic Particles · L1 Orbit
+            Electron, Proton, and Alpha Monitor · Energetic Particle Spectrometer (L1 Orbit)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #C084FC' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
@@ -171,6 +178,18 @@ export default function Epam() {
             {fetching ? 'FETCHING...' : 'REFRESH'}
           </button>
         </div>
+      </div>
+
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#C084FC"
+          loading={loading}
+        />
       </div>
 
       {/* Transparent Telemetry Metrics Strip */}
@@ -204,8 +223,16 @@ export default function Epam() {
 
       {/* Combined Multi-Grid Chart Block */}
       {loading ? <LoadingSpinner /> : (
-        <Card title="EPAM CHARGED PARTICLES FLUX (REAL-TIME)" style={{ marginBottom: 16 }}>
-          <ReactECharts ref={chartRef} option={option} style={{ height: 450, width: '100%' }} notMerge={true} />
+        <Card
+          title="EPAM CHARGED PARTICLES FLUX (REAL-TIME)"
+          style={{ marginBottom: 16 }}
+          extra={panLoading ? (
+            <span style={{ fontSize: 11, color: '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          ) : null}
+        >
+          <ReactECharts option={option} style={{ height: 450, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
         </Card>
       )}
 

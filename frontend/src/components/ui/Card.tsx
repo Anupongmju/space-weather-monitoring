@@ -3,12 +3,13 @@ import { ReactNode, CSSProperties } from 'react';
 interface CardProps {
   title?: string;
   subtitle?: string;
+  extra?: ReactNode;
   children?: ReactNode;
   style?: CSSProperties;
   accent?: boolean;
 }
 
-export default function Card({ title, subtitle, children, style, accent = false }: CardProps) {
+export default function Card({ title, subtitle, extra, children, style, accent = false }: CardProps) {
   const cornerColor = accent ? '#5DADE2' : '#3498DB';
 
   return (
@@ -28,28 +29,31 @@ export default function Card({ title, subtitle, children, style, accent = false 
       <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: `2px solid ${cornerColor}`, borderLeft: `2px solid ${cornerColor}`, pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: `2px solid ${cornerColor}`, borderRight: `2px solid ${cornerColor}`, pointerEvents: 'none' }} />
 
-      {(title || subtitle) && (
-        <div style={{ marginBottom: 16 }}>
-          {title && (
-            <h3 style={{
-              fontFamily: "'Orbitron', monospace",
-              fontSize: 12, fontWeight: 600,
-              color: '#3498DB', letterSpacing: 2,
-              textTransform: 'uppercase', margin: 0,
-              display: 'flex', alignItems: 'center', gap: 8
-            }}>
-              <span style={{ width: 4, height: 12, background: '#3498DB', display: 'inline-block' }} />
-              {title}
-            </h3>
-          )}
-          {subtitle && (
-            <p style={{
-              fontSize: 12, color: '#A0B4CC',
-              margin: '4px 0 0', fontFamily: "'Share Tech Mono', monospace",
-            }}>
-              {subtitle}
-            </p>
-          )}
+      {(title || subtitle || extra) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            {title && (
+              <h3 style={{
+                fontFamily: "'Orbitron', monospace",
+                fontSize: 12, fontWeight: 600,
+                color: '#3498DB', letterSpacing: 2,
+                textTransform: 'uppercase', margin: 0,
+                display: 'flex', alignItems: 'center', gap: 8
+              }}>
+                <span style={{ width: 4, height: 12, background: '#3498DB', display: 'inline-block' }} />
+                {title}
+              </h3>
+            )}
+            {subtitle && (
+              <p style={{
+                fontSize: 12, color: '#A0B4CC',
+                margin: '4px 0 0', fontFamily: "'Share Tech Mono', monospace",
+              }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
+          {extra && <div>{extra}</div>}
         </div>
       )}
       {children}

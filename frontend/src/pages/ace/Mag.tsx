@@ -5,34 +5,53 @@ import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 export default function Mag() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
 
-  const load = async () => { const d = await loadMag(limit); setData(d); setLoading(false) }
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    const sDate = appliedRange ? appliedRange.startDate : undefined
+    const eDate = appliedRange ? appliedRange.endDate : undefined
+    const d = await loadMag(limit, sDate, eDate)
+    setData(d)
+    if (showLoading) setLoading(false)
+  }
 
   const fetch_ = async () => {
     setFetching(true)
     try {
       await fetchAndSaveMag()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadMag(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-    await load()
-  }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
   const bzStatus = !latest ? 'offline' : latest.bz < -10 ? 'danger' : latest.bz < 0 ? 'warning' : 'normal'
@@ -50,7 +69,7 @@ export default function Mag() {
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#0F172A',
-      borderColor: 'rgba(59,130,246,0.6)',
+      borderColor: 'rgba(56,189,248,0.6)',
       borderWidth: 1.5,
       padding: 14,
       textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
@@ -61,15 +80,13 @@ export default function Mag() {
       link: [{ xAxisIndex: 'all' }]
     },
     grid: [
-      { top: 40, left: 65, right: 20, height: 160 },    // Grid 0: Bz & Bt
-      { top: 250, left: 65, right: 20, height: 160 }    // Grid 1: Bx & By
+      { top: 40, left: 65, right: 20, height: 160 },    // Grid 0: Bt / Bz
+      { top: 250, left: 65, right: 20, height: 160 }    // Grid 1: Bx / By
     ],
     xAxis: [
       {
         gridIndex: 0,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -77,8 +94,6 @@ export default function Mag() {
       {
         gridIndex: 1,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -112,7 +127,11 @@ export default function Mag() {
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        filterMode: 'none'
+        filterMode: 'none',
+        rangeMode: ['value', 'value'],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
     series: [
@@ -122,7 +141,7 @@ export default function Mag() {
         xAxisIndex: 0,
         yAxisIndex: 0,
         showSymbol: false,
-        itemStyle: { color: '#C084FC' },
+        itemStyle: { color: '#A855F7' },
         lineStyle: { width: 2 },
         data: data.map(d => [d.time_tag, d.bt])
       },
@@ -132,15 +151,9 @@ export default function Mag() {
         xAxisIndex: 0,
         yAxisIndex: 0,
         showSymbol: false,
-        itemStyle: { color: '#38BDF8' },
-        lineStyle: { width: 2.2 },
-        data: data.map(d => [d.time_tag, d.bz]),
-        markLine: {
-          data: [{ yAxis: 0 }],
-          lineStyle: { color: 'rgba(239, 68, 68, 0.6)', type: 'dashed', width: 1.2 },
-          symbol: ['none', 'none'],
-          label: { show: false },
-        }
+        itemStyle: { color: '#EF4444' },
+        lineStyle: { width: 2 },
+        data: data.map(d => [d.time_tag, d.bz])
       },
       {
         name: 'Bx',
@@ -148,15 +161,9 @@ export default function Mag() {
         xAxisIndex: 1,
         yAxisIndex: 1,
         showSymbol: false,
-        itemStyle: { color: '#FB923C' },
-        lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.bx]),
-        markLine: {
-          data: [{ yAxis: 0 }],
-          lineStyle: { color: 'rgba(255, 255, 255, 0.25)', type: 'dashed' },
-          symbol: ['none', 'none'],
-          label: { show: false },
-        }
+        itemStyle: { color: '#38BDF8' },
+        lineStyle: { width: 1.5 },
+        data: data.map(d => [d.time_tag, d.bx])
       },
       {
         name: 'By',
@@ -164,8 +171,8 @@ export default function Mag() {
         xAxisIndex: 1,
         yAxisIndex: 1,
         showSymbol: false,
-        itemStyle: { color: '#4ADE80' },
-        lineStyle: { width: 2 },
+        itemStyle: { color: '#FBBF24' },
+        lineStyle: { width: 1.5 },
         data: data.map(d => [d.time_tag, d.by])
       }
     ]
@@ -174,39 +181,27 @@ export default function Mag() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
       
-      {/* Seamless Header */}
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
         marginBottom: 28, flexWrap: 'wrap', gap: 16,
         paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#38BDF8', margin: 0, letterSpacing: -0.5 }}>
             ACE / MAG
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Interplanetary Magnetic Field Vector (Bx, By, Bz, Bt) · L1 Orbit
+            Magnetometer · Interplanetary Magnetic Field Vectors (L1 Orbit)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #38BDF8' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
-          <StatusBadge status={bzStatus} label={bzStatus === 'danger' ? 'Southward Bz Risk' : bzStatus === 'warning' ? 'Southward Bz' : 'Normal'} />
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#38BDF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
+          <StatusBadge status={bzStatus} />
           <button
             onClick={fetch_}
             disabled={fetching}
@@ -219,6 +214,18 @@ export default function Mag() {
             {fetching ? 'FETCHING...' : 'REFRESH'}
           </button>
         </div>
+      </div>
+
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#38BDF8"
+          loading={loading}
+        />
       </div>
 
       {/* Transparent Telemetry Metrics Strip */}
@@ -255,8 +262,16 @@ export default function Mag() {
 
       {/* Unified Multi-Grid Chart Block */}
       {loading ? <LoadingSpinner /> : (
-        <Card title="MAGNETOMETER METRICS (REAL-TIME)" style={{ marginBottom: 16 }}>
-          <ReactECharts ref={chartRef} option={option} style={{ height: 450, width: '100%' }} notMerge={true} />
+        <Card
+          title="ACE MAGNETIC FIELD (L1 ORBIT)"
+          style={{ marginBottom: 16 }}
+          extra={panLoading ? (
+            <span style={{ fontSize: 11, color: '#38BDF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          ) : null}
+        >
+          <ReactECharts option={option} style={{ height: 450, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
         </Card>
       )}
 

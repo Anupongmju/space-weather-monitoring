@@ -1,24 +1,42 @@
 import { useEffect, useState, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
-import { fetchAndSaveSwepam, loadSwepam } from '../../services/aceService'
+import { fetchAndSaveSwepam, loadSwepam, fetchArchiveSwepam } from '../../services/aceService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 export default function Swepam() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
 
-  const load = async () => {
-    const d = await loadSwepam(limit)
-    setData(d)
-    setLoading(false)
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    const sDate = appliedRange ? appliedRange.startDate : undefined
+    const eDate = appliedRange ? appliedRange.endDate : undefined
+    let d: any[] = []
+    try {
+      if (sDate && eDate) {
+        // On-demand archive fetch (does not persist to DB)
+        d = await fetchArchiveSwepam(sDate, eDate, 10000)
+      } else {
+        d = await loadSwepam(limit)
+      }
+    } catch (err) {
+      console.error('Failed to load swepam data:', err)
+      d = []
+    } finally {
+      setData(d)
+      if (showLoading) setLoading(false)
+    }
   }
 
   const fetch_ = async () => {
@@ -26,17 +44,26 @@ export default function Swepam() {
     try {
       await fetchAndSaveSwepam()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadSwepam(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-    await load()
-  }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
 
@@ -75,8 +102,6 @@ export default function Swepam() {
       {
         gridIndex: 0,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -84,8 +109,6 @@ export default function Swepam() {
       {
         gridIndex: 1,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { show: false },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -93,8 +116,6 @@ export default function Swepam() {
       {
         gridIndex: 2,
         type: 'time',
-        min: minT,
-        max: visibleMax,
         axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
@@ -144,7 +165,11 @@ export default function Swepam() {
       {
         type: 'inside',
         xAxisIndex: [0, 1, 2],
-        filterMode: 'none'
+        filterMode: 'none',
+        rangeMode: ['value', 'value'],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
     series: [
@@ -184,45 +209,33 @@ export default function Swepam() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
 
-      {/* Seamless Header */}
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
         marginBottom: 28, flexWrap: 'wrap', gap: 16,
         paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#FB923C', margin: 0, letterSpacing: -0.5 }}>
             ACE / SWEPAM
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Solar Wind Electrons Protons and Alpha Monitor · L1 Orbit
+            Solar Wind Electron Proton Alpha Monitor · Solar Wind Plasma Parameters (L1 Orbit)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #3498DB' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#FB923C', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
             disabled={fetching}
             style={{
               padding: '4px 10px', background: 'transparent', border: 'none',
-              color: '#3498DB', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+              color: '#FB923C', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
               cursor: fetching ? 'not-allowed' : 'pointer', opacity: fetching ? 0.6 : 1
             }}
           >
@@ -231,16 +244,28 @@ export default function Swepam() {
         </div>
       </div>
 
-      {/* Transparent Telemetry Metrics Strip */}
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#FB923C"
+          loading={loading}
+        />
+      </div>
+
+      {/* SWEPAM Plasma Metrics Banner */}
       {latest && (
         <div style={{
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, marginBottom: 24, padding: '0 8px', background: 'transparent', border: 'none'
+          gap: 24, marginBottom: 28, padding: '0 8px', background: 'transparent', border: 'none'
         }}>
           {[
-            { label: 'PROTON DENSITY', value: latest.proton_density?.toFixed(1), unit: 'n/cc', color: '#3498DB' },
+            { label: 'PROTON DENSITY', value: latest.proton_density?.toFixed(1), unit: 'p/cm³', color: '#3498DB' },
             { label: 'BULK SPEED', value: latest.bulk_speed?.toFixed(0), unit: 'km/s', color: '#38BDF8' },
-            { label: 'ION TEMP', value: latest.ion_temp ? (latest.ion_temp / 1000).toFixed(0) + 'k' : '—', unit: 'K', color: '#C084FC' },
+            { label: 'ION TEMPERATURE', value: latest.ion_temp ? Math.round(latest.ion_temp).toLocaleString() : '—', unit: 'K', color: '#C084FC' },
           ].map((s, idx) => (
             <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
               <div>
@@ -262,10 +287,18 @@ export default function Swepam() {
         </div>
       )}
 
-      {/* Unified Multi-Grid Chart Block */}
+      {/* SWEPAM Multi-Grid Chart Block */}
       {loading ? <LoadingSpinner /> : (
-        <Card title="SWEPAM TIME SERIES METRICS (REAL-TIME)" style={{ marginBottom: 16 }}>
-          <ReactECharts ref={chartRef} option={option} style={{ height: 500, width: '100%' }} notMerge={true} />
+        <Card
+          title="SWEPAM PLASMA METRICS (REAL-TIME)"
+          style={{ marginBottom: 16 }}
+          extra={panLoading ? (
+            <span style={{ fontSize: 11, color: '#3498DB', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          ) : null}
+        >
+          <ReactECharts option={option} style={{ height: 500, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
         </Card>
       )}
 

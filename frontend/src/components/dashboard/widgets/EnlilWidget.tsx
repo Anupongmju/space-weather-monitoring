@@ -58,7 +58,11 @@ export default function EnlilWidget() {
     loadLatestVideo();
   }, []);
 
-  const videoSrc = `${API_BASE}/static/enlil_latest.mp4`;
+  const videoSrc = React.useMemo(() => {
+    const t = videoInfo?.last_modified || 0;
+    const path = videoInfo?.latest_video_url || '/static/enlil_latest.mp4';
+    return `${API_BASE}${path}${t ? `?t=${t}` : ''}`;
+  }, [videoInfo?.latest_video_url, videoInfo?.last_modified]);
 
   return (
     <div style={{

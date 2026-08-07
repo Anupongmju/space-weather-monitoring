@@ -25,16 +25,14 @@ const DATA_SOURCES = [
     ]
   },
   {
-    section: 'GROUND-BASED',
+    section: 'GROUND-BASED & LUNAR',
     items: [
+      { label: 'Radiation & Particles', path: '/radiation', tag: 'RAD' },
       { label: 'NeutronMonitor', path: '/cosmic/neutron', tag: 'NM' },
       { label: 'MAW Pressure', path: '/cosmic/maw/pressure', tag: 'PS' },
       { label: 'MAW Counts', path: '/cosmic/maw/counts', tag: 'MC' },
       { label: 'MAW Scatter', path: '/cosmic/maw/scatter', tag: 'MST' },
       { label: 'MAW Tubes', path: '/cosmic/maw/tubes', tag: 'MT' },
-
-
-
     ]
   },
 ]
@@ -220,6 +218,7 @@ export default function Navbar() {
         </div>
 
         {[
+          { label: 'Radiation', to: '/radiation' },
           { label: 'Analysis', to: '/analysis' },
           { label: 'News', to: '/news' },
           { label: 'Report', to: '/report' },

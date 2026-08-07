@@ -37,14 +37,20 @@ def ping_self():
         print(f"[Ping] Failed: {e}")
 
 def fetch_realtime():
-    """ดึงข้อมูล ACE/GOES/Cosmic ทุก 5 นาที"""
+    """ดึงข้อมูล ACE/GOES/Cosmic/Radiation ทุก 5 นาที"""
     try:
         from fetchers.ace_fetcher import fetch_all_ace
         from fetchers.goes_fetcher import fetch_all_goes
         from fetchers.cosmic_fetcher import fetch_all_cosmic
+        from fetchers.stereo_fetcher import fetch_stereo_particles
+        from fetchers.solar1_fetcher import fetch_solar1_rtsw
+        from fetchers.crater_fetcher import fetch_crater_doserates
         fetch_all_ace()
         fetch_all_goes()
         fetch_all_cosmic()
+        fetch_stereo_particles()
+        fetch_solar1_rtsw()
+        fetch_crater_doserates()
         print(f"[Scheduler] Realtime data updated: {datetime.now(timezone.utc)}")
     except Exception as e:
         print(f"[Scheduler] Realtime Error: {e}")
@@ -78,7 +84,8 @@ def start_scheduler():
                     print(f"[Scheduler] ENLIL Error: {e}")
             enlil_counter += 1
 
-            cleanup_old_data()
+            # Disabled cleanup to preserve historical data indefinitely.
+            # cleanup_old_data()
             time.sleep(3600)
 
     # รัน 2 threads พร้อมกัน

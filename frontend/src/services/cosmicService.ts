@@ -46,8 +46,13 @@ export const fetchAllCosmic = (): Promise<any> =>
   fetch(`${BASE}/fetch`, { method: 'POST' }).then(r => r.json())
 
 // ── Load from SQLite ──
-export const loadNeutron = (station = 'OULU', limit = 1440): Promise<any[]> =>
-  fetch(`${BASE}/neutron?station=${station}&limit=${limit}`).then(r => r.json())
+export const loadNeutron = (station = 'OULU', limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/neutron?station=${encodeURIComponent(station)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/neutron?station=${encodeURIComponent(station)}&limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
 
 export const loadNeutronWithFallback = async (
   stations = ['OULU', 'SOPO', 'JUNG1', 'THUL', 'MOSC', 'KIEL2'],

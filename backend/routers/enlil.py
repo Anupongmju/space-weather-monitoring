@@ -7,17 +7,21 @@ router = APIRouter(prefix="/api/enlil", tags=["enlil"])
 @router.get("/latest")
 def get_latest_enlil():
     latest_mp4 = os.path.join(STATIC_DIR, "enlil_latest.mp4")
-    if not os.path.exists(latest_mp4):
-        # If video doesn't exist yet, fetch and convert it on-demand
+    latest_mpg = os.path.join(STATIC_DIR, "enlil_latest.mpg")
+    
+    target_file = latest_mp4 if os.path.exists(latest_mp4) else (latest_mpg if os.path.exists(latest_mpg) else None)
+    
+    if not target_file:
         result = fetch_latest_enlil_video()
         return result
     
-    stat = os.stat(latest_mp4)
+    stat = os.stat(target_file)
+    rel_url = f"/static/{os.path.basename(target_file)}"
     return {
         "status": "success",
-        "latest_video_url": "/static/enlil_latest.mp4",
+        "latest_video_url": rel_url,
         "size_bytes": stat.st_size,
-        "last_modified": stat.st_mtime
+        "last_modified": int(stat.st_mtime * 1000)
     }
 
 @router.post("/fetch")

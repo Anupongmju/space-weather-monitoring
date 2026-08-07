@@ -129,14 +129,30 @@ def init_db():
         corr_factor REAL, stat_error REAL, status_flag INTEGER
     )''')
 
-    c.execute('''CREATE TABLE IF NOT EXISTS news (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        image_url TEXT,
-        author TEXT DEFAULT 'Admin',
-        published_at TIMESTAMPTZ DEFAULT NOW(),
-        canva_url TEXT
+    c.execute('''CREATE TABLE IF NOT EXISTS stereo_particles (
+        time_tag TEXT PRIMARY KEY,
+        ele_b02 REAL, ele_b05 REAL, ele_b10 REAL, ele_b15 REAL,
+        pro_b02 REAL, pro_b05 REAL, pro_b10 REAL, pro_b15 REAL
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS solar1_rtsw (
+        time_tag TEXT PRIMARY KEY,
+        proton_density REAL, proton_speed REAL, proton_temperature REAL,
+        active BOOLEAN
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS crater_doserates (
+        time_tag TEXT PRIMARY KEY,
+        julian_date REAL,
+        d12 REAL, d34 REAL, d56 REAL,
+        d1 REAL, d2 REAL, d3 REAL, d4 REAL, d5 REAL, d6 REAL
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS solar1_stis_particles (
+        time_tag TEXT PRIMARY KEY,
+        p1 REAL, p2 REAL, p3 REAL, p4 REAL, p5 REAL, p6 REAL, p7 REAL, p8 REAL,
+        de1 REAL, de2 REAL, de3 REAL, de4 REAL,
+        active BOOLEAN DEFAULT TRUE
     )''')
 
     conn.commit()

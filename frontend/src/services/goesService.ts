@@ -11,11 +11,41 @@ export const fetchAndSaveGoesWind = (): Promise<any> => fetch(`${BASE}/fetch/win
 export const fetchAllGOES = (): Promise<any> => fetch(`${BASE}/fetch`, { method: 'POST' }).then(r => r.json())
 
 // ── Load from SQLite ──
-export const loadXray     = (limit = 1440): Promise<any[]> => fetch(`${BASE}/xray?limit=${limit}`).then(r => r.json())
-export const loadProton   = (limit = 1440): Promise<any[]> => fetch(`${BASE}/proton?limit=${limit}`).then(r => r.json())
-export const loadElectron = (limit = 1440): Promise<any[]> => fetch(`${BASE}/electron?limit=${limit}`).then(r => r.json())
-export const loadGoesMag  = (limit = 1440): Promise<any[]> => fetch(`${BASE}/mag?limit=${limit}`).then(r => r.json())
-export const loadGoesWind = (limit = 1440): Promise<any[]> => fetch(`${BASE}/wind?limit=${limit}`).then(r => r.json())
+export const loadXray = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/xray?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/xray?limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
+export const loadProton = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/proton?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/proton?limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
+export const loadElectron = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/electron?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/electron?limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
+export const loadGoesMag = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/mag?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/mag?limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
+export const loadGoesWind = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+  const url = (startDate && endDate)
+    ? `${BASE}/wind?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
+    : `${BASE}/wind?limit=${limit}`
+  return fetch(url).then(r => r.json())
+}
+
 
 export const loadSuviLoop = (wavelength: string, limit = 40): Promise<{ urls: string[]; error?: string }> =>
   fetch(`${BASE}/suvi-loop/${wavelength}?limit=${limit}`).then(r => r.json())

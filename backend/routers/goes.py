@@ -1,6 +1,10 @@
 from fastapi import APIRouter
+from typing import Optional
+import datetime
+import asyncio
 from database import get_conn
 from fetchers.goes_fetcher import fetch_all_goes
+from fetchers.nc_reader import read_proton_nc, nc_date_coverage
 import psycopg2.extras
 
 router = APIRouter(prefix="/goes", tags=["GOES"])
@@ -36,50 +40,102 @@ def route_fetch_mag(): return fetch_goes_mag()
 def route_fetch_wind(): return fetch_goes_wind()
 
 
-@router.get("/xray")
-def get_xray(limit: int = 1440):
+def format_date_boundary(date_str: str, is_end: bool = False) -> str:
+    if not date_str:
+        return ""
+    date_str = date_str.strip().replace('T', ' ')
+    if len(date_str) == 10:
+        return f"{date_str} 23:59:59" if is_end else f"{date_str} 00:00:00"
+    return date_str
+
+def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    if start_date and end_date:
+        s = format_date_boundary(start_date, is_end=False)
+        e = format_date_boundary(end_date, is_end=True)
+        return query(
+            f"""SELECT * FROM {table_name} 
+               WHERE time_tag >= %s 
+                 AND time_tag <= %s
+               ORDER BY time_tag ASC""",
+            (s, e)
+        )
+
+    max_row = query(f"SELECT MAX(time_tag) as max_t FROM {table_name}")
+    if not max_row or not max_row[0]['max_t']:
+        return []
+
+    max_t_str = max_row[0]['max_t']
+    try:
+        dt = datetime.datetime.fromisoformat(max_t_str.replace('Z', '+00:00'))
+        min_dt = dt - datetime.timedelta(minutes=limit)
+        min_t_str = min_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except Exception:
+        min_t_str = max_t_str
+
     return query(
-        """SELECT * FROM goes_xray 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM goes_xray) - (%s || ' minutes')::INTERVAL
+        f"""SELECT * FROM {table_name} 
+           WHERE time_tag >= %s
            ORDER BY time_tag ASC""",
-        (limit,)
+        (min_t_str,)
     )
+
+@router.get("/xray")
+def get_xray(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("goes_xray", limit, start_date, end_date)
 
 @router.get("/proton")
-def get_proton(limit: int = 1440):
-    return query(
-        """SELECT * FROM goes_proton 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM goes_proton) - (%s || ' minutes')::INTERVAL
-           ORDER BY time_tag ASC""",
-        (limit,)
-    )
+async def get_proton(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    # ดึงจาก DB ก่อน (run in thread pool เพื่อไม่ block event loop)
+    loop = asyncio.get_event_loop()
+    db_result = await loop.run_in_executor(None, get_time_filtered_query, "goes_proton", limit, start_date, end_date)
+
+    # ถ้ากำหนด date range และ DB ไม่มีข้อมูล → ลองดึงจาก NC ไฟล์ (ใน thread pool)
+    if start_date and end_date and len(db_result) == 0:
+        try:
+            s = start_date.strip()[:10]  # เอาแค่ YYYY-MM-DD
+            e = end_date.strip()[:10]
+            start_dt = datetime.date.fromisoformat(s)
+            end_dt   = datetime.date.fromisoformat(e)
+            nc_result = await loop.run_in_executor(None, read_proton_nc, start_dt, end_dt)
+            if nc_result:
+                print(f"[NC Fallback] DB empty for {s}~{e}, loaded {len(nc_result)} rows from NC files")
+            return nc_result
+        except Exception as ex:
+            print(f"[NC Fallback] Error: {ex}")
+            return db_result
+
+    return db_result
+
+
+@router.get("/proton-nc")
+async def get_proton_nc(start_date: str, end_date: str):
+    """อ่าน proton flux จาก NC files โดยตรง (ไม่ผ่าน DB)"""
+    try:
+        start_dt = datetime.date.fromisoformat(start_date.strip()[:10])
+        end_dt   = datetime.date.fromisoformat(end_date.strip()[:10])
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, read_proton_nc, start_dt, end_dt)
+    except Exception as ex:
+        return {"error": str(ex)}
+
+
+@router.get("/nc-coverage")
+def get_nc_coverage():
+    """บอกว่า NC files มีข้อมูลช่วงวันที่ไหนบ้าง"""
+    return nc_date_coverage()
 
 @router.get("/electron")
-def get_electron(limit: int = 1440):
-    return query(
-        """SELECT * FROM goes_electron 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM goes_electron) - (%s || ' minutes')::INTERVAL
-           ORDER BY time_tag ASC""",
-        (limit,)
-    )
+def get_electron(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("goes_electron", limit, start_date, end_date)
 
 @router.get("/mag")
-def get_mag(limit: int = 1440):
-    return query(
-        """SELECT * FROM goes_mag 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM goes_mag) - (%s || ' minutes')::INTERVAL
-           ORDER BY time_tag ASC""",
-        (limit,)
-    )
+def get_mag(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("goes_mag", limit, start_date, end_date)
 
 @router.get("/wind")
-def get_wind(limit: int = 1440):
-    return query(
-        """SELECT * FROM goes_wind 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM goes_wind) - (%s || ' minutes')::INTERVAL
-           ORDER BY time_tag ASC""",
-        (limit,)
-    )
+def get_wind(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("goes_wind", limit, start_date, end_date)
+
 
 @router.get("/suvi-loop/{wavelength}")
 def get_suvi_loop(wavelength: str, limit: int = 40):

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveElectron, loadElectron } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 const COLORS = { '>=0.8 MeV': '#a855f7', '>=2 MeV': '#3498DB' }
 
@@ -14,20 +16,35 @@ export default function ElectronFlux(){
     const [energies,setEnergies] = useState<any[]>([])
     const [loading,setLoading] = useState(true)
     const [fetching,setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
+  const chartRef = useRef<any>(null)
 
-    const load = async() => {
-        const d = await loadElectron(limit)
-        const map: Record<string, any> = {}
-        d.forEach(r => {
-            if(!map[r.time_tag]) map[r.time_tag] = {time_tag:r.time_tag}
-            map[r.time_tag][r.energy] = r.flux
-        })
-        const pivoted = Object.values(map).sort((a: any, b: any) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
-        setData(pivoted)
-        setEnergies([...new Set(d.map(r => r.energy))])
-        setLoading(false)
+  const pivot = (d: any[]) => {
+    const map: Record<string, any> = {}
+    d.forEach(r => {
+      if(!map[r.time_tag]) map[r.time_tag] = { time_tag: r.time_tag }
+      map[r.time_tag][r.energy] = r.flux
+    })
+    return Object.values(map).sort((a: any, b: any) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }
+
+    const load = async (showLoading = true) => {
+        if (showLoading) setLoading(true)
+        try {
+          const sDate = appliedRange ? appliedRange.startDate : undefined
+          const eDate = appliedRange ? appliedRange.endDate : undefined
+          const d = await loadElectron(limit, sDate, eDate)
+          if (Array.isArray(d)) {
+            setData(pivot(d))
+            setEnergies([...new Set(d.map(r => r.energy))])
+          }
+        } catch (err) {
+          console.error('Failed to load electron data:', err)
+        } finally {
+          if (showLoading) setLoading(false)
+        }
     }
         
   const fetch_ = async () => {
@@ -35,17 +52,29 @@ export default function ElectronFlux(){
     try {
       await fetchAndSaveElectron()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: async (start, end) => {
+      const older = await loadElectron(0, start, end)
+      return pivot(older)
+    },
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-      await load()
-    }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
     const option = {
       backgroundColor: 'transparent',
@@ -58,15 +87,32 @@ export default function ElectronFlux(){
         textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
         extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
         formatter: (params: any) => {
-          let res = `<div style="color: #C084FC; font-weight:700; margin-bottom: 6px">${params[0].axisValueLabel}</div>`;
+          if (!params || !Array.isArray(params) || params.length === 0) return ''
+          const title = params[0]?.axisValueLabel || params[0]?.name || ''
+          let res = `<div style="color: #C084FC; font-weight:700; margin-bottom: 6px">${title}</div>`
           params.forEach((p: any) => {
-            res += `<div style="color: ${p.color}; margin-bottom: 2px">${p.seriesName}: ${p.value[1]?.toExponential(2)}</div>`;
-          });
-          return res;
+            if (!p || p.value === undefined || p.value === null) return
+            const rawVal = Array.isArray(p.value) ? p.value[1] : p.value
+            const val = (rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal)))
+              ? Number(rawVal).toExponential(2)
+              : 'N/A'
+            res += `<div style="color: ${p.color}; margin-bottom: 2px">${p.seriesName || ''}: ${val}</div>`
+          })
+          return res
         }
       },
       grid: { top: 30, right: 20, bottom: 30, left: 65 },
-      dataZoom: [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'none',
+          rangeMode: ['value', 'value'],
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
+        }
+      ],
       xAxis: {
         type: 'time',
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
@@ -108,23 +154,11 @@ export default function ElectronFlux(){
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #C084FC' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
@@ -140,8 +174,27 @@ export default function ElectronFlux(){
         </div>
       </div>
 
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#C084FC"
+          loading={loading}
+        />
+      </div>
+
       {loading ? <LoadingSpinner /> : (
-        <Card title="INTEGRAL ELECTRON FLUX">
+        <Card
+          title="INTEGRAL ELECTRON FLUX"
+          extra={panLoading ? (
+            <span style={{ fontSize: 11, color: '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          ) : null}
+        >
           <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
             {energies.map(e => (
               <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: COLORS[e] || '#94A3B8' }}>
@@ -149,7 +202,12 @@ export default function ElectronFlux(){
               </div>
             ))}
           </div>
-          <ReactECharts option={option} style={{ height: 320, width: '100%' }} notMerge={true} />
+          <ReactECharts
+            option={option}
+            style={{ height: 320, width: '100%' }}
+            onChartReady={onChartReady}
+            onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+          />
         </Card>
       )}      {/* Refined Instrument Info Guide */}
       <InstrumentInfoGuide

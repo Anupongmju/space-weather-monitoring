@@ -5,42 +5,55 @@ import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 
 export default function Sis() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState(360)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
 
-  const load = async () => { const d = await loadSis(limit); setData(d); setLoading(false) }
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    const sDate = appliedRange ? appliedRange.startDate : undefined
+    const eDate = appliedRange ? appliedRange.endDate : undefined
+    const d = await loadSis(limit, sDate, eDate)
+    setData(d)
+    if (showLoading) setLoading(false)
+  }
   
   const fetch_ = async () => {
     setFetching(true)
     try {
       await fetchAndSaveSis()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadSis(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
+
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-    await load()
-  }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
-
-  const times = data.map(d => new Date(d.time_tag).getTime()).filter(t => !isNaN(t));
-  const minT = times.length ? Math.min(...times) : undefined;
-  const maxT = times.length ? Math.max(...times) : undefined;
-  const diff = (minT !== undefined && maxT !== undefined) ? maxT - minT : 0;
-  const visibleMax = (maxT !== undefined && diff > 0) ? maxT + diff * 0.5 : undefined;
 
   const option = {
     backgroundColor: 'transparent',
@@ -55,62 +68,62 @@ export default function Sis() {
       axisPointer: { type: 'line', lineStyle: { color: '#34D399', type: 'dashed', width: 1.5 } }
     },
     grid: { top: 30, right: 20, bottom: 30, left: 65 },
-    dataZoom: [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }],
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        filterMode: 'none',
+        rangeMode: ['value', 'value'],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
+      }
+    ],
     xAxis: { 
       type: 'time', 
-      min: minT,
-      max: visibleMax,
       splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } }, 
       axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
       axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
     },
     yAxis: {
       type: 'log',
+      name: 'Particles / (cm² s sr MeV)', 
+      nameLocation: 'middle', 
+      nameGap: 45, 
+      nameTextStyle: { color: '#34D399', fontSize: 10, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
       splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
       axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
       axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
     },
     series: [
-      { name: '>10 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 2.2 }, data: data.map(d => [d.time_tag, d.p10]) },
-      { name: '>30 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#FB923C' }, lineStyle: { width: 2.2 }, data: data.map(d => [d.time_tag, d.p30]) }
+      { name: '> 10 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p10]) },
+      { name: '> 30 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#38BDF8' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p30]) }
     ]
   };
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
       
-      {/* Seamless Header */}
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
         marginBottom: 28, flexWrap: 'wrap', gap: 16,
         paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#34D399', margin: 0, letterSpacing: -0.5 }}>
             ACE / SIS
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Solar Isotope Spectrometer — High Energy Protons · L1 Orbit
+            Solar Isotope Spectrometer · Solar Energetic Particle High-Energy Proton Flux (&gt;10 &amp; &gt;30 MeV)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #34D399' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+          {panLoading && (
+            <span style={{ fontSize: 11, color: '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          )}
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
@@ -125,6 +138,44 @@ export default function Sis() {
           </button>
         </div>
       </div>
+
+      {/* Dedicated Row 2 Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor="#34D399"
+          loading={loading}
+        />
+      </div>
+
+      {loading ? <LoadingSpinner /> : (
+        <Card
+          title="SIS HIGH ENERGY PROTON FLUX"
+          extra={panLoading ? (
+            <span style={{ fontSize: 11, color: '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              ◀ LOADING HISTORICAL DATA...
+            </span>
+          ) : null}
+        >
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: '#34D399' }}>
+              <div style={{ width: 16, height: 2, background: '#34D399' }} /> &gt; 10 MeV
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>
+              <div style={{ width: 16, height: 2, background: '#38BDF8' }} /> &gt; 30 MeV
+            </div>
+          </div>
+          <ReactECharts
+            option={option}
+            style={{ height: 280, width: '100%' }}
+            onChartReady={onChartReady}
+            onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+          />
+        </Card>
+      )}
 
       {/* Transparent Telemetry Metrics Strip */}
       {latest && (
@@ -154,12 +205,6 @@ export default function Sis() {
             </div>
           ))}
         </div>
-      )}
-
-      {loading ? <LoadingSpinner /> : (
-        <Card title="HIGH ENERGY PROTON FLUX — SIS">
-          <ReactECharts option={option} style={{ height: 280, width: '100%' }} notMerge={true} />
-        </Card>
       )}
 
       {/* Refined Instrument Info Guide */}

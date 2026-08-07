@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveXray, loadXray } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
+import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
 
 
 // ── Flare classification ───────────────────────────────────────────
@@ -82,16 +84,35 @@ function detectFlares(data: any[]) {
 }
 
 export default function XrayFlux(){
-    const [data,setData] = useState([])
+    const [data,setData] = useState<any[]>([])
     const [loading,setLoading] = useState(true)
     const [fetching,setFetching] = useState(false)
-    const [limit, setLimit] = useState(360)
+    const [limit, setLimit] = useState<TimeRange>(360)
+    const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
     const [activeTab, setActiveTab] = useState('usage')
+    
+    const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+    data,
+    setData,
+    loadHistorical: (start, end) => loadXray(0, start, end),
+    windowMinutes: 1440,
+    initialWindowMinutes: appliedRange ? 0 : limit,
+  })
 
-    const load = async () => {
-      const d = await loadXray(limit)
-      setData(d)
-      setLoading(false)
+  const load = async (showLoading = true) => {
+      if (showLoading) setLoading(true)
+      try {
+        const sDate = appliedRange ? appliedRange.startDate : undefined
+        const eDate = appliedRange ? appliedRange.endDate : undefined
+        const d = await loadXray(limit, sDate, eDate)
+        if (Array.isArray(d)) {
+          setData(d)
+        }
+      } catch (err) {
+        console.error('Failed to load xray data:', err)
+      } finally {
+        if (showLoading) setLoading(false)
+      }
     }
     
   const fetch_ = async () => {
@@ -99,17 +120,18 @@ export default function XrayFlux(){
     try {
       await fetchAndSaveXray()
     } catch(e) {}
-    await load()
+    await load(false)
     setFetching(false)
   }
 
   useEffect(() => {
-    load()
-  }, [limit])
+    resetPan()
+    load(true)
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
-      await load()
-    }, 60000, [limit])
+    await load(false)
+  }, 60000, !appliedRange)
     
     const latest = data[data.length - 1]
     const flare = getFlareClass(latest?.flux_long)
@@ -144,7 +166,17 @@ export default function XrayFlux(){
         }
       },
       grid: { top: 14, right: 58, bottom: 36, left: 56 },
-      dataZoom: [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'none',
+          rangeMode: ['value', 'value'],
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
+        }
+      ],
       xAxis: {
         type: 'time',
         splitLine: { show: false },
@@ -156,23 +188,21 @@ export default function XrayFlux(){
         type: 'log',
         min: 1e-9,
         max: 1e-2,
+        interval: 1,
         splitLine: { show: false },
         axisLine: { lineStyle: { color: '#333' } },
         axisTick: { show: false },
         axisLabel: {
-          color: '#bbb',
+          color: '#888',
           fontSize: 10,
           fontFamily: 'monospace',
-          fontWeight: 700,
           formatter: (v) => {
-            const exp = Math.round(Math.log10(v))
-            const map = { '-9':'A0','-8':'A','-7':'B','-6':'C','-5':'M','-4':'X','-3':'X10' }
-            return map[exp] ?? ''
+            const exp = Math.round(Math.log10(v));
+            return `10${exp.toString().replace('-', '⁻')}`;
           }
         }
       },
       series: [
-        // Background colour bands
         {
           name: '_bands', type: 'line', data: [], showSymbol: false, silent: true,
           markArea: {
@@ -183,7 +213,6 @@ export default function XrayFlux(){
             ])
           }
         },
-        // Dense horizontal log sub-gridlines
         {
           name: '_grid', type: 'line', data: [], showSymbol: false, silent: true,
           markLine: {
@@ -196,7 +225,6 @@ export default function XrayFlux(){
             ]))
           }
         },
-        // Band labels on right
         {
           name: '_blabels', type: 'line', data: [], showSymbol: false, silent: true,
           markLine: {
@@ -210,7 +238,6 @@ export default function XrayFlux(){
             }))
           }
         },
-        // Flare event vertical markers
         {
           name: '_flares', type: 'line', data: [], showSymbol: false,
           markLine: {
@@ -225,52 +252,43 @@ export default function XrayFlux(){
             }))
           }
         },
-        // 1–8 Å — blue
         {
-          name: '1-8 Å', type: 'line', showSymbol: false, sampling: 'lttb', z: 10,
-          itemStyle: { color: '#3498DB' }, lineStyle: { width: 1.5, color: '#3498DB' },
+          name: '1-8 Å (Long)',
+          type: 'line',
+          showSymbol: false,
+          connectNulls: true,
+          lineStyle: { width: 1.5, color: '#3498DB' },
           data: data.map(d => [d.time_tag, d.flux_long])
         },
-        // 0.5–4 Å — green
         {
-          name: '0.5-4 Å', type: 'line', showSymbol: false, sampling: 'lttb', z: 10,
-          itemStyle: { color: '#22c55e' }, lineStyle: { width: 1.2, color: '#22c55e' },
+          name: '0.5-4 Å (Short)',
+          type: 'line',
+          showSymbol: false,
+          connectNulls: true,
+          lineStyle: { width: 1.5, color: '#22c55e' },
           data: data.map(d => [d.time_tag, d.flux_short])
-        },
+        }
       ]
     };
 
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 12px' }}>
-        {/* Header Bar */}
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 18, fontWeight: 700, color: '#3498DB', margin: 0, letterSpacing: 0.5 }}>
               GOES / X-RAY FLUX
             </h2>
             <p style={{ color: '#94A3B8', fontSize: 12, margin: '4px 0 0', fontFamily: 'var(--font-mono)' }}>
-              Solar X-ray Flux — Flare Classification
+              Solar X-Ray Radiation Monitor · 1-8Å & 0.5-4Å
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[360, 1440, 4320, 10080].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setLimit(v)}
-                  style={{
-                    padding: '4px 10px', background: 'transparent', border: 'none',
-                    borderBottom: limit === v ? '2px solid #3498DB' : '2px solid transparent',
-                    color: limit === v ? '#F8FAFC' : '#94A3B8',
-                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                    cursor: 'pointer', transition: 'all 0.15s ease'
-                  }}
-                >
-                  {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-                </button>
-              ))}
-            </div>
-            <StatusBadge status={bzStatus} label={`Class ${flare.label}`} />
+            {panLoading && (
+              <span style={{ fontSize: 11, color: '#3498DB', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                ◀ LOADING HISTORICAL DATA...
+              </span>
+            )}
+            <StatusBadge status={bzStatus} />
             <button
               onClick={fetch_}
               disabled={fetching}
@@ -283,6 +301,18 @@ export default function XrayFlux(){
               {fetching ? 'FETCHING...' : 'REFRESH'}
             </button>
           </div>
+        </div>
+
+        {/* Dedicated Row 2 Toolbar */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+          <DateRangeToolbar
+            limit={limit}
+            onLimitChange={setLimit}
+            appliedRange={appliedRange}
+            onApplyRange={setAppliedRange}
+            accentColor="#3498DB"
+            loading={loading}
+          />
         </div>
 
         {/* Transparent Telemetry Metrics Strip */}
@@ -319,7 +349,14 @@ export default function XrayFlux(){
         )}
 
         {loading ? <LoadingSpinner /> : (
-          <Card title="SOLAR X-RAY FLUX">
+          <Card 
+            title="SOLAR X-RAY FLUX"
+            extra={panLoading ? (
+              <span style={{ fontSize: 11, color: '#3498DB', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                ◀ LOADING HISTORICAL DATA...
+              </span>
+            ) : null}
+          >
             {/* Legend */}
             <div style={{ display: 'flex', gap: 20, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               {[{ color: '#3498DB', label: '1–8 Å (Long)' }, { color: '#22c55e', label: '0.5–4 Å (Short)' }].map(l => (
@@ -332,7 +369,12 @@ export default function XrayFlux(){
                 {flareEvents.length > 0 ? `${flareEvents.length} flare event${flareEvents.length > 1 ? 's' : ''} detected` : 'No flares detected'}
               </div>
             </div>
-            <ReactECharts option={option} style={{ height: 380, width: '100%' }} notMerge={true} />
+            <ReactECharts
+              option={option}
+              style={{ height: 380, width: '100%' }}
+              onChartReady={onChartReady}
+              onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+            />
           </Card>
         )}
 
