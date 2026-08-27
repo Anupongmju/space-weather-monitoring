@@ -45,6 +45,14 @@ def get_neutron(station: str = "OULU", limit: int = 1440, start_date: Optional[s
         """
         return query(sql, (station, s, e))
 
+    if limit <= 0:
+        sql = """
+            SELECT * FROM cosmic_neutron 
+            WHERE station=%s 
+            ORDER BY time_tag ASC
+        """
+        return query(sql, (station,))
+
     sql = """
         SELECT * FROM cosmic_neutron 
         WHERE station=%s 

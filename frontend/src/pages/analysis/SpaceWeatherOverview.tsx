@@ -22,12 +22,15 @@ import { useChartPan } from '../../hooks/useChartPan'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useLineDrawing } from '../../hooks/useLineDrawing'
 import TrendLineOverlay, { buildMarkLines } from '../../components/ui/TrendLineOverlay'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 const PROTON_COLORS: Record<string, string> = {
   '>=1 MeV': '#60A5FA',   // Bright Blue
   '>=5 MeV': '#34D399',   // Bright Emerald
   '>=10 MeV': '#FBBF24',  // Bright Amber
-  '>=50 MeV': '#3498DB',  // Bright Blue Accent
+  '>=30 MeV': '#F59E0B',  // Bright Orange
+  '>=50 MeV': '#38BDF8',  // Bright Sky Blue
+  '>=60 MeV': '#F97316',  // Bright Orange-Red
   '>=100 MeV': '#F87171', // Bright Red
   '>=500 MeV': '#C084FC', // Bright Purple
 }
@@ -295,34 +298,52 @@ export default function SpaceWeatherOverview() {
       })
   }, [sopbData, sopoData])
 
+  const integralProtonRaw = useMemo(() => {
+    return protonRaw.filter((r: any) => r.energy && r.energy.startsWith('>='))
+  }, [protonRaw])
+
   const protonPivoted = useMemo(() => {
     const map: Record<string, any> = {}
-    protonRaw.forEach(r => {
+    integralProtonRaw.forEach(r => {
       if (!map[r.time_tag]) map[r.time_tag] = { time_tag: r.time_tag }
       map[r.time_tag][r.energy] = r.flux
     })
     return Object.values(map).sort(
       (a: any, b: any) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime()
     )
-  }, [protonRaw])
+  }, [integralProtonRaw])
 
   const energyBands = useMemo(() => {
-    return [...new Set(protonRaw.map(r => r.energy))].filter(Boolean).sort()
-  }, [protonRaw])
+    const customOrder = ['>=1 MeV', '>=5 MeV', '>=10 MeV', '>=30 MeV', '>=50 MeV', '>=60 MeV', '>=100 MeV', '>=500 MeV']
+    const present = new Set(integralProtonRaw.map(r => r.energy))
+    const ordered = customOrder.filter(e => present.has(e))
+    const remaining = [...present].filter(e => !customOrder.includes(e)).sort()
+    return [...ordered, ...remaining]
+  }, [integralProtonRaw])
 
-  // Synchronized time axis baselines
-  const { axisMin, axisMax } = useMemo(() => {
-    const refTimes = [
-      ...magData.map(d => new Date(d.time_tag).getTime()),
-      ...swepamData.map(d => new Date(d.time_tag).getTime()),
-    ].filter(t => !isNaN(t))
+  const safeLog = (val: any) => {
+    if (val === null || val === undefined) return null
+    const n = Number(val)
+    return !isNaN(n) && n > 0 ? n : null
+  }
 
-    if (!refTimes.length) return { axisMin: undefined, axisMax: undefined }
-    const minT = Math.min(...refTimes)
-    const maxT = Math.max(...refTimes)
-    const pad = (maxT - minT) * 0.02
-    return { axisMin: minT - pad, axisMax: maxT + pad }
-  }, [magData, swepamData])
+  // Calculate independent tier window range based on each dataset's latest timestamp and window limit
+  const getIndependentTierRange = (data: any[], windowMinutes: number, timeKey = 'time_tag', paddingRatio = 0.25) => {
+    if (!data || data.length === 0) return { min: undefined, max: undefined }
+    const validTimes = data.map(d => (Array.isArray(d) ? new Date(d[0]).getTime() : new Date(d[timeKey]).getTime())).filter(t => !isNaN(t))
+    if (validTimes.length === 0) return { min: undefined, max: undefined }
+
+    const maxTs = Math.max(...validTimes)
+    const windowMs = (windowMinutes || 1440) * 60 * 1000
+    const minTs = maxTs - windowMs
+    const paddedMax = minTs + (windowMs / (1 - paddingRatio))
+    return { min: minTs, max: paddedMax }
+  }
+
+  const magRange = useMemo(() => getIndependentTierRange(magData, limit), [magData, limit])
+  const swepamRange = useMemo(() => getIndependentTierRange(swepamData, limit), [swepamData, limit])
+  const protonRange = useMemo(() => getIndependentTierRange(protonPivoted, limit), [protonPivoted, limit])
+  const cosmicRange = useMemo(() => getIndependentTierRange(ouluData, limit), [ouluData, limit])
 
   const GRIDS = [
     { top: 45, left: 95, right: 85, height: 130 },
@@ -335,7 +356,6 @@ export default function SpaceWeatherOverview() {
 
   const axisLabelStyle = { color: '#F8FAFC', fontSize: 13, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
   const splitLineStyle = { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' as const } }
-  const noSplit = { show: false }
 
   const xAxisBase = (gi: number, showLabel: boolean) => ({
     gridIndex: gi,
@@ -345,15 +365,19 @@ export default function SpaceWeatherOverview() {
     axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
   })
 
-  const yAxisBase = (gi: number, name: string, color: string) => ({
+  const yAxisBase = (gi: number, name: string, color: string, type: 'value' | 'log' = 'value') => ({
     gridIndex: gi,
-    type: 'value' as const,
+    type,
     name,
     nameLocation: 'middle' as const,
     nameGap: 55,
     nameTextStyle: { color, fontSize: 13, fontFamily: 'sans-serif', fontWeight: 700 },
     splitLine: splitLineStyle,
-    axisLabel: { ...axisLabelStyle, color: '#F8FAFC' },
+    axisLabel: {
+      ...axisLabelStyle,
+      color: '#F8FAFC',
+      ...(type === 'log' ? { formatter: formatPowerOf10 } : {}),
+    },
     axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
   })
 
@@ -450,12 +474,9 @@ export default function SpaceWeatherOverview() {
         type: 'inside' as const,
         xAxisIndex: [0, 1, 2, 3, 4, 5],
         filterMode: 'none' as const,
-        rangeMode: ['value', 'value'] as const,
         zoomOnMouseWheel: true,
         moveOnMouseMove: true,
         moveOnMouseWheel: true,
-        preventDefaultMouseDown: true,
-        ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       },
     ],
     legend: {
@@ -476,12 +497,12 @@ export default function SpaceWeatherOverview() {
     },
     grid: GRIDS,
     xAxis: [
-      xAxisBase(0, false),
-      xAxisBase(1, false),
-      xAxisBase(2, false),
-      xAxisBase(3, false),
-      xAxisBase(4, false),
-      xAxisBase(5, true),
+      { ...xAxisBase(0, false), min: cosmicRange.min, max: cosmicRange.max },
+      { ...xAxisBase(1, false), min: cosmicRange.min, max: cosmicRange.max },
+      { ...xAxisBase(2, false), min: magRange.min, max: magRange.max },
+      { ...xAxisBase(3, false), min: magRange.min, max: magRange.max },
+      { ...xAxisBase(4, false), min: swepamRange.min, max: swepamRange.max },
+      { ...xAxisBase(5, true), min: protonRange.min, max: protonRange.max },
     ],
     yAxis: [
       yAxisBase(0, 'Cosmic Ray (cts/min)', '#A5B4FC'),
@@ -489,7 +510,7 @@ export default function SpaceWeatherOverview() {
       yAxisBase(2, 'Bt & Bz (nT)', '#93C5FD'),
       yAxisBase(3, 'Bx - By (nT)', '#FDBA74'),
       { ...yAxisBase(4, 'SW Speed (km/s)', '#6EE7B7'), scale: true },
-      { ...yAxisBase(5, 'Proton Flux (pfu)', '#FDE047'), type: 'log' as const },
+      yAxisBase(5, 'Proton Flux (pfu)', '#FDE047', 'log'),
     ],
     series: [
       {
@@ -593,10 +614,10 @@ export default function SpaceWeatherOverview() {
           fontWeight: 700,
           distance: 6,
         },
-        data: protonPivoted.map((d: any) => [d.time_tag, d[e]]),
+        data: protonPivoted.map((d: any) => [d.time_tag, safeLog(d[e])]),
       })),
     ],
-  }), [ouluData, sopoData, sopbSopoRatioData, magData, swepamData, protonPivoted, energyBands, axisMin, axisMax, lines])
+  }), [ouluData, sopoData, sopbSopoRatioData, magData, swepamData, protonPivoted, energyBands, cosmicRange, magRange, swepamRange, protonRange, lines])
 
   const PANEL_LABELS = [
     { y: 50, label: 'COSMIC RAY', target: 'OULU & SOPO (NMDB)', color: '#A5B4FC', icon: Globe },

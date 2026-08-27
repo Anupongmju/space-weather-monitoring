@@ -5,6 +5,8 @@ import XrayWidget from './widgets/XrayWidget';
 import CosmicWidget from './widgets/CosmicWidget';
 import ProtonWidget from './widgets/ProtonWidget';
 import ElectronWidget from './widgets/ElectronWidget';
+import SunspotWidget from './widgets/SunspotWidget';
+import ThuleWidget from './widgets/ThuleWidget';
 
 import FactsWidget from './widgets/FactsWidget';
 import SolarImagesWidget from './widgets/SolarImagesWidget';
@@ -68,6 +70,8 @@ export default function LeftColumn() {
             <CosmicWidget />
             <ProtonWidget />
             <ElectronWidget />
+            <SunspotWidget />
+            <ThuleWidget />
           </div>
         </div>
       </div>

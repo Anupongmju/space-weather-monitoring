@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 const DATA_SOURCES = [
   {
-    section: 'ACE', 
+    section: 'ACE + SOLAR-1 ', 
     items: [
       { label: 'ACE Real-Time Solar Wind', path: '/ace/swepam', tag: 'L1' },
       { label: 'ACE Magnetic Field ', path: '/ace/Mag', tag: 'MAG' },
@@ -19,16 +19,20 @@ const DATA_SOURCES = [
       { label: 'GOES Proton Flux', path: '/goes/proton', tag: 'PRT' },
       { label: 'GOES Electron Flux', path: '/goes/electron', tag: 'ELC' },
       { label: 'GOES Magnetometer', path: '/goes/mag', tag: 'MAG' },
-      { label: 'GOES SolarWind', path: '/goes/wind', tag: 'SW' },
+      // { label: 'GOES SolarWind', path: '/goes/wind', tag: 'SW' },
       { label: 'GOES SolarSUVI', path: '/goes/suvi', tag: 'SUV' },
 
     ]
   },
   {
-    section: 'GROUND-BASED & LUNAR',
+    section: 'GROUND, LUNAR & MARS',
     items: [
+      { label: 'Moon Orbit (GSE)', path: '/moon', tag: 'MOON' },
+      { label: 'Mars RAD (Curiosity)', path: '/mars', tag: 'MARS' },
       { label: 'Radiation & Particles', path: '/radiation', tag: 'RAD' },
-      { label: 'NeutronMonitor', path: '/cosmic/neutron', tag: 'NM' },
+      { label: 'Sunspot Number (SILSO)', path: '/solar/sunspot', tag: 'SSN' },
+      { label: 'Global Neutron Map', path: '/cosmic/map', tag: 'MAP' },
+      { label: 'Neutron Monitor', path: '/cosmic/neutron', tag: 'NM' },
       { label: 'MAW Pressure', path: '/cosmic/maw/pressure', tag: 'PS' },
       { label: 'MAW Counts', path: '/cosmic/maw/counts', tag: 'MC' },
       { label: 'MAW Scatter', path: '/cosmic/maw/scatter', tag: 'MST' },
@@ -218,6 +222,8 @@ export default function Navbar() {
         </div>
 
         {[
+          { label: 'Moon', to: '/moon' },
+          { label: 'Mars', to: '/mars' },
           { label: 'Radiation', to: '/radiation' },
           { label: 'Analysis', to: '/analysis' },
           { label: 'News', to: '/news' },

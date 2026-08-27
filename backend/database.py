@@ -34,21 +34,21 @@ def get_pool():
 
         for attempt in range(1, max_retries + 1):
             try:
-                print(f"[DB] กำลังเชื่อมต่อฐานข้อมูล... (ครั้งที่ {attempt}/{max_retries})")
+                print(f"[DB] Connecting to database... (Attempt {attempt}/{max_retries})")
                 _pool = psycopg2.pool.ThreadedConnectionPool(
                     2, 15, DATABASE_URL, connection_factory=PooledConnection
                 )
-                print("[DB] เชื่อมต่อฐานข้อมูลสำเร็จ ✓")
+                print("[DB] Database connected successfully [OK]")
                 return _pool
             except psycopg2.OperationalError as e:
                 last_error = e
                 if attempt < max_retries:
-                    print(f"[DB] ยังไม่พร้อม รอ {delay} วินาที... ({e})")
+                    print(f"[DB] Database not ready, retrying in {delay}s... ({e})")
                     time.sleep(delay)
-                    delay = min(delay * 2, 30)  # exponential backoff สูงสุด 30 วินาที
+                    delay = min(delay * 2, 30)  # exponential backoff max 30s
 
         raise RuntimeError(
-            f"[DB] ไม่สามารถเชื่อมต่อฐานข้อมูลได้หลังจากลอง {max_retries} ครั้ง: {last_error}"
+            f"[DB] Unable to connect to database after {max_retries} attempts: {last_error}"
         )
     return _pool
 
@@ -138,7 +138,13 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS solar1_rtsw (
         time_tag TEXT PRIMARY KEY,
         proton_density REAL, proton_speed REAL, proton_temperature REAL,
-        active BOOLEAN
+        active BOOLEAN DEFAULT TRUE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS solar1_mag (
+        time_tag TEXT PRIMARY KEY,
+        bt REAL, bx_gse REAL, by_gse REAL, bz_gse REAL,
+        active BOOLEAN DEFAULT TRUE
     )''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS crater_doserates (
@@ -154,6 +160,45 @@ def init_db():
         de1 REAL, de2 REAL, de3 REAL, de4 REAL,
         active BOOLEAN DEFAULT TRUE
     )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS sunspot_monthly (
+        time_tag TEXT PRIMARY KEY,
+        year INTEGER,
+        month INTEGER,
+        fractional_year REAL,
+        sunspot_number REAL,
+        std_dev REAL,
+        obs_count INTEGER,
+        is_definitive BOOLEAN DEFAULT TRUE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS mars_rad_doserates (
+        time_tag TEXT PRIMARY KEY,
+        sol INTEGER,
+        dose_rate_silicon REAL,
+        dose_rate_plastic REAL,
+        dose_a1 REAL,
+        dose_a2 REAL,
+        dose_b REAL,
+        dose_c REAL,
+        dose_d REAL,
+        dose_e REAL,
+        dose_f REAL,
+        flux_charged REAL,
+        flux_neutral REAL,
+        l1_cnt_fast REAL,
+        l1_cnt_slow REAL,
+        l2_coinc_ab REAL,
+        l2_coinc_ade REAL,
+        pressure_mbar REAL
+    )''')
+
+    # Ensure columns exist if table already created
+    for col in [
+        'dose_a1', 'dose_a2', 'dose_b', 'dose_c', 'dose_d', 'dose_e', 'dose_f',
+        'l1_cnt_fast', 'l1_cnt_slow', 'l2_coinc_ab', 'l2_coinc_ade', 'pressure_mbar'
+    ]:
+        c.execute(f"ALTER TABLE mars_rad_doserates ADD COLUMN IF NOT EXISTS {col} REAL")
 
     conn.commit()
     conn.close()

@@ -70,13 +70,25 @@ def fetch_xray():
     return len(records)
 
 def fetch_proton():
+    records = []
+    # 1. Fetch Integral Protons
     try:
-        data = safe_http_get("integral-protons-7-day.json", "integral-protons-3-day.json", "integral-protons-6-hour.json")
+        data_int = safe_http_get("integral-protons-7-day.json", "integral-protons-3-day.json", "integral-protons-6-hour.json")
+        for d in data_int:
+            records.append((d['time_tag'], d.get('energy',''), float(d.get('flux',0) or 0), d.get('satellite',0)))
     except Exception as e:
-        print(f"Error fetching GOES proton: {e}")
-        return 0
+        print(f"Error fetching GOES integral proton: {e}")
 
-    records = [(d['time_tag'], d.get('energy',''), float(d.get('flux',0) or 0), d.get('satellite',0)) for d in data]
+    # 2. Fetch Differential Protons
+    try:
+        data_diff = safe_http_get("differential-protons-7-day.json", "differential-protons-3-day.json", "differential-protons-6-hour.json")
+        for d in data_diff:
+            records.append((d['time_tag'], d.get('energy',''), float(d.get('flux',0) or 0), d.get('satellite',0)))
+    except Exception as e:
+        print(f"Error fetching GOES differential proton: {e}")
+
+    if not records:
+        return 0
 
     conn = get_conn()
     try:

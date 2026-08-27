@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { fetchAllACE, loadSwepam, loadMag } from '../services/aceService'
 import { fetchAllGOES, loadProton, loadXray } from '../services/goesService'
 import { fetchAllCosmic, loadNeutron, loadNeutronWithFallback } from '../services/cosmicService'
@@ -40,7 +40,7 @@ const css = `
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: shimmer 10s linear infinite;
+    animation: shimmer 15s linear infinite;
   }
   .fadein { animation: fadein 0.8s ease forwards; }
   .bounce-ind { animation: bounce-ind 2s ease-in-out infinite; }
@@ -79,6 +79,54 @@ const css = `
     opacity: 0.15; transition: opacity 0.3s;
   }
   .glass-card.active .card-tag-vert { opacity: 0; }
+
+  .mars-hotspot-btn {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .mars-hotspot-btn:hover {
+    transform: translate(50%, -50%) scale(1.15) !important;
+  }
+  .mars-pulse-ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(239, 68, 68, 0.4);
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }
+  .mars-hotspot-btn:hover .mars-pulse-ring {
+    opacity: 1;
+    border-color: #EF4444;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.7);
+  }
+  .mars-tooltip-tag {
+    position: absolute;
+    bottom: -18px;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #EF4444;
+    color: #FFFFFF;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+  }
+  .mars-hotspot-btn:hover .mars-tooltip-tag {
+    opacity: 1;
+    transform: translateY(0);
+    background: rgba(239, 68, 68, 0.95);
+  }
 `
 
 import OrbitBackground from '../components/space/OrbitBackground'
@@ -256,10 +304,11 @@ export default function Dashboard() {
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         background: 'transparent', overflow: 'hidden',
+        pointerEvents: 'none',
       }}>
 
         {/* Text content */}
-        <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 32px' }} className="fadein">
+        <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 32px', pointerEvents: 'auto' }} className="fadein">
 
           {/* Badge */}
           <div style={{
@@ -327,14 +376,6 @@ export default function Dashboard() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="bounce-ind" style={{
-          position: 'absolute', bottom: 36, left: '50%',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-          opacity: 0.3, zIndex: 10,
-        }}>
-          <span style={{ fontSize: 8, letterSpacing: 3, fontFamily: 'var(--font-mono)', color: 'white' }}>MOON BACKGROUND IS RELTIME</span>
-          <div style={{ width: 1, height: 40, background: 'linear-gradient(to bottom, white, transparent)' }} />
-        </div>
       </section>
 
       {/* ── Dashboard Content ── */}

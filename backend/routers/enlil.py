@@ -1,8 +1,9 @@
 import os
+from datetime import datetime
 from fastapi import APIRouter
 from fetchers.enlil_fetcher import fetch_latest_enlil_video, STATIC_DIR
 
-router = APIRouter(prefix="/api/enlil", tags=["enlil"])
+router = APIRouter(prefix="/enlil", tags=["enlil"])
 
 @router.get("/latest")
 def get_latest_enlil():
@@ -16,6 +17,14 @@ def get_latest_enlil():
         return result
     
     stat = os.stat(target_file)
+    age_seconds = datetime.now().timestamp() - stat.st_mtime
+    
+    # If video file is older than 2 hours, automatically fetch fresh real-time data
+    if age_seconds > 2 * 3600:
+        result = fetch_latest_enlil_video()
+        if result and result.get("status") == "success":
+            return result
+
     rel_url = f"/static/{os.path.basename(target_file)}"
     return {
         "status": "success",

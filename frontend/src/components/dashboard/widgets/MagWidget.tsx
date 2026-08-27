@@ -1,16 +1,15 @@
-import React, { useEffect, useState } from 'react'
-import ReactECharts from 'echarts-for-react'
-import { useNavigate } from 'react-router-dom'
-import { loadMag } from '../../../services/aceService'
+import { useEffect, useState } from 'react';
+import ReactECharts from 'echarts-for-react';
+import { useNavigate } from 'react-router-dom';
+import { loadMag } from '../../../services/aceService';
 
 export default function MagWidget() {
-  const navigate = useNavigate()
-  const [data, setData] = useState<any[]>([])
-  
-  useEffect(() => {
-    loadMag(4320).then(setData)
-  }, [])
+  const navigate = useNavigate();
+  const [data, setData] = useState<any[]>([]);
 
+  useEffect(() => {
+    loadMag(4320).then(setData);
+  }, []);
 
   const option = {
     grid: { top: 10, right: 10, bottom: 20, left: 30 },
@@ -51,5 +50,3 @@ export default function MagWidget() {
     </div>
   );
 }
-
-

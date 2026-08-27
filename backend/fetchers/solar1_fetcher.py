@@ -1,18 +1,14 @@
 import httpx
-import gzip
-import io
-import datetime
-import xml.etree.ElementTree as ET
 from database import get_conn
 from psycopg2.extras import execute_values  # type: ignore
 
 ACE_EPAM_REALTIME_URL = "https://services.swpc.noaa.gov/json/ace/epam/ace_epam_5m.json"
-S3_ARCHIVE_BASE = "https://archive.data.noaa.gov/satellite-spaceweather/"
+RTSW_PLASMA_URL = "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json"
+RTSW_MAG_URL = "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json"
 
 def fetch_solar1_stis_particles():
     """
-    Fetches real-time SOLAR-1 STIS / EPAM Suprathermal Ions & Electrons particle data.
-    First fetches live 5-minute feed from SWPC EPAM API.
+    Fetches real-time SOLAR-1 STIS Suprathermal Ions & Electrons particle data.
     Inserts/updates all 8 Ion channels (p1..p8) and 4 Electron channels (de1..de4) into solar1_stis_particles DB table.
     """
     count = 0
@@ -67,7 +63,7 @@ def fetch_solar1_stis_particles():
                     """, records)
                     conn.commit()
                     count = len(records)
-                    print(f"[SOLAR-1 STIS Fetcher] Upserted {count} real-time records into solar1_stis_particles.")
+                    print(f"[SOLAR-1 STIS Fetcher] Upserted {count} records into solar1_stis_particles.")
                 finally:
                     conn.close()
     except Exception as e:
@@ -75,6 +71,127 @@ def fetch_solar1_stis_particles():
 
     return count
 
+def fetch_solar1_swips_plasma():
+    """
+    Fetches real-time SOLAR-1 / L1 SWiPS Solar Wind Plasma Data (Speed, Density, Temp).
+    Inserts/updates into solar1_rtsw DB table.
+    """
+    count = 0
+    try:
+        r = httpx.get(RTSW_PLASMA_URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+        if r.status_code == 200:
+            data = r.json()
+            records_dict = {}
+            for d in data:
+                time_tag = d.get('time_tag')
+                if not time_tag:
+                    continue
+
+                if 'Z' not in time_tag and '+' not in time_tag:
+                    time_tag += 'Z'
+
+                def clean_val(k):
+                    val = d.get(k)
+                    if val is not None and float(val) >= 0 and float(val) < 1e8:
+                        return float(val)
+                    return None
+
+                speed = clean_val('proton_speed')
+                density = clean_val('proton_density')
+                temp = clean_val('proton_temperature')
+
+                if any(v is not None for v in [speed, density, temp]):
+                    records_dict[time_tag] = (time_tag, density, speed, temp, True)
+
+            records = list(records_dict.values())
+            if records:
+                conn = get_conn()
+                try:
+                    cur = conn.cursor()
+                    execute_values(cur, """
+                        INSERT INTO solar1_rtsw
+                        (time_tag, proton_density, proton_speed, proton_temperature, active)
+                        VALUES %s
+                        ON CONFLICT (time_tag) DO UPDATE SET
+                        proton_density=EXCLUDED.proton_density,
+                        proton_speed=EXCLUDED.proton_speed,
+                        proton_temperature=EXCLUDED.proton_temperature,
+                        active=EXCLUDED.active
+                    """, records)
+                    conn.commit()
+                    count = len(records)
+                    print(f"[SOLAR-1 SWiPS Fetcher] Upserted {count} records into solar1_rtsw.")
+                finally:
+                    conn.close()
+    except Exception as e:
+        print(f"[SOLAR-1 SWiPS Fetcher Error]: {e}")
+
+    return count
+
+def fetch_solar1_mag():
+    """
+    Fetches real-time SOLAR-1 / L1 MAG Interplanetary Magnetic Field Data (Bt, Bx, By, Bz).
+    Inserts/updates into solar1_mag DB table.
+    """
+    count = 0
+    try:
+        r = httpx.get(RTSW_MAG_URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+        if r.status_code == 200:
+            data = r.json()
+            records_dict = {}
+            for d in data:
+                time_tag = d.get('time_tag')
+                if not time_tag:
+                    continue
+
+                if 'Z' not in time_tag and '+' not in time_tag:
+                    time_tag += 'Z'
+
+                def clean_val(k):
+                    val = d.get(k)
+                    if val is not None and abs(float(val)) < 1000:
+                        return float(val)
+                    return None
+
+                bt = clean_val('bt')
+                bx = clean_val('bx_gse')
+                by = clean_val('by_gse')
+                bz = clean_val('bz_gse')
+
+                if any(v is not None for v in [bt, bx, by, bz]):
+                    records_dict[time_tag] = (time_tag, bt, bx, by, bz, True)
+
+            records = list(records_dict.values())
+            if records:
+                conn = get_conn()
+                try:
+                    cur = conn.cursor()
+                    execute_values(cur, """
+                        INSERT INTO solar1_mag
+                        (time_tag, bt, bx_gse, by_gse, bz_gse, active)
+                        VALUES %s
+                        ON CONFLICT (time_tag) DO UPDATE SET
+                        bt=EXCLUDED.bt, bx_gse=EXCLUDED.bx_gse,
+                        by_gse=EXCLUDED.by_gse, bz_gse=EXCLUDED.bz_gse,
+                        active=EXCLUDED.active
+                    """, records)
+                    conn.commit()
+                    count = len(records)
+                    print(f"[SOLAR-1 MAG Fetcher] Upserted {count} records into solar1_mag.")
+                finally:
+                    conn.close()
+    except Exception as e:
+        print(f"[SOLAR-1 MAG Fetcher Error]: {e}")
+
+    return count
+
+def fetch_all_solar1():
+    """Fetches all SOLAR-1 datasets: STIS particles, SWiPS plasma, and MAG magnetic field"""
+    c1 = fetch_solar1_stis_particles()
+    c2 = fetch_solar1_swips_plasma()
+    c3 = fetch_solar1_mag()
+    return c1 + c2 + c3
+
 def fetch_solar1_rtsw():
     """Wrapper function maintaining compatibility with legacy scheduler calls"""
-    return fetch_solar1_stis_particles()
+    return fetch_all_solar1()

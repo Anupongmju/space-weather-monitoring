@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveEpam, loadEpam } from '../../services/aceService'
+import { loadSolar1 } from '../../services/radiationService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
@@ -8,9 +9,12 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 export default function Epam() {
   const [data, setData] = useState<any[]>([])
+  const [solar1Data, setSolar1Data] = useState<any[]>([])
+  const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [limit, setLimit] = useState<TimeRange>(360)
@@ -22,9 +26,18 @@ export default function Epam() {
     if (showLoading) setLoading(true)
     const sDate = appliedRange ? appliedRange.startDate : undefined
     const eDate = appliedRange ? appliedRange.endDate : undefined
-    const d = await loadEpam(limit, sDate, eDate)
-    setData(d)
-    if (showLoading) setLoading(false)
+    try {
+      const [dAce, dSolar1] = await Promise.all([
+        loadEpam(limit, sDate, eDate),
+        loadSolar1(limit, sDate, eDate)
+      ])
+      setData(Array.isArray(dAce) ? dAce : [])
+      setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }
   
   const fetch_ = async () => {
@@ -55,14 +68,28 @@ export default function Epam() {
 
   const latest = data[data.length - 1]
 
-  // Time calculations for keeping latest data centered with space on the right
-  const times = data.map(d => new Date(d.time_tag).getTime()).filter(t => !isNaN(t))
-  const minT = times.length ? Math.min(...times) : undefined
-  const maxT = times.length ? Math.max(...times) : undefined
-  const diff = (minT !== undefined && maxT !== undefined) ? maxT - minT : 0
-  const visibleMax = (maxT !== undefined && diff > 0) ? maxT + diff * 0.5 : undefined
+  const series: any[] = []
 
-  // Multi-grid ECharts option configuration
+  if (satSource === 'ACE' || satSource === 'BOTH') {
+    series.push(
+      { name: 'ACE e 38-53 keV', type: 'line', xAxisIndex: 0, yAxisIndex: 0, smooth: 0.15, showSymbol: false, itemStyle: { color: '#FB923C' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.e38_53]) },
+      { name: 'ACE e 175-315 keV', type: 'line', xAxisIndex: 0, yAxisIndex: 0, smooth: 0.15, showSymbol: false, itemStyle: { color: '#FBBF24' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.e175_315]) },
+      { name: 'ACE p 47-65 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#38BDF8' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.p47_65]) },
+      { name: 'ACE p 112-187 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.p112_187]) },
+      { name: 'ACE p 310-580 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#C084FC' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.p310_580]) }
+    )
+  }
+
+  if (satSource === 'SOLAR1' || satSource === 'BOTH') {
+    series.push(
+      { name: 'S1 e 38-53 keV (de1)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, smooth: 0.15, showSymbol: false, itemStyle: { color: '#EC4899' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.de1]) },
+      { name: 'S1 e 175-315 keV (de2)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, smooth: 0.15, showSymbol: false, itemStyle: { color: '#F43F5E' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.de2]) },
+      { name: 'S1 p 47-68 keV (p1)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#06B6D4' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.p1]) },
+      { name: 'S1 p 115-195 keV (p3)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#10B981' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.p3]) },
+      { name: 'S1 p 321-580 keV (p5)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, smooth: 0.15, showSymbol: false, itemStyle: { color: '#8B5CF6' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.p5]) }
+    )
+  }
+
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
@@ -74,6 +101,11 @@ export default function Epam() {
       textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
       extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
       axisPointer: { type: 'line', lineStyle: { color: '#C084FC', type: 'dashed', width: 1.5 } }
+    },
+    legend: {
+      show: true,
+      textStyle: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
+      top: 0
     },
     axisPointer: {
       link: [{ xAxisIndex: 'all' }]
@@ -107,7 +139,7 @@ export default function Epam() {
         nameGap: 45,
         nameTextStyle: { color: '#C084FC', fontSize: 11, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
+        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)', formatter: formatPowerOf10 },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
       },
       {
@@ -118,7 +150,7 @@ export default function Epam() {
         nameGap: 45,
         nameTextStyle: { color: '#38BDF8', fontSize: 11, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
+        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)', formatter: formatPowerOf10 },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
       }
     ],
@@ -133,13 +165,7 @@ export default function Epam() {
         ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
-    series: [
-      { name: '38-53 keV', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, itemStyle: { color: '#FB923C' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.e38_53]) },
-      { name: '175-315 keV', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, itemStyle: { color: '#FBBF24' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.e175_315]) },
-      { name: '47-65 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, itemStyle: { color: '#38BDF8' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p47_65]) },
-      { name: '112-187 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p112_187]) },
-      { name: '310-580 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, itemStyle: { color: '#C084FC' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p310_580]) }
-    ]
+    series
   }
 
   return (
@@ -153,10 +179,10 @@ export default function Epam() {
       }}>
         <div>
           <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#C084FC', margin: 0, letterSpacing: -0.5 }}>
-            ACE / EPAM
+            ENERGETIC PARTICLES (EPAM / STIS)
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Electron, Proton, and Alpha Monitor · Energetic Particle Spectrometer (L1 Orbit)
+            Suprathermal & Energetic Particle Spectrometer · ACE EPAM & SOLAR-1 STIS (L1 Orbit)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -180,8 +206,32 @@ export default function Epam() {
         </div>
       </div>
 
-      {/* Dedicated Row 2 Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+      {/* Toolbar: Source Toggle + Date Range */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        {/* Source Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          <span style={{ color: '#94A3B8', fontWeight: 600 }}>SATELLITE SOURCE:</span>
+          {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setSatSource(s)}
+              style={{
+                background: satSource === s ? '#C084FC' : 'rgba(255,255,255,0.05)',
+                color: satSource === s ? '#FFF' : '#94A3B8',
+                border: '1px solid ' + (satSource === s ? '#C084FC' : 'rgba(255,255,255,0.1)'),
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 12px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              {s === 'SOLAR1' ? 'SOLAR-1 (STIS)' : s === 'BOTH' ? 'BOTH (ACE + SOLAR-1)' : 'ACE'}
+            </button>
+          ))}
+        </div>
+
         <DateRangeToolbar
           limit={limit}
           onLimitChange={setLimit}
@@ -232,7 +282,7 @@ export default function Epam() {
             </span>
           ) : null}
         >
-          <ReactECharts option={option} style={{ height: 450, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
+          <ReactECharts option={option} notMerge={true} style={{ height: 450, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
         </Card>
       )}
 

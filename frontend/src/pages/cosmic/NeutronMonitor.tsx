@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Map } from 'lucide-react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveNeutron, loadNeutron, STATIONS } from '../../services/cosmicService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -7,31 +9,61 @@ import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 
-const STATION_COLORS = STATIONS.reduce((acc, s, i) => {
+const STATION_COLORS: Record<string, string> = STATIONS.reduce((acc, s, i) => {
   // Use the golden angle to generate widely distributed distinct colors
   const hue = (i * 137.508) % 360;
   acc[s.id] = `hsl(${Math.floor(hue)}, 80%, 65%)`
   return acc
-}, {})
+}, {} as Record<string, string>)
 
 export default function NeutronMonitor() {
-  const [data, setData]           = useState({}) 
-  const [active, setActive]       = useState(() => STATIONS.reduce((acc, s) => ({ ...acc, [s.id]: s.id === 'OULU' }), {}))
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+
+  const initialStation = (location.state as any)?.targetStation || searchParams.get('station') || 'OULU'
+
+  const [data, setData]           = useState<Record<string, any[]>>({}) 
+  const [active, setActive]       = useState<Record<string, boolean>>(() => {
+    return STATIONS.reduce((acc, s) => ({ ...acc, [s.id]: s.id === initialStation }), {})
+  })
   const [loading, setLoading]     = useState(true)
   const [fetching, setFetching]   = useState(false)
-  const [fetchStation, setFetchStation] = useState('OULU')
+  const [fetchStation, setFetchStation] = useState(initialStation)
   const [limit, setLimit]         = useState(360)
   const [hours, setHours]         = useState(24)
   const [activeTab, setActiveTab] = useState('usage')
+
+  // When arriving from map page with a target station
+  useEffect(() => {
+    const target = (location.state as any)?.targetStation || searchParams.get('station')
+    if (target) {
+      setActive({ [target]: true })
+      setFetchStation(target)
+    }
+  }, [location.state, searchParams])
 
   // โหลดข้อมูลเฉพาะ station ที่ active
   const load = async () => {
     setLoading(true)
     const activeStations = STATIONS.filter(s => active[s.id])
+    if (activeStations.length === 0) {
+      setLoading(false)
+      return
+    }
+
     const results = await Promise.all(
       activeStations.map(async s => {
-        const d = await loadNeutron(s.id, limit)
-        return { id: s.id, data: d }
+        let d = await loadNeutron(s.id, limit)
+        // If no local records exist for this active station, attempt live fetch from NMDB
+        if (!Array.isArray(d) || d.length === 0) {
+          try {
+            await fetchAndSaveNeutron(s.id, hours)
+            d = await loadNeutron(s.id, limit)
+          } catch (e) {
+            console.warn(`Failed auto-fetch for station ${s.id}:`, e)
+          }
+        }
+        return { id: s.id, data: Array.isArray(d) ? d : [] }
       })
     )
     const newData = { ...data }
@@ -73,7 +105,10 @@ export default function NeutronMonitor() {
     .filter(s => active[s.id] && data[s.id]?.length > 0)
     .map(s => {
       const stationData = data[s.id]
-      const baseline = stationData.length > 10 ? stationData.slice(0, 10).reduce((sum, d) => sum + d.count_rate, 0) / 10 : null
+      const validPoints = stationData.filter((d: any) => d && d.count_rate > 0)
+      const baseline = validPoints.length > 0
+        ? validPoints.reduce((sum: number, d: any) => sum + d.count_rate, 0) / validPoints.length
+        : null
       
       return {
         name: `${s.label} (${s.id})`,
@@ -81,8 +116,8 @@ export default function NeutronMonitor() {
         showSymbol: false,
         lineStyle: { width: 1.5, color: STATION_COLORS[s.id] },
         itemStyle: { color: STATION_COLORS[s.id] },
-        data: stationData.map(d => {
-          if (!baseline || baseline === 0) return [d.time_tag, 0]
+        data: stationData.map((d: any) => {
+          if (!baseline || baseline === 0 || !d.count_rate || d.count_rate <= 0) return [d.time_tag, null]
           const pct = ((d.count_rate - baseline) / baseline) * 100
           return [d.time_tag, pct]
         }),
@@ -144,7 +179,28 @@ export default function NeutronMonitor() {
             NMDB Network · Global Neutron Station Telemetry
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            to="/cosmic/map"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              background: 'rgba(56,189,248,0.12)',
+              border: '1px solid rgba(56,189,248,0.4)',
+              color: '#38BDF8',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              fontWeight: 700,
+              textDecoration: 'none',
+              borderRadius: 3,
+              transition: 'all 0.15s'
+            }}
+          >
+            <Map size={14} />
+            <span>GLOBAL EARTH MAP</span>
+          </Link>
           <div style={{ display: 'flex', gap: 8 }}>
             {[360, 1440, 4320, 10080].map(v => (
               <button
@@ -289,8 +345,9 @@ export default function NeutronMonitor() {
       {loading ? <LoadingSpinner /> : (
         <Card title="NEUTRON COUNT RATE — MULTI STATION">
           {series.length === 0 ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', fontFamily: 'monospace', fontSize: 11, color: '#606075', letterSpacing: 2 }}>
-              NO STATION SELECTED — TOGGLE ABOVE TO SHOW
+            <div style={{ padding: '60px 20px', textAlign: 'center', fontFamily: 'monospace', fontSize: 11, color: '#94A3B8', letterSpacing: 1 }}>
+              <div style={{ color: '#F8FAFC', marginBottom: 6, fontWeight: 700 }}>NO REAL-TIME BROADCAST DATA FOR SELECTED STATION(S)</div>
+              <div style={{ color: '#64748B', fontSize: 10 }}>This station is currently offline or not streaming live telemetry publicly to the NMDB network.</div>
             </div>
           ) : (
             <ReactECharts option={option} style={{ height: 320, width: '100%' }} notMerge={true} />

@@ -60,7 +60,8 @@ def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Opti
             (s, e)
         )
 
-    max_row = query(f"SELECT MAX(time_tag) as max_t FROM {table_name}")
+    now_utc_str = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT23:59:59Z')
+    max_row = query(f"SELECT MAX(time_tag) as max_t FROM {table_name} WHERE time_tag <= %s", (now_utc_str,))
     if not max_row or not max_row[0]['max_t']:
         return []
 
@@ -74,9 +75,9 @@ def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Opti
 
     return query(
         f"""SELECT * FROM {table_name} 
-           WHERE time_tag >= %s
+           WHERE time_tag >= %s AND time_tag <= %s
            ORDER BY time_tag ASC""",
-        (min_t_str,)
+        (min_t_str, max_t_str)
     )
 
 @router.get("/xray")

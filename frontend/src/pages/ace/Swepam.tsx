@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveSwepam, loadSwepam, fetchArchiveSwepam } from '../../services/aceService'
+import { loadSolar1Plasma } from '../../services/radiationService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
@@ -11,6 +12,8 @@ import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolba
 
 export default function Swepam() {
   const [data, setData] = useState<any[]>([])
+  const [solar1Data, setSolar1Data] = useState<any[]>([])
+  const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [limit, setLimit] = useState<TimeRange>(360)
@@ -22,19 +25,22 @@ export default function Swepam() {
     if (showLoading) setLoading(true)
     const sDate = appliedRange ? appliedRange.startDate : undefined
     const eDate = appliedRange ? appliedRange.endDate : undefined
-    let d: any[] = []
     try {
       if (sDate && eDate) {
-        // On-demand archive fetch (does not persist to DB)
-        d = await fetchArchiveSwepam(sDate, eDate, 10000)
+        const d = await fetchArchiveSwepam(sDate, eDate, 10000)
+        setData(Array.isArray(d) ? d : [])
+        setSolar1Data([])
       } else {
-        d = await loadSwepam(limit)
+        const [dAce, dSolar1] = await Promise.all([
+          loadSwepam(limit),
+          loadSolar1Plasma(limit)
+        ])
+        setData(Array.isArray(dAce) ? dAce : [])
+        setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
       }
     } catch (err) {
       console.error('Failed to load swepam data:', err)
-      d = []
     } finally {
-      setData(d)
       if (showLoading) setLoading(false)
     }
   }
@@ -66,13 +72,85 @@ export default function Swepam() {
   }, 60000, !appliedRange)
 
   const latest = data[data.length - 1]
+  const latestS1 = solar1Data[solar1Data.length - 1]
 
-  // Time calculations for keeping latest data centered with space on the right
-  const times = data.map(d => new Date(d.time_tag).getTime()).filter(t => !isNaN(t))
-  const minT = times.length ? Math.min(...times) : undefined
-  const maxT = times.length ? Math.max(...times) : undefined
-  const diff = (minT !== undefined && maxT !== undefined) ? maxT - minT : 0
-  const visibleMax = (maxT !== undefined && diff > 0) ? maxT + diff * 0.5 : undefined
+  const series: any[] = []
+
+  if (satSource === 'ACE' || satSource === 'BOTH') {
+    series.push(
+      {
+        name: 'ACE Density',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#38BDF8' },
+        lineStyle: { width: 1.5, opacity: 0.9 },
+        data: data.map(d => [d.time_tag, d.proton_density])
+      },
+      {
+        name: 'ACE Speed',
+        type: 'line',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#3498DB' },
+        lineStyle: { width: 1.5, opacity: 0.9 },
+        data: data.map(d => [d.time_tag, d.bulk_speed])
+      },
+      {
+        name: 'ACE Temp',
+        type: 'line',
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#C084FC' },
+        lineStyle: { width: 1.5, opacity: 0.9 },
+        data: data.map(d => [d.time_tag, d.ion_temp])
+      }
+    )
+  }
+
+  if (satSource === 'SOLAR1' || satSource === 'BOTH') {
+    series.push(
+      {
+        name: 'SOLAR-1 Density',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#F59E0B' },
+        lineStyle: { width: 1.5, opacity: 0.85 },
+        data: solar1Data.map(d => [d.time_tag, d.proton_density])
+      },
+      {
+        name: 'SOLAR-1 Speed',
+        type: 'line',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#10B981' },
+        lineStyle: { width: 1.5, opacity: 0.85 },
+        data: solar1Data.map(d => [d.time_tag, d.proton_speed])
+      },
+      {
+        name: 'SOLAR-1 Temp',
+        type: 'line',
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        smooth: 0.15,
+        showSymbol: false,
+        itemStyle: { color: '#F43F5E' },
+        lineStyle: { width: 1.5, opacity: 0.85 },
+        data: solar1Data.map(d => [d.time_tag, d.proton_temperature])
+      }
+    )
+  }
 
   // Multi-grid ECharts option configuration
   const option = {
@@ -89,6 +167,11 @@ export default function Swepam() {
         type: 'line',
         lineStyle: { color: '#3498DB', type: 'dashed', width: 1.5 }
       }
+    },
+    legend: {
+      show: true,
+      textStyle: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
+      top: 0
     },
     axisPointer: {
       link: [{ xAxisIndex: 'all' }]
@@ -125,7 +208,7 @@ export default function Swepam() {
       {
         gridIndex: 0,
         type: 'value',
-        name: 'Density (n/cc)',
+        name: 'Density (p/cm³)',
         nameLocation: 'middle',
         nameGap: 45,
         nameTextStyle: { color: '#3498DB', fontSize: 11, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
@@ -172,38 +255,7 @@ export default function Swepam() {
         ...(zoomRange ? { startValue: zoomRange.startValue, endValue: zoomRange.endValue } : {})
       }
     ],
-    series: [
-      {
-        name: 'Proton Density',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        showSymbol: false,
-        itemStyle: { color: '#3498DB' },
-        lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.proton_density])
-      },
-      {
-        name: 'Bulk Speed',
-        type: 'line',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        showSymbol: false,
-        itemStyle: { color: '#38BDF8' },
-        lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.bulk_speed])
-      },
-      {
-        name: 'Ion Temp',
-        type: 'line',
-        xAxisIndex: 2,
-        yAxisIndex: 2,
-        showSymbol: false,
-        itemStyle: { color: '#C084FC' },
-        lineStyle: { width: 2 },
-        data: data.map(d => [d.time_tag, d.ion_temp])
-      }
-    ]
+    series
   }
 
   return (
@@ -217,10 +269,10 @@ export default function Swepam() {
       }}>
         <div>
           <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#FB923C', margin: 0, letterSpacing: -0.5 }}>
-            ACE / SWEPAM
+            SOLAR WIND PLASMA (SWEPAM / SWiPS)
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Solar Wind Electron Proton Alpha Monitor · Solar Wind Plasma Parameters (L1 Orbit)
+            Solar Wind Plasma Comparison · ACE SWEPAM &amp; SOLAR-1 SWiPS (L1 Orbit)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -244,8 +296,32 @@ export default function Swepam() {
         </div>
       </div>
 
-      {/* Dedicated Row 2 Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+      {/* Toolbar: Source Toggle + Date Range */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        {/* Source Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          <span style={{ color: '#94A3B8', fontWeight: 600 }}>SATELLITE SOURCE:</span>
+          {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setSatSource(s)}
+              style={{
+                background: satSource === s ? '#FB923C' : 'rgba(255,255,255,0.05)',
+                color: satSource === s ? '#FFF' : '#94A3B8',
+                border: '1px solid ' + (satSource === s ? '#FB923C' : 'rgba(255,255,255,0.1)'),
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 12px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              {s === 'SOLAR1' ? 'SOLAR-1 (SWFO-L1)' : s === 'BOTH' ? 'BOTH (ACE + SOLAR-1)' : 'ACE'}
+            </button>
+          ))}
+        </div>
+
         <DateRangeToolbar
           limit={limit}
           onLimitChange={setLimit}
@@ -256,36 +332,35 @@ export default function Swepam() {
         />
       </div>
 
-      {/* SWEPAM Plasma Metrics Banner */}
-      {latest && (
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, marginBottom: 28, padding: '0 8px', background: 'transparent', border: 'none'
-        }}>
-          {[
-            { label: 'PROTON DENSITY', value: latest.proton_density?.toFixed(1), unit: 'p/cm³', color: '#3498DB' },
-            { label: 'BULK SPEED', value: latest.bulk_speed?.toFixed(0), unit: 'km/s', color: '#38BDF8' },
-            { label: 'ION TEMPERATURE', value: latest.ion_temp ? Math.round(latest.ion_temp).toLocaleString() : '—', unit: 'K', color: '#C084FC' },
-          ].map((s, idx) => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#CBD5E1', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
-                  {s.label}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: s.color }}>
-                    {s.value ?? '—'}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                    {s.unit}
-                  </span>
-                </div>
+      {/* Plasma Metrics Banner */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+        gap: 24, marginBottom: 28, padding: '0 8px', background: 'transparent', border: 'none'
+      }}>
+        {[
+          { label: 'ACE SPEED', value: latest?.bulk_speed?.toFixed(0), unit: 'km/s', color: '#38BDF8' },
+          { label: 'SOLAR-1 SPEED', value: latestS1?.proton_speed?.toFixed(0), unit: 'km/s', color: '#10B981' },
+          { label: 'ACE DENSITY', value: latest?.proton_density?.toFixed(1), unit: 'p/cm³', color: '#3498DB' },
+          { label: 'SOLAR-1 DENSITY', value: latestS1?.proton_density?.toFixed(1), unit: 'p/cm³', color: '#F59E0B' },
+        ].map((s, idx) => (
+          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#CBD5E1', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
+                {s.label}
               </div>
-              {idx < 2 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
+                <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: s.color }}>
+                  {s.value ?? '—'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+                  {s.unit}
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            {idx < 3 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />}
+          </div>
+        ))}
+      </div>
 
       {/* SWEPAM Multi-Grid Chart Block */}
       {loading ? <LoadingSpinner /> : (
@@ -298,7 +373,7 @@ export default function Swepam() {
             </span>
           ) : null}
         >
-          <ReactECharts option={option} style={{ height: 500, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
+          <ReactECharts option={option} notMerge={true} style={{ height: 500, width: '100%' }} onChartReady={onChartReady} onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }} />
         </Card>
       )}
 

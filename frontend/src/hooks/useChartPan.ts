@@ -189,24 +189,22 @@ export function useChartPan({
       if (startVal !== null && endVal !== null && startVal < endVal) {
         setZoomRange({ startValue: startVal, endValue: endVal })
 
-        const isNearLeft =
-          (startPct !== null && startPct <= 10) ||
-          (totalSpan > 0 && startVal <= dataStart + totalSpan * 0.1) ||
-          startVal <= dataStart
+        const isAtLeftEdge =
+          (startPct !== null && startPct <= 0.1) ||
+          (startVal <= dataStart + 1000)
 
-        const isNearRight =
-          (endPct !== null && endPct >= 90) ||
-          (totalSpan > 0 && endVal >= dataEnd - totalSpan * 0.1) ||
-          endVal >= dataEnd
+        const isAtRightEdge =
+          (endPct !== null && endPct >= 99.9) ||
+          (endVal >= dataEnd - 1000)
 
-        if (isNearLeft && !fetchingRef.current && hasMoreRef.current) {
+        if (isAtLeftEdge && !fetchingRef.current && hasMoreRef.current) {
           if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
           const sVal = startVal, eVal = endVal
-          debounceTimerRef.current = setTimeout(() => triggerFetchHistorical(sVal, eVal), 250)
-        } else if (isNearRight && !fetchingRef.current && hasMoreForwardRef.current) {
+          debounceTimerRef.current = setTimeout(() => triggerFetchHistorical(sVal, eVal), 300)
+        } else if (isAtRightEdge && !fetchingRef.current && hasMoreForwardRef.current) {
           if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
           const sVal = startVal, eVal = endVal
-          debounceTimerRef.current = setTimeout(() => triggerFetchForward(sVal, eVal), 250)
+          debounceTimerRef.current = setTimeout(() => triggerFetchForward(sVal, eVal), 300)
         }
       }
     },

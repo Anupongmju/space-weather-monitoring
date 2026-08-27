@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
+import ReactDOM from 'react-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 async function fetchMoonRA() {
   const now = new Date()
@@ -62,6 +64,11 @@ const cleanDays = [
 ];
 
 export default React.memo(function OrbitBackground() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isDashboard = location.pathname === '/'
+  const [marsHovered, setMarsHovered] = useState(false)
+  const [moonHovered, setMoonHovered] = useState(false)
   const [moonRA, setMoonRA] = useState(null)
   const [activePlayer, setActivePlayer] = useState<'A' | 'B'>('A');
   const [dayIndexA, setDayIndexA] = useState(0);
@@ -84,11 +91,15 @@ export default React.memo(function OrbitBackground() {
   const lroRef = useRef<SVGGElement | null>(null)
   const change7Ref = useRef<SVGGElement | null>(null)
   const solar1Ref = useRef<SVGGElement | null>(null)
+  const phobosRef = useRef<SVGGElement | null>(null)
+  const deimosRef = useRef<SVGGElement | null>(null)
+  const rotatingMarsRef = useRef<SVGGElement | null>(null)
+  const moonInteractiveRef = useRef<SVGGElement | null>(null)
 
   const handleEndedA = () => {
     if (videoRefB.current) {
       videoRefB.current.currentTime = 0;
-      videoRefB.current.play().catch(() => {});
+      videoRefB.current.play().catch(() => { });
     }
     setActivePlayer('B');
     setDayIndexA((dayIndexB + 1) % cleanDays.length);
@@ -97,7 +108,7 @@ export default React.memo(function OrbitBackground() {
   const handleEndedB = () => {
     if (videoRefA.current) {
       videoRefA.current.currentTime = 0;
-      videoRefA.current.play().catch(() => {});
+      videoRefA.current.play().catch(() => { });
     }
     setActivePlayer('A');
     setDayIndexB((dayIndexA + 1) % cleanDays.length);
@@ -174,6 +185,9 @@ export default React.memo(function OrbitBackground() {
 
       if (moonGroupRef.current) {
         moonGroupRef.current.setAttribute('transform', `translate(${x}, ${y})`);
+      }
+      if (moonInteractiveRef.current) {
+        moonInteractiveRef.current.setAttribute('transform', `translate(${x}, ${y})`);
       }
 
       if (moonShadowRef.current) {
@@ -403,16 +417,53 @@ export default React.memo(function OrbitBackground() {
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
+  // Mars Moons Animation (Phobos & Deimos) and Mars Rotation
+  useEffect(() => {
+    let animationFrameId: number;
+    const animateMarsMoons = () => {
+      const t = Date.now() / 1000;
+      // Phobos (Fast close orbit)
+      const phobosAngle = t * 0.32;
+      const px = 62 * Math.cos(phobosAngle);
+      const py = 30 * Math.sin(phobosAngle);
+      if (phobosRef.current) {
+        phobosRef.current.setAttribute('transform', `translate(${px}, ${py})`);
+      }
+
+      // Deimos (Outer orbit)
+      const deimosAngle = t * 0.12;
+      const dx = 90 * Math.cos(deimosAngle);
+      const dy = 44 * Math.sin(deimosAngle);
+      if (deimosRef.current) {
+        deimosRef.current.setAttribute('transform', `translate(${dx}, ${dy})`);
+      }
+
+      // Mars Rotation
+      const rot = (t * 1.5) % 360;
+      if (rotatingMarsRef.current) {
+        rotatingMarsRef.current.setAttribute('transform', `rotate(${rot}, 0, 0)`);
+      }
+
+      animationFrameId = requestAnimationFrame(animateMarsMoons);
+    };
+    animateMarsMoons();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
+
   const W = 1920;
   const H = 1080;
   const CY = H / 2;
   const EARTH_X = 1350;
+  const MARS_X = 1680;
+  const MARS_Y = 270;
+  const MARS_R = 48;
   const SUN_X = -100;
   const MOON_RX = 380;
   const MOON_RY = 220;
   const ACE_X = EARTH_X - 600;
 
   return (
+    <>
     <div style={{
       position: 'fixed',
       top: 0,
@@ -422,7 +473,7 @@ export default React.memo(function OrbitBackground() {
       zIndex: 0,
       overflow: 'hidden',
       pointerEvents: 'none',
-      background: '#000000'
+      background: '#000000',
     }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -486,6 +537,23 @@ export default React.memo(function OrbitBackground() {
             <stop offset="50%" stopColor="black" stopOpacity="0.6" />
             <stop offset="90%" stopColor="black" stopOpacity="0.95" />
           </linearGradient>
+
+          {/* ── MARS (RIGHTMOST SISTER PLANET BEHIND EARTH) ── */}
+          <pattern id="marsGlobeTexture" x="0" y="0" width="1" height="1" viewBox="0 0 100 100">
+            <image href="/assets/mars.jpg" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" />
+          </pattern>
+
+          <linearGradient id="marsShadowHome" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="25%" stopColor="black" stopOpacity="0" />
+            <stop offset="55%" stopColor="black" stopOpacity="0.45" />
+            <stop offset="85%" stopColor="black" stopOpacity="0.85" />
+            <stop offset="100%" stopColor="black" stopOpacity="0.95" />
+          </linearGradient>
+
+          <radialGradient id="marsGlowHome" cx="50%" cy="50%" r="50%">
+            <stop offset="45%" stopColor="#EF4444" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+          </radialGradient>
 
           {/* ── FILTERS ── */}
           <filter id="shadowBlur" x="-100%" y="-100%" width="300%" height="300%">
@@ -858,7 +926,7 @@ export default React.memo(function OrbitBackground() {
           </g>
         </g>
 
-        {/* ── MOON ── */}
+        {/* ── MOON GRAPHICS ── */}
         <g ref={moonGroupRef} transform={`translate(${EARTH_X + MOON_RX}, ${CY})`}>
           {/* Fallback Body and Image using Pattern */}
           <circle cx="0" cy="0" r="35" fill="url(#bgMoon)" />
@@ -869,7 +937,15 @@ export default React.memo(function OrbitBackground() {
             cx="0" cy="0" r="35"
             fill="url(#moonShadow)"
           />
-          <circle cx="0" cy="0" r="35" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          <circle
+            cx="0"
+            cy="0"
+            r="35"
+            fill="none"
+            stroke={moonHovered ? '#FBBF24' : 'rgba(255,255,255,0.15)'}
+            strokeWidth={moonHovered ? 2 : 1}
+            style={{ transition: 'stroke 0.25s ease, stroke-width 0.25s ease' }}
+          />
 
           {/* Earth's shadow overlay on Moon (Lunar Eclipse) */}
           <circle
@@ -914,7 +990,7 @@ export default React.memo(function OrbitBackground() {
 
             {/* Upper Deck Payload Structure */}
             <rect x="-5" y="-12" width="10" height="6" rx="1" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="0.6" />
-            
+
             {/* Robotic Sampling Arm */}
             <polyline points="-5,-8 -16,-12 -22,-6" fill="none" stroke="#E2E8F0" strokeWidth="0.8" />
             <circle cx="-22" cy="-6" r="1.2" fill="#FFD700" />
@@ -1160,14 +1236,150 @@ export default React.memo(function OrbitBackground() {
           </g>
         </g>
 
+        {/* ── MARS SYSTEM (POSITIONED AT UPPER-RIGHT ABOVE MOON ORBIT) ── */}
+        <g transform={`translate(${MARS_X}, ${MARS_Y})`}>
+          {/* Ambient Deep Space Red Glow */}
+          <circle
+            cx="0" cy="0"
+            r="62"
+            fill="url(#marsGlowHome)"
+            opacity="0.35"
+          />
 
+          {/* Phobos Moon Orbit Track */}
+          <ellipse
+            rx="62" ry="30"
+            fill="none"
+            stroke="rgba(255, 255, 255, 0.12)"
+            strokeWidth="0.8"
+            strokeDasharray="3 4"
+            transform="rotate(15)"
+          />
+
+          {/* Deimos Moon Orbit Track */}
+          <ellipse
+            rx="90" ry="44"
+            fill="none"
+            stroke="rgba(239, 68, 68, 0.2)"
+            strokeWidth="0.8"
+            strokeDasharray="4 6"
+            transform="rotate(-12)"
+          />
+
+          {/* Mars Rotating Photographic Globe */}
+          <g ref={rotatingMarsRef}>
+            <circle cx="0" cy="0" r={MARS_R} fill="url(#marsGlobeTexture)" />
+          </g>
+
+          {/* Solar Illumination Shadow Mask (Sun is at left -X) */}
+          <circle cx="0" cy="0" r={MARS_R} fill="url(#marsShadowHome)" />
+
+          {/* Mars Limb Atmospheric Glow */}
+          <circle
+            cx="0" cy="0" r={MARS_R}
+            fill="none"
+            stroke="rgba(239, 68, 68, 0.4)"
+            strokeWidth="1"
+          />
+
+          {/* Curiosity Landing Site at Gale Crater (Active Telemetry Pulse) */}
+          <g transform="translate(-8, 6)">
+            <circle cx="0" cy="0" r="2.5" fill="#EF4444" />
+            <circle cx="0" cy="0" r="5" fill="none" stroke="#EF4444" strokeWidth="1">
+              <animate attributeName="r" values="2.5;8" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="1;0" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <text x="6" y="2.5" fill="#FCA5A5" fontSize="6.5" fontFamily="var(--font-mono)" letterSpacing="0.6" opacity="0.9">
+              GALE CRATER (RAD)
+            </text>
+          </g>
+
+          {/* Phobos Moon */}
+          <g ref={phobosRef}>
+            <circle cx="0" cy="0" r="2.5" fill="#D6D3D1" />
+            <text x="4" y="2" fill="#A8A29E" fontSize="5.5" fontFamily="var(--font-mono)">PHOBOS</text>
+          </g>
+
+          {/* Deimos Moon */}
+          <g ref={deimosRef}>
+            <circle cx="0" cy="0" r="1.8" fill="#A8A29E" />
+            <text x="3" y="1.5" fill="#78716C" fontSize="5.5" fontFamily="var(--font-mono)">DEIMOS</text>
+          </g>
+        </g>
 
       </svg>
-
-      <style>{`
-        /* Removed heavy animations for performance */
-      `}</style>
     </div>
+
+    {/* ── INTERACTIVE OVERLAY via Portal — rendered directly onto document.body, bypasses ALL stacking contexts ── */}
+    {isDashboard && ReactDOM.createPortal(
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid slice"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 9999,
+          pointerEvents: 'none',
+        }}
+      >
+        {/* 1. Interactive Mars Target */}
+        <g
+          transform={`translate(${MARS_X}, ${MARS_Y})`}
+          style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+          onClick={() => navigate('/mars', { state: { fromDashboard: true, startPos: 'dashboard' } })}
+          onMouseEnter={() => setMarsHovered(true)}
+          onMouseLeave={() => setMarsHovered(false)}
+        >
+          <circle cx="0" cy="0" r="54" fill="rgba(255,255,255,0.001)" />
+          <circle cx="0" cy="0" r="54" fill="none" stroke="#EF4444" strokeWidth="1.5" strokeDasharray="5 5" opacity={marsHovered ? 1 : 0} style={{ transition: 'opacity 0.25s ease' }}>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="15s" repeatCount="indefinite" />
+          </circle>
+          {marsHovered && (
+            <circle cx="0" cy="0" r="58" fill="none" stroke="#F87171" strokeWidth="1" opacity="0.6">
+              <animate attributeName="r" values="54;62;54" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+            </circle>
+          )}
+          {marsHovered && (
+            <g transform="translate(0, 64)" style={{ pointerEvents: 'none' }}>
+              <rect x="-80" y="-12" width="160" height="24" rx="3" fill="rgba(239, 68, 68, 0.95)" stroke="#FFFFFF" strokeWidth="1" />
+              <text x="0" y="4" fill="#FFFFFF" fontSize="9.5" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🚀 EXPLORE MARS RAD →</text>
+            </g>
+          )}
+        </g>
+
+        {/* 2. Interactive Moon Target — ref is updated every RAF frame by the animation loop */}
+        <g
+          ref={moonInteractiveRef}
+          transform={`translate(${EARTH_X + MOON_RX}, ${CY})`}
+          style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+          onClick={() => navigate('/moon', { state: { fromDashboard: true, startPos: 'dashboard' } })}
+          onMouseEnter={() => setMoonHovered(true)}
+          onMouseLeave={() => setMoonHovered(false)}
+        >
+          <circle cx="0" cy="0" r="48" fill="rgba(255,255,255,0.001)" />
+          <circle cx="0" cy="0" r="44" fill="none" stroke="#FBBF24" strokeWidth="1.5" strokeDasharray="4 4" opacity={moonHovered ? 1 : 0} style={{ transition: 'opacity 0.25s ease' }}>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="12s" repeatCount="indefinite" />
+          </circle>
+          {moonHovered && (
+            <circle cx="0" cy="0" r="48" fill="none" stroke="#FDE68A" strokeWidth="1" opacity="0.6">
+              <animate attributeName="r" values="44;54;44" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+            </circle>
+          )}
+          {moonHovered && (
+            <g transform="translate(0, 64)" style={{ pointerEvents: 'none' }}>
+              <rect x="-85" y="-12" width="170" height="24" rx="3" fill="rgba(5, 10, 24, 0.95)" stroke="#FBBF24" strokeWidth="1" />
+              <text x="0" y="4" fill="#FBBF24" fontSize="9.5" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🌕 EXPLORE MOON ORBIT →</text>
+            </g>
+          )}
+        </g>
+      </svg>,
+      document.body
+    )}
+  </>
   )
-}
-)
+})

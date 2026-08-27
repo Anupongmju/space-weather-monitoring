@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveSis, loadSis } from '../../services/aceService'
+import { loadSolar1 } from '../../services/radiationService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
@@ -8,10 +9,13 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 
 export default function Sis() {
   const [data, setData] = useState<any[]>([])
+  const [solar1Data, setSolar1Data] = useState<any[]>([])
+  const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [limit, setLimit] = useState<TimeRange>(360)
@@ -22,9 +26,18 @@ export default function Sis() {
     if (showLoading) setLoading(true)
     const sDate = appliedRange ? appliedRange.startDate : undefined
     const eDate = appliedRange ? appliedRange.endDate : undefined
-    const d = await loadSis(limit, sDate, eDate)
-    setData(d)
-    if (showLoading) setLoading(false)
+    try {
+      const [dAce, dSolar1] = await Promise.all([
+        loadSis(limit, sDate, eDate),
+        loadSolar1(limit, sDate, eDate)
+      ])
+      setData(Array.isArray(dAce) ? dAce : [])
+      setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
+    } catch(e) {
+      console.error(e)
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }
   
   const fetch_ = async () => {
@@ -55,6 +68,22 @@ export default function Sis() {
 
   const latest = data[data.length - 1]
 
+  const series: any[] = []
+
+  if (satSource === 'ACE' || satSource === 'BOTH') {
+    series.push(
+      { name: 'ACE > 10 MeV', type: 'line', smooth: 0.15, showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.p10]) },
+      { name: 'ACE > 30 MeV', type: 'line', smooth: 0.15, showSymbol: false, itemStyle: { color: '#38BDF8' }, lineStyle: { width: 1.5, opacity: 0.9 }, data: data.map(d => [d.time_tag, d.p30]) }
+    )
+  }
+
+  if (satSource === 'SOLAR1' || satSource === 'BOTH') {
+    series.push(
+      { name: 'S1 > 10 MeV (p7)', type: 'line', smooth: 0.15, showSymbol: false, itemStyle: { color: '#F59E0B' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.p7]) },
+      { name: 'S1 > 30 MeV (p8)', type: 'line', smooth: 0.15, showSymbol: false, itemStyle: { color: '#EC4899' }, lineStyle: { width: 1.5, opacity: 0.85 }, data: solar1Data.map(d => [d.time_tag, d.p8]) }
+    )
+  }
+
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
@@ -67,7 +96,12 @@ export default function Sis() {
       extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
       axisPointer: { type: 'line', lineStyle: { color: '#34D399', type: 'dashed', width: 1.5 } }
     },
-    grid: { top: 30, right: 20, bottom: 30, left: 65 },
+    legend: {
+      show: true,
+      textStyle: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
+      top: 0
+    },
+    grid: { top: 35, right: 20, bottom: 30, left: 65 },
     dataZoom: [
       {
         type: 'inside',
@@ -92,13 +126,10 @@ export default function Sis() {
       nameGap: 45, 
       nameTextStyle: { color: '#34D399', fontSize: 10, fontWeight: 'bold', fontFamily: 'var(--font-mono)' },
       splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-      axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
+      axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)', formatter: formatPowerOf10 },
       axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
     },
-    series: [
-      { name: '> 10 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#34D399' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p10]) },
-      { name: '> 30 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#38BDF8' }, lineStyle: { width: 2 }, data: data.map(d => [d.time_tag, d.p30]) }
-    ]
+    series
   };
 
   return (
@@ -112,10 +143,10 @@ export default function Sis() {
       }}>
         <div>
           <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#34D399', margin: 0, letterSpacing: -0.5 }}>
-            ACE / SIS
+            HIGH-ENERGY PROTONS (SIS / STIS)
           </h1>
           <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Solar Isotope Spectrometer · Solar Energetic Particle High-Energy Proton Flux (&gt;10 &amp; &gt;30 MeV)
+            Solar Isotope Spectrometer &amp; STIS · High-Energy Proton Flux (&gt;10 &amp; &gt;30 MeV)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -139,8 +170,32 @@ export default function Sis() {
         </div>
       </div>
 
-      {/* Dedicated Row 2 Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+      {/* Toolbar: Source Selector + Date Range */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        {/* Source Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          <span style={{ color: '#94A3B8', fontWeight: 600 }}>SATELLITE SOURCE:</span>
+          {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setSatSource(s)}
+              style={{
+                background: satSource === s ? '#34D399' : 'rgba(255,255,255,0.05)',
+                color: satSource === s ? '#FFF' : '#94A3B8',
+                border: '1px solid ' + (satSource === s ? '#34D399' : 'rgba(255,255,255,0.1)'),
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 12px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              {s === 'SOLAR1' ? 'SOLAR-1 (STIS)' : s === 'BOTH' ? 'BOTH (ACE + SOLAR-1)' : 'ACE'}
+            </button>
+          ))}
+        </div>
+
         <DateRangeToolbar
           limit={limit}
           onLimitChange={setLimit}
@@ -153,58 +208,21 @@ export default function Sis() {
 
       {loading ? <LoadingSpinner /> : (
         <Card
-          title="SIS HIGH ENERGY PROTON FLUX"
+          title="SIS / STIS HIGH ENERGY PROTON FLUX"
           extra={panLoading ? (
             <span style={{ fontSize: 11, color: '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
               ◀ LOADING HISTORICAL DATA...
             </span>
           ) : null}
         >
-          <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: '#34D399' }}>
-              <div style={{ width: 16, height: 2, background: '#34D399' }} /> &gt; 10 MeV
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>
-              <div style={{ width: 16, height: 2, background: '#38BDF8' }} /> &gt; 30 MeV
-            </div>
-          </div>
           <ReactECharts
             option={option}
-            style={{ height: 280, width: '100%' }}
+            notMerge={true}
+            style={{ height: 320, width: '100%' }}
             onChartReady={onChartReady}
             onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
           />
         </Card>
-      )}
-
-      {/* Transparent Telemetry Metrics Strip */}
-      {latest && (
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, marginBottom: 24, padding: '0 8px', background: 'transparent', border: 'none'
-        }}>
-          {[
-            { label: '>10 MeV PROTONS', value: latest.p10?.toExponential(2), color: '#34D399' },
-            { label: '>30 MeV PROTONS', value: latest.p30?.toExponential(2), color: '#FB923C' },
-          ].map((s, idx) => (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#CBD5E1', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
-                  {s.label}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: s.color }}>
-                    {s.value ?? '—'}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                    pfu
-                  </span>
-                </div>
-              </div>
-              {idx < 1 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />}
-            </div>
-          ))}
-        </div>
       )}
 
       {/* Refined Instrument Info Guide */}

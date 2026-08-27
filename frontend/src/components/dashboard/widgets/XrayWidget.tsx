@@ -15,7 +15,24 @@ export default function XrayWidget() {
   const option = {
     grid: { top: 10, right: 10, bottom: 20, left: 40 },
     xAxis: { type: 'time', splitLine: { show: false }, axisLabel: { color: '#606075', fontSize: 9 } },
-    yAxis: { type: 'log', splitLine: { show: false }, axisLabel: { color: '#606075', fontSize: 9 } },
+    yAxis: {
+      type: 'log',
+      splitLine: { show: false },
+      axisLabel: {
+        color: '#606075',
+        fontSize: 9,
+        formatter: (v: number) => {
+          if (v <= 0) return '0';
+          const log = Math.round(Math.log10(v));
+          const superscripts: Record<string, string> = {
+            '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+          };
+          const expStr = log.toString().split('').map(c => superscripts[c] || c).join('');
+          return `10${expStr}`;
+        }
+      }
+    },
     series: [
       { name: '1-8 Å', type: 'line', showSymbol: false, itemStyle: { color: '#3498DB' }, lineStyle: { width: 1.5 }, data: data.map((d: any) => [d.time_tag, d.flux_long]) }
     ],

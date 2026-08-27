@@ -8,6 +8,7 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 const COLORS = { '>=0.8 MeV': '#a855f7', '>=2 MeV': '#3498DB' }
 
@@ -122,7 +123,7 @@ export default function ElectronFlux(){
       yAxis: {
         type: 'log',
         splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
+        axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)', formatter: formatPowerOf10 },
         axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
       },
       series: energies.map(e => ({

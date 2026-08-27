@@ -28,7 +28,7 @@ const CATEGORIES = [
       { text: 'Proton Flux (≥10 MeV)', path: '/goes/proton', sub: 'EPS · Radiation storm indicator' },
       { text: 'Electron Flux (≥2 MeV)', path: '/goes/electron', sub: 'EPS · Satellite charging risk' },
       { text: 'Magnetometer (Bz)', path: '/goes/mag', sub: 'MAG · Geosynchronous field' },
-      { text: 'Solar Wind', path: '/goes/wind', sub: 'SWPC · Solar wind data' },
+      // { text: 'Solar Wind', path: '/goes/wind', sub: 'SWPC · Solar wind data' },
       { text: 'SUVI Solar Imagery', path: '/goes/suvi', sub: 'SUVI · Ultraviolet imager' },
     ],
   },
@@ -47,13 +47,26 @@ const CATEGORIES = [
       { text: 'Pressure-Count Scatter', path: '/cosmic/maw/scatter', sub: 'Mawson Station · Scatter analysis' },
     ],
   },
+  {
+    tag: 'MARS',
+    num: '04',
+    label: 'Mars Curiosity Surface RAD',
+    desc: 'Surface radiation dose rate and charged/neutral particle telemetry from MSL Curiosity Rover at Gale Crater on Mars.',
+    color: '#EF4444',
+    icon: Radio,
+    items: [
+      { text: 'Moon Orbit (GSE & Magnetosphere)', path: '/moon', tag: 'MOON', sub: 'NASA SSCWeb 4D · 27 Event positions & Magnetotail' },
+      { text: 'Mars Radiation Dashboard', path: '/mars', sub: 'RAD · Surface dosimetry & Sol telemetry' },
+      { text: 'Heliospheric & Lunar Radiation', path: '/radiation', tag: 'RAD', sub: 'CRaTER & STEREO particle environment' },
+    ],
+  },
 ]
 
 const STATS = [
-  { label: 'DATA SOURCES', value: '3', unit: 'networks', color: '#38BDF8' },
-  { label: 'INSTRUMENTS', value: '15', unit: 'channels', color: '#34D399' },
+  { label: 'DATA SOURCES', value: '4', unit: 'networks', color: '#38BDF8' },
+  { label: 'INSTRUMENTS', value: '18', unit: 'channels', color: '#34D399' },
   { label: 'UPDATE CYCLE', value: '60', unit: 'seconds', color: '#A5B4FC' },
-  { label: 'COVERAGE', value: '7', unit: 'days max', color: '#FBBF24' },
+  { label: 'MARS MISSION', value: 'MSL', unit: 'Curiosity RAD', color: '#EF4444' },
 ]
 
 export default function CurrentConditions() {

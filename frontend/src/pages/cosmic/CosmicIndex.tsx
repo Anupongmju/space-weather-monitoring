@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { Atom, ArrowRight } from 'lucide-react'
+import { Atom, ArrowRight, Map } from 'lucide-react'
 import { fetchAllCosmic } from '../../services/cosmicService'
 import StatusBadge from '../../components/ui/StatusBadge'
 
@@ -9,7 +9,7 @@ const STATIONS = [
   { id: 'KIEL2', label: 'Kiel',         country: 'Germany',     lat: '54.33°N', lon: '10.13°E' },
   { id: 'JUNG1', label: 'Jungfraujoch', country: 'Switzerland', lat: '46.55°N', lon: '7.98°E'  },
   { id: 'THUL',  label: 'Thule',        country: 'Greenland',   lat: '76.60°N', lon: '68.70°W' },
-  // { id: 'MOSC',  label: 'Moscow',       country: 'Russia',      lat: '55.47°N', lon: '37.32°E' },
+  { id: 'PSNM',  label: 'Doi Inthanon', country: 'Thailand',    lat: '18.59°N', lon: '98.49°E' },
 ]
 export default function CosmicIndex(){
   const navigate = useNavigate()
@@ -71,6 +71,91 @@ export default function CosmicIndex(){
         </div>
       </div>
 
+      {/* Action Banners Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 28 }}>
+        {/* Global Earth Map Card */}
+        <div
+          onClick={() => navigate('/cosmic/map')}
+          style={{
+            padding: '20px 24px',
+            background: 'linear-gradient(135deg, rgba(56,189,248,0.12), rgba(56,189,248,0.03))',
+            border: '1px solid rgba(56,189,248,0.35)',
+            borderRadius: 12, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(56,189,248,0.18)'
+            e.currentTarget.style.borderColor = '#38BDF8'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(56,189,248,0.12), rgba(56,189,248,0.03))'
+            e.currentTarget.style.borderColor = 'rgba(56,189,248,0.35)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: 8,
+              background: 'rgba(56,189,248,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Map size={22} color="#38BDF8" />
+            </div>
+            <div>
+              <div style={{ fontFamily: "'Orbitron', monospace", fontSize: 13, fontWeight: 700, color: '#38BDF8' }}>
+                GLOBAL EARTH MAP
+              </div>
+              <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                Fullscreen real Earth satellite stations map
+              </div>
+            </div>
+          </div>
+          <ArrowRight size={18} color="#38BDF8" />
+        </div>
+
+        {/* Multi-Station Telemetry Card */}
+        <div
+          onClick={() => navigate('/cosmic/neutron')}
+          style={{
+            padding: '20px 24px',
+            background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(168,85,247,0.03))',
+            border: '1px solid rgba(168,85,247,0.35)',
+            borderRadius: 12, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(168,85,247,0.18)'
+            e.currentTarget.style.borderColor = '#A855F7'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(168,85,247,0.03))'
+            e.currentTarget.style.borderColor = 'rgba(168,85,247,0.35)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: 8,
+              background: 'rgba(168,85,247,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Atom size={22} color="#A855F7" />
+            </div>
+            <div>
+              <div style={{ fontFamily: "'Orbitron', monospace", fontSize: 13, fontWeight: 700, color: '#A855F7' }}>
+                NEUTRON MONITOR
+              </div>
+              <div style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                Real-time count rate · % Variation plots
+              </div>
+            </div>
+          </div>
+          <ArrowRight size={18} color="#A855F7" />
+        </div>
+      </div>
+
       {/* Status */}
       {status && (
         <div style={{
@@ -100,7 +185,7 @@ export default function CosmicIndex(){
 
       {/* Station cards */}
       <h3 style={{ fontFamily: "'Orbitron', monospace", fontSize: 11, color: '#606075', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 14 }}>
-        Available Stations
+        Featured Monitoring Stations
       </h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 28 }}>
         {STATIONS.map(st => {
@@ -137,30 +222,6 @@ export default function CosmicIndex(){
             </div>
           )
         })}
-      </div>
-
-      {/* Navigate to chart */}
-      <div
-        onClick={() => navigate('/cosmic/neutron')}
-        style={{
-          padding: '18px 24px',
-          background: 'rgba(168,85,247,0.08)',
-          border: '1px solid rgba(168,85,247,0.25)',
-          borderRadius: 12, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(168,85,247,0.15)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(168,85,247,0.08)'}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Atom size={20} color="#A855F7" />
-          <div>
-            <div style={{ fontFamily: "'Orbitron', monospace", fontSize: 13, fontWeight: 700, color: '#A855F7' }}>NEUTRON MONITOR</div>
-            <div style={{ fontSize: 11, color: '#606075', fontFamily: 'var(--font-mono)', marginTop: 2 }}>Real-time count rate · All stations</div>
-          </div>
-        </div>
-        <ArrowRight size={16} color="#A855F7" />
       </div>
     </div>
   )

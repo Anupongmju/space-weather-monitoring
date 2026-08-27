@@ -16,7 +16,7 @@ export default function EnlilWidget() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`${API_BASE}/api/enlil/latest`);
+      const res = await fetch(`${API_BASE}/enlil/latest`);
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }
@@ -37,7 +37,7 @@ export default function EnlilWidget() {
     try {
       setFetching(true);
       setError(null);
-      const res = await fetch(`${API_BASE}/api/enlil/fetch`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/enlil/fetch`, { method: 'POST' });
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }
@@ -148,6 +148,7 @@ export default function EnlilWidget() {
           </div>
         ) : (
           <video
+            key={videoSrc}
             src={videoSrc}
             autoPlay
             loop

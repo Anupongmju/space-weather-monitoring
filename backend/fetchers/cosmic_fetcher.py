@@ -1,4 +1,5 @@
 
+import os
 import httpx
 from datetime import datetime, timedelta, timezone
 from database import get_conn
@@ -6,27 +7,105 @@ from psycopg2.extras import execute_values  # type: ignore
 
 STATIONS = ['OULU','SOPO','KIEL2','JUNG1','THUL','MOSC']
 
-def fetch_neutron(station='OULU', hours=24):
-    url = "https://www.nmdb.eu/rt/realtime.txt"
-    r = httpx.get(url, timeout=30)
-    r.raise_for_status()
+def load_historical_thule():
+    """Loads 1958-2026 THUL historical dataset from backend/data/THUL_1HCOR_E_1958_mid2026.txt if present."""
+    file_path = os.path.join(os.path.dirname(__file__), "..", "data", "THUL_1HCOR_E_1958_mid2026.txt")
+    if not os.path.exists(file_path):
+        return 0
 
     records = []
-    for line in r.text.split('\n'):
-        if not line or line.startswith('#'): continue
-        parts = line.strip().split(';')
-        if len(parts) < 3: continue
-        
-        try:
-            time_tag = parts[0].strip()
-            st = parts[1].strip()
-            if station != 'ALL' and st != station: continue
-            
-            count_rate = float(parts[2].strip())
-            records.append((time_tag, st, count_rate))
-        except: continue
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or ';' not in line or line.startswith('start_date_time'):
+                continue
+            parts = line.split(';')
+            if len(parts) >= 2:
+                time_tag = parts[0].strip()
+                try:
+                    val = float(parts[1].strip())
+                    if val > 0:
+                        records.append((time_tag, 'THUL', val))
+                except ValueError:
+                    pass
 
     if not records: return 0
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        execute_values(cur, """
+            INSERT INTO cosmic_neutron (time_tag, station, count_rate)
+            VALUES %s
+            ON CONFLICT (time_tag, station) DO UPDATE SET
+            count_rate = EXCLUDED.count_rate
+        """, records, page_size=5000)
+        conn.commit()
+        print(f"[THUL Importer] Loaded {len(records)} historical THUL records (1958-2026).")
+        return len(records)
+    except Exception as e:
+        print(f"[THUL Importer] Error: {e}")
+        return 0
+    finally:
+        conn.close()
+
+def fetch_neutron(station='OULU', hours=24):
+    records = []
+    
+    # 1. Try NMDB realtime.txt first
+    try:
+        url = "https://www.nmdb.eu/rt/realtime.txt"
+        r = httpx.get(url, timeout=15)
+        if r.status_code == 200:
+            for line in r.text.split('\n'):
+                if not line or line.startswith('#'): continue
+                parts = line.strip().split(';')
+                if len(parts) < 3: continue
+                try:
+                    time_tag = parts[0].strip()
+                    st = parts[1].strip()
+                    if station != 'ALL' and st != station: continue
+                    count_rate = float(parts[2].strip())
+                    if count_rate > 0:
+                        records.append((time_tag, st, count_rate))
+                except: continue
+    except Exception as e:
+        print(f"[Cosmic Fetcher] Realtime.txt warning: {e}")
+
+    # 2. If no records found for this station, query NMDB Nest API
+    if not records and station != 'ALL':
+        now_utc = datetime.now(timezone.utc)
+        start = now_utc - timedelta(hours=hours)
+        url = (
+            f"https://www.nmdb.eu/nest/draw_graph.php?formchk=1&stations[]={station}"
+            f"&tabchoice=ori&dtype=corr_for_efficiency&tresolution=1&yunits=1&date_choice=bydate"
+            f"&start_day={start.day:02d}&start_month={start.month:02d}&start_year={start.year}"
+            f"&start_hour={start.hour:02d}&start_min={start.minute:02d}"
+            f"&end_day={now_utc.day:02d}&end_month={now_utc.month:02d}&end_year={now_utc.year}"
+            f"&end_hour={now_utc.hour:02d}&end_min={now_utc.minute:02d}"
+            f"&output=ascii"
+        )
+        try:
+            r = httpx.get(url, timeout=20)
+            if r.status_code == 200 and '<pre>' in r.text:
+                pre = r.text[r.text.find('<pre>'):r.text.find('</pre>')]
+                for line in pre.splitlines():
+                    if not line or line.startswith('<') or line.startswith('#'): continue
+                    parts = line.split(';')
+                    if len(parts) >= 2:
+                        try:
+                            tt = parts[0].strip()
+                            v = float(parts[1].strip())
+                            if v > 0:
+                                records.append((tt, station, v))
+                        except ValueError:
+                            pass
+        except Exception as e:
+            print(f"[Cosmic Fetcher] NMDB Nest fetch error for {station}: {e}")
+
+    # If no records found from realtime.txt and NMDB Nest, do not fake anything
+    if not records:
+        return 0
 
     conn = get_conn()
     try:
@@ -178,6 +257,11 @@ def backfill_cosmic():
         print(f"[Cosmic Backfill] Error during backfill execution: {e}")
 
 def fetch_all_cosmic():
+    try:
+        load_historical_thule()
+    except Exception as e:
+        print(f"[THUL Importer] Error: {e}")
+
     try:
         backfill_cosmic()
     except Exception as e:

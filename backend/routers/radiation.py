@@ -79,6 +79,14 @@ def get_stereo(limit: int = 1440, start_date: Optional[str] = None, end_date: Op
 def get_solar1(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
     return get_time_filtered_query("solar1_stis_particles", limit, start_date, end_date)
 
+@router.get("/solar1/plasma")
+def get_solar1_plasma(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("solar1_rtsw", limit, start_date, end_date)
+
+@router.get("/solar1/mag")
+def get_solar1_mag(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    return get_time_filtered_query("solar1_mag", limit, start_date, end_date)
+
 @router.get("/crater")
 def get_crater(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
     return get_time_filtered_query("crater_doserates", limit, start_date, end_date)

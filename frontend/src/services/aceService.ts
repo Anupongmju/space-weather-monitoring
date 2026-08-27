@@ -8,7 +8,7 @@ export const fetchAndSaveEpam   = (): Promise<any> => fetch(`${BASE}/fetch/epam`
 export const fetchAndSaveSis    = (): Promise<any> => fetch(`${BASE}/fetch/sis`,    { method: 'POST' }).then(r => r.json())
 export const fetchAndSaveSwics  = (): Promise<any[]> => Promise.resolve([]) // ไม่มีข้อมูล
 
-export const fetchAllACE = (): Promise<any> => fetch('http://localhost:8000/ace/fetch', { method: 'POST' }).then(r => r.json())
+export const fetchAllACE = (): Promise<any> => fetch(`${BASE}/fetch`, { method: 'POST' }).then(r => r.json())
 
 // ── Load from SQLite (ดึงข้อมูลที่เก็บไว้มา plot) ──
 export const loadSwepam = (limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {

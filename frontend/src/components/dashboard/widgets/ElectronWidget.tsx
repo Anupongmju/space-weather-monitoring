@@ -25,7 +25,24 @@ export default function ElectronWidget() {
   const option = {
     grid: { top: 10, right: 10, bottom: 20, left: 45 },
     xAxis: { type: 'time', splitLine: { show: false }, axisLabel: { color: '#606075', fontSize: 9 } },
-    yAxis: { type: 'log', splitLine: { show: false }, axisLabel: { color: '#606075', fontSize: 9 } },
+    yAxis: {
+      type: 'log',
+      splitLine: { show: false },
+      axisLabel: {
+        color: '#606075',
+        fontSize: 9,
+        formatter: (v: number) => {
+          if (v <= 0) return '0';
+          const log = Math.round(Math.log10(v));
+          const superscripts: Record<string, string> = {
+            '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+          };
+          const expStr = log.toString().split('').map(c => superscripts[c] || c).join('');
+          return `10${expStr}`;
+        }
+      }
+    },
     series: energies.length > 0 ? energies.map(energy => ({
       name: energy,
       type: 'line',

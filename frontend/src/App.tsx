@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navbar from './components/layout/Navbar'
 import Dashboard from './pages/Dashboard'
 import CurrentConditions from './pages/CurrentConditions'
@@ -24,14 +24,18 @@ import GoesSuvi from './pages/goes/GoesSuvi'
 // Cosmic Ray pages
 import CosmicIndex from './pages/cosmic/CosmicIndex'
 import NeutronMonitor from './pages/cosmic/NeutronMonitor'
+import NeutronMapPage from './pages/cosmic/NeutronMapPage'
 import MawIndex from './pages/cosmic/MawIndex'
 import MawCounts from './pages/cosmic/MawCounts'
 import MawPressure from './pages/cosmic/MawPressure'
 import MawTubes from './pages/cosmic/MawTubes'
 import MawScatter from './pages/cosmic/MawScatter'
+import SunspotNumber from './pages/solar/SunspotNumber'
 
 import SpaceWeatherOverview from './pages/analysis/SpaceWeatherOverview'
 import RadiationMonitoring from './pages/RadiationMonitoring'
+import MarsDashboard from './pages/mars/MarsDashboard'
+import MoonDashboard from './pages/moon/MoonDashboard'
 import NoaaReport from './pages/reports/NoaaReport'
 import News from './pages/News'
 import NewsDetail from './pages/NewsDetail'
@@ -43,13 +47,23 @@ import './App.css'
 import OrbitBackground from './components/space/OrbitBackground'
 
 export default function App() {
+  const location = useLocation()
+  const isCustomSpacePage =
+    location.pathname.startsWith('/moon') ||
+    location.pathname.startsWith('/lunar') ||
+    location.pathname.startsWith('/mars') ||
+    location.pathname.startsWith('/cosmic/map') ||
+    location.pathname.startsWith('/cosmic/globe')
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#020617', position: 'relative', overflow: 'hidden' }}>
       <ScrollToTop />
-      {/* Universal Real-Time Astronomical Orbit Background */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        <OrbitBackground />
-      </div>
+      {/* Universal Real-Time Astronomical Orbit Background (disabled on pages with dedicated custom backgrounds) */}
+      {!isCustomSpacePage && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+          <OrbitBackground />
+        </div>
+      )}
 
       {/* Gentle dark gradient overlay */}
       <div style={{
@@ -88,15 +102,22 @@ export default function App() {
             <Route path="/goes/wind" element={<SolarWind />} />
             <Route path="/goes/suvi" element={<GoesSuvi />} />
 
-            {/* Cosmic Ray */}
+            {/* Cosmic Ray & Solar */}
+            <Route path="/solar/sunspot" element={<SunspotNumber />} />
             <Route path="/cosmic" element={<CosmicIndex />} />
             <Route path="/cosmic/neutron" element={<NeutronMonitor />} />
+            <Route path="/cosmic/map" element={<NeutronMapPage />} />
+            <Route path="/cosmic/globe" element={<NeutronMapPage />} />
             <Route path="/cosmic/maw" element={<MawIndex />} />
             <Route path='/cosmic/maw/counts' element={<MawCounts />} />
             <Route path='cosmic/maw/pressure' element={<MawPressure />} />
             <Route path='/cosmic/maw/tubes' element={<MawTubes />} />
             <Route path='/cosmic/maw/scatter' element={<MawScatter />} />
             <Route path="/radiation" element={<RadiationMonitoring />} />
+            <Route path="/mars" element={<MarsDashboard />} />
+            <Route path="/mars/rad" element={<MarsDashboard />} />
+            <Route path="/moon" element={<MoonDashboard />} />
+            <Route path="/lunar" element={<MoonDashboard />} />
             <Route path="/analysis" element={<SpaceWeatherOverview />} />
             <Route path="/report" element={<NoaaReport />} />
             <Route path="/news" element={<News />} />

@@ -8,6 +8,7 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 
 // ── Flare classification ───────────────────────────────────────────
@@ -32,13 +33,13 @@ const BAND_ZONES = [
   { yMin: 1e-3, yMax: 1e-2, color: 'rgba(60,0,0,0.96)'    },
 ]
 const BAND_LABELS = [
-  { yMid: 5e-9,  label: 'A0', color: '#555566' },
-  { yMid: 5e-8,  label: 'A',  color: '#777788' },
-  { yMid: 5e-7,  label: 'B',  color: '#4ade80' },
-  { yMid: 5e-6,  label: 'C',  color: '#d4c000' },
-  { yMid: 5e-5,  label: 'M',  color: '#F97316' },
-  { yMid: 5e-4,  label: 'X',  color: '#EF4444' },
-  { yMid: 5e-3,  label: 'X10',color: '#ff4040' },
+  { yMid: 3.16e-9, label: 'A0',  color: '#555566' },
+  { yMid: 3.16e-8, label: 'A',   color: '#777788' },
+  { yMid: 3.16e-7, label: 'B',   color: '#4ade80' },
+  { yMid: 3.16e-6, label: 'C',   color: '#d4c000' },
+  { yMid: 3.16e-5, label: 'M',   color: '#F97316' },
+  { yMid: 3.16e-4, label: 'X',   color: '#EF4444' },
+  { yMid: 3.16e-3, label: 'X10', color: '#ff4040' },
 ]
 
 // ── Dense horizontal sub-gridlines on log scale ──────────────────────
@@ -60,22 +61,25 @@ function buildLogGrid() {
 }
 
 // ── Detect flare peaks ────────────────────────────────────────────────
-function detectFlares(data: any[]) {
-  if (data.length < 5) return []
-  const MIN_FLUX = 1e-6
+function detectFlares(data: any[], selectedClasses: string[]) {
+  if (data.length < 5 || selectedClasses.length === 0) return []
   const GAP = 8
   const events: { time: string; label: string }[] = []
   let lastIdx = -GAP - 1
   for (let i = 2; i < data.length - 2; i++) {
     const v = data[i].flux_long
-    if (!v || v < MIN_FLUX) continue
+    if (!v || v < 1e-8) continue
+    const cls = getFlareClass(v)
+    const baseClass = cls.label.startsWith('X') ? 'X' : cls.label
+
+    if (!selectedClasses.includes(baseClass)) continue
+
     if (
       v >= data[i-1].flux_long && v >= data[i-2].flux_long &&
       v >= data[i+1].flux_long && v >= data[i+2].flux_long &&
       i - lastIdx > GAP
     ) {
-      const cls = getFlareClass(v)
-      const base = v >= 1e-3 ? 1e-3 : v >= 1e-4 ? 1e-4 : v >= 1e-5 ? 1e-5 : 1e-6
+      const base = v >= 1e-3 ? 1e-3 : v >= 1e-4 ? 1e-4 : v >= 1e-5 ? 1e-5 : v >= 1e-6 ? 1e-6 : v >= 1e-7 ? 1e-7 : 1e-8
       events.push({ time: data[i].time_tag, label: `${cls.label}${(v / base).toFixed(1)}` })
       lastIdx = i
     }
@@ -91,6 +95,14 @@ export default function XrayFlux(){
     const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
     const [activeTab, setActiveTab] = useState('usage')
     
+    const [selectedClasses, setSelectedClasses] = useState<string[]>(['M', 'X'])
+
+    const toggleClass = (cls: string) => {
+      setSelectedClasses(prev =>
+        prev.includes(cls) ? prev.filter(c => c !== cls) : [...prev, cls]
+      )
+    }
+
     const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
     data,
     setData,
@@ -136,7 +148,7 @@ export default function XrayFlux(){
     const latest = data[data.length - 1]
     const flare = getFlareClass(latest?.flux_long)
     const bzStatus = flare.label === 'X' || flare.label === 'X10' ? 'danger' : flare.label === 'M' ? 'warning' : 'normal'
-    const flareEvents = detectFlares(data)
+    const flareEvents = detectFlares(data, selectedClasses)
     const logGridLines = buildLogGrid()
     const tStart = data[0]?.time_tag
     const tEnd   = data[data.length - 1]?.time_tag
@@ -165,7 +177,7 @@ export default function XrayFlux(){
           )
         }
       },
-      grid: { top: 14, right: 58, bottom: 36, left: 56 },
+      grid: { top: 14, right: 82, bottom: 36, left: 56 },
       dataZoom: [
         {
           type: 'inside',
@@ -184,24 +196,47 @@ export default function XrayFlux(){
         axisTick: { lineStyle: { color: '#333' } },
         axisLabel: { color: '#777', fontSize: 10, fontFamily: 'monospace' }
       },
-      yAxis: {
-        type: 'log',
-        min: 1e-9,
-        max: 1e-2,
-        interval: 1,
-        splitLine: { show: false },
-        axisLine: { lineStyle: { color: '#333' } },
-        axisTick: { show: false },
-        axisLabel: {
-          color: '#888',
-          fontSize: 10,
-          fontFamily: 'monospace',
-          formatter: (v) => {
-            const exp = Math.round(Math.log10(v));
-            return `10${exp.toString().replace('-', '⁻')}`;
+      yAxis: [
+        {
+          type: 'log',
+          min: 1e-9,
+          max: 1e-2,
+          interval: 1,
+          splitLine: { show: false },
+          axisLine: { lineStyle: { color: '#333' } },
+          axisTick: { show: false },
+          axisLabel: {
+            color: '#888',
+            fontSize: 10,
+            fontFamily: 'monospace',
+            formatter: formatPowerOf10
+          }
+        },
+        {
+          type: 'log',
+          min: 1e-9,
+          max: 1e-2,
+          position: 'right',
+          splitLine: { show: false },
+          axisLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+          axisTick: { show: true, lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+          axisLabel: {
+            color: '#94A3B8',
+            fontSize: 15,
+            fontFamily: 'var(--font-mono), monospace',
+            fontWeight: 700,
+            formatter: (v: number) => {
+              if (v === 1e-8) return 'A'
+              if (v === 1e-7) return 'B'
+              if (v === 1e-6) return 'C'
+              if (v === 1e-5) return 'M'
+              if (v === 1e-4) return 'X'
+              if (v === 1e-3) return 'X10'
+              return ''
+            }
           }
         }
-      },
+      ],
       series: [
         {
           name: '_bands', type: 'line', data: [], showSymbol: false, silent: true,
@@ -226,19 +261,6 @@ export default function XrayFlux(){
           }
         },
         {
-          name: '_blabels', type: 'line', data: [], showSymbol: false, silent: true,
-          markLine: {
-            silent: true,
-            symbol: ['none','none'],
-            data: BAND_LABELS.map(b => ({
-              yAxis: b.yMid,
-              lineStyle: { opacity: 0 },
-              label: { show: true, position: 'insideEndTop', formatter: b.label,
-                color: b.color, fontSize: 11, fontFamily: 'monospace', fontWeight: 700, distance: 4 }
-            }))
-          }
-        },
-        {
           name: '_flares', type: 'line', data: [], showSymbol: false,
           markLine: {
             silent: false,
@@ -258,7 +280,33 @@ export default function XrayFlux(){
           showSymbol: false,
           connectNulls: true,
           lineStyle: { width: 1.5, color: '#3498DB' },
-          data: data.map(d => [d.time_tag, d.flux_long])
+          data: data.map(d => [d.time_tag, d.flux_long]),
+          markLine: {
+            silent: true,
+            symbol: ['none', 'none'],
+            data: BAND_LABELS.map(b => ([
+              { coord: [tStart, b.yMid], lineStyle: { opacity: 0 } },
+              {
+                coord: [tEnd, b.yMid],
+                lineStyle: { opacity: 0 },
+                label: {
+                  show: true,
+                  position: 'end',
+                  distance: 8,
+                  formatter: b.label === 'A0' ? 'A0' : `Class ${b.label}`,
+                  color: b.color,
+                  fontSize: 15,
+                  fontFamily: 'var(--font-mono), monospace',
+                  fontWeight: 700,
+                  backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                  borderColor: `${b.color}aa`,
+                  borderWidth: 1,
+                  borderRadius: 3,
+                  padding: [2, 5],
+                }
+              }
+            ]))
+          }
         },
         {
           name: '0.5-4 Å (Short)',
@@ -357,16 +405,77 @@ export default function XrayFlux(){
               </span>
             ) : null}
           >
-            {/* Legend */}
-            <div style={{ display: 'flex', gap: 20, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              {[{ color: '#3498DB', label: '1–8 Å (Long)' }, { color: '#22c55e', label: '0.5–4 Å (Short)' }].map(l => (
-                <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: l.color }}>
-                  <div style={{ width: 22, height: 2, background: l.color }} />
-                  {l.label}
+            {/* Legend & Flare Filter Control */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                {[{ color: '#3498DB', label: '1–8 Å (Long)' }, { color: '#22c55e', label: '0.5–4 Å (Short)' }].map(l => (
+                  <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: l.color }}>
+                    <div style={{ width: 22, height: 2, background: l.color }} />
+                    {l.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Flare Multi-Select Class Filter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(15, 23, 42, 0.7)', padding: '3px 8px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 4 }}>
+                  <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)', fontWeight: 600, paddingRight: 4 }}>
+                    FLARE CLASSES:
+                  </span>
+                  {[
+                    { key: 'A', color: '#3b82f6' },
+                    { key: 'B', color: '#22c55e' },
+                    { key: 'C', color: '#d4c000' },
+                    { key: 'M', color: '#F97316' },
+                    { key: 'X', color: '#EF4444' },
+                  ].map(item => {
+                    const isSelected = selectedClasses.includes(item.key)
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => toggleClass(item.key)}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? '#FFFFFF' : '#64748B',
+                          background: isSelected ? `${item.color}33` : 'transparent',
+                          border: `1px solid ${isSelected ? item.color : 'rgba(255,255,255,0.08)'}`,
+                          borderRadius: 3,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? `0 0 6px ${item.color}44` : 'none'
+                        }}
+                      >
+                        {isSelected ? '✓ ' : ''}{item.key}
+                      </button>
+                    )
+                  })}
+                  <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.15)', margin: '0 4px' }} />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedClasses(selectedClasses.length === 5 ? ['C', 'M', 'X'] : ['A', 'B', 'C', 'M', 'X'])}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: 9,
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      color: '#3498DB',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {selectedClasses.length === 5 ? 'RESET' : 'ALL'}
+                  </button>
                 </div>
-              ))}
-              <div style={{ marginLeft: 'auto', fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                {flareEvents.length > 0 ? `${flareEvents.length} flare event${flareEvents.length > 1 ? 's' : ''} detected` : 'No flares detected'}
+                <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)', minWidth: 140, textAlign: 'right' }}>
+                  {flareEvents.length > 0
+                    ? `${flareEvents.length} flare event${flareEvents.length > 1 ? 's' : ''} (${selectedClasses.length > 0 ? selectedClasses.slice().sort().join(',') : 'None'})`
+                    : `No flares (${selectedClasses.length > 0 ? selectedClasses.slice().sort().join(',') : 'None'})`}
+                </div>
               </div>
             </div>
             <ReactECharts

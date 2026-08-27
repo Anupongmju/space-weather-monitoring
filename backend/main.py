@@ -35,6 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routers import ace, goes, cosmic, maw, news, enlil, archive_ace, radiation, sunspot, mars, moon
+
 app.include_router(ace.router)
 app.include_router(goes.router)
 app.include_router(cosmic.router)
@@ -43,6 +45,9 @@ app.include_router(news.router)
 app.include_router(enlil.router)
 app.include_router(archive_ace.router)
 app.include_router(radiation.router)
+app.include_router(sunspot.router)
+app.include_router(mars.router)
+app.include_router(moon.router)
 
 @app.get("/")
 def root():
@@ -56,11 +61,13 @@ def fetch_all():
     from fetchers.stereo_fetcher import fetch_stereo_particles
     from fetchers.solar1_fetcher import fetch_solar1_rtsw
     from fetchers.crater_fetcher import fetch_crater_doserates
+    from fetchers.mars_rad_fetcher import fetch_mars_rad
     return {
         "ace":       fetch_all_ace(),
         "goes":      fetch_all_goes(),
         "cosmic":    fetch_all_cosmic(),
         "stereo":    fetch_stereo_particles(),
         "solar1":    fetch_solar1_rtsw(),
-        "crater":    fetch_crater_doserates()
+        "crater":    fetch_crater_doserates(),
+        "mars":      fetch_mars_rad()
     }

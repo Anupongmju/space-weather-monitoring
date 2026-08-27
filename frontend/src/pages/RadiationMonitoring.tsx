@@ -11,7 +11,7 @@ import {
   Satellite,
   Calendar
 } from 'lucide-react'
-import { loadStereo, loadSolar1, loadCrater, fetchAllRadiation } from '../services/radiationService'
+import { loadStereo, loadSolar1, loadCrater, loadAceEpam, loadAceSis, fetchAllRadiation } from '../services/radiationService'
 import { loadProton, loadElectron } from '../services/goesService'
 import { loadNeutron } from '../services/cosmicService'
 import { useAutoFetch } from '../hooks/useAutoFetch'
@@ -20,6 +20,18 @@ import LoadingSpinner from '../components/ui/LoadingSpinner'
 import InstrumentInfoGuide from '../components/ui/InstrumentInfoGuide'
 import { useLineDrawing } from '../hooks/useLineDrawing'
 import TrendLineOverlay, { buildMarkLines } from '../components/ui/TrendLineOverlay'
+import { formatPowerOf10 } from '../utils/formatters'
+
+const GOES_PROTON_COLORS: Record<string, string> = {
+  '>=1 MeV': '#60A5FA',   // Bright Blue
+  '>=5 MeV': '#34D399',   // Bright Emerald
+  '>=10 MeV': '#FBBF24',  // Bright Amber
+  '>=30 MeV': '#F97316',  // Bright Orange
+  '>=50 MeV': '#38BDF8',  // Bright Cyan
+  '>=60 MeV': '#A855F7',  // Bright Purple
+  '>=100 MeV': '#EF4444', // Bright Red
+  '>=500 MeV': '#EC4899', // Bright Pink
+}
 
 type TimeRange = 360 | 1440 | 4320 | 10080
 const TIME_LABELS: Record<number, string> = { 360: '6H', 1440: '1D', 4320: '3D', 10080: '7D' }
@@ -40,34 +52,39 @@ function DateInputDDMMYYYY({
   onChange: (val: string) => void
   accentColor?: string
 }) {
-  const hiddenRef = useRef<HTMLInputElement>(null)
-
-  const formatDisplay = (iso: string) => {
+  const isoToDdMmYyyy = (iso: string) => {
     if (!iso) return ''
     const parts = iso.split('-')
-    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : iso
+    if (parts.length !== 3) return iso
+    return `${parts[2]}/${parts[1]}/${parts[0]}`
   }
 
-  const parseDisplay = (disp: string) => {
-    const parts = disp.split('/')
-    if (parts.length === 3 && parts[0].length <= 2 && parts[1].length <= 2 && parts[2].length === 4) {
-      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-    }
-    return null
-  }
+  const [text, setText] = useState(() => isoToDdMmYyyy(value))
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
-  const [inputText, setInputText] = useState(formatDisplay(value))
-  useEffect(() => { setInputText(formatDisplay(value)) }, [value])
+  useEffect(() => {
+    setText(isoToDdMmYyyy(value))
+  }, [value])
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value
-    setInputText(raw)
-    const iso = parseDisplay(raw)
-    if (iso && !isNaN(new Date(iso).getTime())) onChange(iso)
+    let val = e.target.value
+    setText(val)
+
+    const cleaned = val.replace(/\D/g, '')
+    if (cleaned.length === 8) {
+      const day = cleaned.slice(0, 2)
+      const month = cleaned.slice(2, 4)
+      const year = cleaned.slice(4, 8)
+      const iso = `${year}-${month}-${day}`
+      onChange(iso)
+    }
   }
 
-  const openPicker = () => {
-    try { hiddenRef.current?.showPicker() } catch { hiddenRef.current?.focus() }
+  const handleNativeDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const iso = e.target.value
+    if (iso) {
+      onChange(iso)
+    }
   }
 
   return (
@@ -75,24 +92,61 @@ function DateInputDDMMYYYY({
       <input
         type="text"
         placeholder="DD/MM/YYYY"
-        value={inputText}
+        maxLength={10}
+        value={text}
         onChange={handleTextChange}
         style={{
-          width: 115, background: 'rgba(2, 6, 23, 0.9)', color: '#F8FAFC',
-          border: '1px solid rgba(255, 255, 255, 0.2)', padding: '3px 24px 3px 8px',
-          fontSize: 11, fontFamily: 'var(--font-mono)', outline: 'none', textAlign: 'center'
+          width: 95,
+          padding: '3px 6px',
+          background: 'rgba(15, 23, 42, 0.8)',
+          border: `1px solid ${accentColor}66`,
+          color: '#F8FAFC',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          fontWeight: 600,
+          textAlign: 'center',
+          borderRadius: 2,
+          outline: 'none',
         }}
       />
       <button
-        type="button" onClick={openPicker}
-        style={{ position: 'absolute', right: 4, background: 'transparent', border: 'none', color: accentColor, cursor: 'pointer' }}
+        type="button"
+        onClick={() => {
+          const el = dateInputRef.current as any;
+          if (el) {
+            if (typeof el.showPicker === 'function') {
+              el.showPicker();
+            } else {
+              el.focus();
+            }
+          }
+        }}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: accentColor,
+          cursor: 'pointer',
+          padding: '0 4px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
       >
-        <Calendar size={13} />
+        <Calendar size={12} />
       </button>
       <input
-        ref={hiddenRef} type="date" value={value}
-        onChange={e => e.target.value && onChange(e.target.value)}
-        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+        ref={dateInputRef}
+        type="date"
+        value={value}
+        onChange={handleNativeDateChange}
+        style={{
+          position: 'absolute',
+          opacity: 0,
+          pointerEvents: 'none',
+          width: 0,
+          height: 0,
+          bottom: 0,
+          left: 0,
+        }}
       />
     </div>
   )
@@ -102,7 +156,7 @@ export default function RadiationMonitoring() {
   const chartRef = useRef<any>(null)
   const chartWrapperRef = useRef<HTMLDivElement>(null)
 
-  const [activeMainTab, setActiveMainTab] = useState<'particles' | 'cosmic'>('particles')
+  const [activeMainTab, setActiveMainTab] = useState<'protons' | 'electrons' | 'cosmic'>('protons')
   const [limit, setLimit] = useState<TimeRange>(1440)
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
@@ -121,6 +175,8 @@ export default function RadiationMonitoring() {
   // Data states
   const [stereoData, setStereoData] = useState<any[]>([])
   const [solar1Data, setSolar1Data] = useState<any[]>([])
+  const [aceEpamData, setAceEpamData] = useState<any[]>([])
+  const [aceSisData, setAceSisData] = useState<any[]>([])
   const [goesProtonData, setGoesProtonData] = useState<any[]>([])
   const [goesElectronData, setGoesElectronData] = useState<any[]>([])
   const [craterData, setCraterData] = useState<any[]>([])
@@ -159,9 +215,11 @@ export default function RadiationMonitoring() {
       const sDate = isCustomDate && appliedRange ? appliedRange.startDate : undefined
       const eDate = isCustomDate && appliedRange ? appliedRange.endDate : undefined
 
-      const [stereo, solar1, crater, gProton, gElectron, sopo, oulu] = await Promise.all([
+      const [stereo, solar1, epam, sis, crater, gProton, gElectron, sopo, oulu] = await Promise.all([
         loadStereo(limit, sDate, eDate),
         loadSolar1(limit, sDate, eDate),
+        loadAceEpam(limit, sDate, eDate),
+        loadAceSis(limit, sDate, eDate),
         loadCrater(limit, sDate, eDate),
         loadProton(limit, sDate, eDate),
         loadElectron(limit, sDate, eDate),
@@ -171,6 +229,8 @@ export default function RadiationMonitoring() {
 
       setStereoData(Array.isArray(stereo) ? stereo : [])
       setSolar1Data(Array.isArray(solar1) ? solar1 : [])
+      setAceEpamData(Array.isArray(epam) ? epam : [])
+      setAceSisData(Array.isArray(sis) ? sis : [])
       setCraterData(Array.isArray(crater) ? crater : [])
       setGoesProtonData(Array.isArray(gProton) ? pivotGoes(gProton) : [])
       setGoesElectronData(Array.isArray(gElectron) ? pivotGoes(gElectron) : [])
@@ -196,12 +256,14 @@ export default function RadiationMonitoring() {
   }
 
   const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
-    data: stereoData.length ? stereoData : craterData,
-    setData: activeMainTab === 'particles' ? setStereoData : setCraterData,
+    data: activeMainTab === 'cosmic' ? craterData : stereoData,
+    setData: activeMainTab === 'cosmic' ? setCraterData : setStereoData,
     loadHistorical: async (start, end) => {
-      const [st, s1, cr, gp, ge, sp, ou] = await Promise.all([
+      const [st, s1, ep, si, cr, gp, ge, sp, ou] = await Promise.all([
         loadStereo(0, start, end),
         loadSolar1(0, start, end),
+        loadAceEpam(0, start, end),
+        loadAceSis(0, start, end),
         loadCrater(0, start, end),
         loadProton(0, start, end),
         loadElectron(0, start, end),
@@ -219,13 +281,15 @@ export default function RadiationMonitoring() {
 
       if (st?.length) setStereoData(prev => merge(prev, st))
       if (s1?.length) setSolar1Data(prev => merge(prev, s1))
+      if (ep?.length) setAceEpamData(prev => merge(prev, ep))
+      if (si?.length) setAceSisData(prev => merge(prev, si))
       if (cr?.length) setCraterData(prev => merge(prev, cr))
       if (gp?.length) setGoesProtonData(prev => merge(prev, pivotGoes(gp)))
       if (ge?.length) setGoesElectronData(prev => merge(prev, pivotGoes(ge)))
       if (sp?.length) setSopoData(prev => merge(prev, sp))
       if (ou?.length) setOuluData(prev => merge(prev, ou))
 
-      return activeMainTab === 'particles' ? (st.length ? st : s1) : (cr.length ? cr : ou)
+      return activeMainTab === 'cosmic' ? (cr.length ? cr : ou) : (st.length ? st : s1)
     },
     windowMinutes: 1440,
     initialWindowMinutes: appliedRange ? 0 : limit,
@@ -252,33 +316,27 @@ export default function RadiationMonitoring() {
     axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
   })
 
-  const yAxisBase = (gi: number, name: string, color: string, type: 'value' | 'log' = 'value') => ({
+  const yAxisBase = (gi: number, type: 'value' | 'log' = 'value') => ({
     gridIndex: gi,
     type,
-    name,
-    nameLocation: 'middle' as const,
-    nameGap: 55,
-    nameTextStyle: { color, fontSize: 13, fontFamily: 'sans-serif', fontWeight: 700 },
     splitLine: splitLineStyle,
-    axisLabel: { ...axisLabelStyle, color: '#F8FAFC' },
+    axisLabel: {
+      ...axisLabelStyle,
+      color: '#F8FAFC',
+      ...(type === 'log' ? { formatter: formatPowerOf10 } : {}),
+    },
     axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+    scale: true,
   })
 
-  // Helper to sanitize positive log values
-  const safeLog = (val: any) => {
+  // Helper to sanitize positive log values (stripping noise floor < 0.01 pfu)
+  const safeLog = (val: any, minThreshold = 0.01) => {
     if (val === null || val === undefined) return null
     const n = Number(val)
-    return !isNaN(n) && n > 0 ? n : null
+    return !isNaN(n) && n >= minThreshold ? n : null
   }
 
-  // Helper to sanitize linear values
-  const safeLinear = (val: any, maxVal = 5000) => {
-    if (val === null || val === undefined) return null
-    const n = Number(val)
-    return !isNaN(n) && n >= 0 && n < maxVal ? n : null
-  }
-
-  // Calculate independent tier window range based strictly on each dataset's own latest timestamp and window limit
+  // Calculate independent tier window range
   const getIndependentTierRange = (data: any[], windowMinutes: number, timeKey = 'time_tag', paddingRatio = 0.25) => {
     if (!data || data.length === 0) return { min: undefined, max: undefined }
     const validTimes = data.map(d => new Date(d[timeKey]).getTime()).filter(t => !isNaN(t))
@@ -293,82 +351,255 @@ export default function RadiationMonitoring() {
 
   const stereoRange = useMemo(() => getIndependentTierRange(stereoData, limit), [stereoData, limit])
   const solar1Range = useMemo(() => getIndependentTierRange(solar1Data, limit), [solar1Data, limit])
+  const epamRange = useMemo(() => getIndependentTierRange(aceEpamData, limit), [aceEpamData, limit])
+  const sisRange = useMemo(() => getIndependentTierRange(aceSisData, limit), [aceSisData, limit])
   const goesRange = useMemo(() => getIndependentTierRange(goesProtonData, limit), [goesProtonData, limit])
   const craterRange = useMemo(() => getIndependentTierRange(craterData, limit), [craterData, limit])
   const nmdbRange = useMemo(() => getIndependentTierRange(ouluData, limit), [ouluData, limit])
 
-  // ── TAB 1: SPACE PROTONS & ELECTRONS OPTION (4 TIERS) ──
-  const particlesOption = useMemo(() => ({
+  const goesProtonEnergies = useMemo(() => {
+    const set = new Set<string>()
+    goesProtonData.forEach(d => {
+      Object.keys(d).forEach(k => {
+        if (k !== 'time_tag' && d[k] != null) set.add(k)
+      })
+    })
+    const list = Array.from(set).sort((a, b) => {
+      const numA = parseFloat(a.replace(/[^0-9.]/g, '')) || 0
+      const numB = parseFloat(b.replace(/[^0-9.]/g, '')) || 0
+      return numA - numB
+    })
+    return list.length > 0 ? list : ['>=1 MeV', '>=5 MeV', '>=10 MeV', '>=30 MeV', '>=50 MeV', '>=60 MeV', '>=100 MeV', '>=500 MeV']
+  }, [goesProtonData])
+
+  const tooltipBase = (headerColor: string) => ({
+    trigger: 'axis' as const,
+    backgroundColor: '#0F172A',
+    borderColor: `${headerColor}99`,
+    borderWidth: 1.5,
+    padding: 14,
+    textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
+    extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
+    axisPointer: { type: 'line' as const, lineStyle: { color: headerColor, type: 'dashed' as const, width: 1.5 } },
+    formatter: (params: any) => {
+      if (!params || params.length === 0) return ''
+      const rawTime = params[0].axisValueLabel || params[0].value[0]
+      let timeStr = rawTime
+      if (typeof rawTime === 'number') {
+        timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+      }
+
+      let html = `<div style="font-family: var(--font-mono); font-size: 11px; min-width: 260px;">`
+      html += `<div style="color: ${headerColor}; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
+
+      params.forEach((p: any) => {
+        if (!p) return
+        const name = p.seriesName
+        const val = Array.isArray(p.value) ? p.value[1] : p.value
+        if (val === undefined || val === null) return
+
+        let valDisplay = typeof val === 'number' ? (val < 0.01 || val > 10000 ? val.toExponential(2) : val.toFixed(2)) : val
+        html += `<div style="display: flex; justify-content: space-between; gap: 16px; padding: 2px 0;">`
+        html += `<span style="color: ${p.color};">● ${name}:</span>`
+        html += `<span style="font-weight: 700; color: #FFF; font-family: monospace;">${valDisplay}</span>`
+        html += `</div>`
+      })
+      html += `</div>`
+      return html
+    }
+  })
+
+  // ── TAB 1: SPACE PROTONS OPTION (5 TIERS: STEREO, Solar-1, ACE EPAM, ACE SIS, GOES-18) ──
+  const protonsOption = useMemo(() => ({
     backgroundColor: 'transparent',
     animation: false,
-    tooltip: {
-      trigger: 'axis' as const,
-      backgroundColor: '#0F172A',
-      borderColor: 'rgba(56, 189, 248, 0.6)',
-      borderWidth: 1.5,
-      padding: 14,
-      textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
-      extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line' as const, lineStyle: { color: '#38BDF8', type: 'dashed' as const, width: 1.5 } },
-      formatter: (params: any) => {
-        if (!params || params.length === 0) return ''
-        const rawTime = params[0].axisValueLabel || params[0].value[0]
-        let timeStr = rawTime
-        if (typeof rawTime === 'number') {
-          timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-        }
-
-        let html = `<div style="font-family: var(--font-mono); font-size: 11px; min-width: 260px;">`
-        html += `<div style="color: #38BDF8; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
-
-        params.forEach((p: any) => {
-          if (!p) return
-          const name = p.seriesName
-          const val = Array.isArray(p.value) ? p.value[1] : p.value
-          if (val === undefined || val === null) return
-
-          let valDisplay = typeof val === 'number' ? (val < 0.01 || val > 10000 ? val.toExponential(2) : val.toFixed(2)) : val
-          html += `<div style="display: flex; justify-content: space-between; gap: 16px; padding: 2px 0;">`
-          html += `<span style="color: ${p.color};">● ${name}:</span>`
-          html += `<span style="font-weight: 700; color: #FFF; font-family: monospace;">${valDisplay}</span>`
-          html += `</div>`
-        })
-        html += `</div>`
-        return html
-      }
-    },
+    title: [
+      { text: '● STEREO Proton (pfu)', left: 75, top: 18, textStyle: { color: '#F59E0B', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● Solar-1 STIS Ions (pfu)', left: 75, top: 298, textStyle: { color: '#F97316', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● ACE EPAM Ions (pfu)', left: 75, top: 578, textStyle: { color: '#EC4899', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● ACE SIS High-Energy Proton (pfu)', left: 75, top: 858, textStyle: { color: '#38BDF8', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● GOES-18 SEISS Proton (pfu)', left: 75, top: 1138, textStyle: { color: '#FBBF24', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+    ],
+    tooltip: tooltipBase('#F59E0B'),
     axisPointer: { snap: true },
     dataZoom: [
-      { type: 'inside' as const, xAxisIndex: [0], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [2], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [3], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [4], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [5], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
+      {
+        type: 'inside' as const,
+        xAxisIndex: [0, 1, 2, 3, 4],
+        filterMode: 'none' as const,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      }
     ],
     grid: [
-      { top: 35,  left: 95, right: 85, height: 130 },
-      { top: 210, left: 95, right: 85, height: 130 },
-      { top: 385, left: 95, right: 85, height: 130 },
-      { top: 560, left: 95, right: 85, height: 130 },
-      { top: 735, left: 95, right: 85, height: 130 },
-      { top: 910, left: 95, right: 85, height: 130 },
+      { top: 45,   left: 75, right: 65, height: 200 },
+      { top: 325,  left: 75, right: 65, height: 200 },
+      { top: 605,  left: 75, right: 65, height: 200 },
+      { top: 885,  left: 75, right: 65, height: 200 },
+      { top: 1165, left: 75, right: 65, height: 200 },
     ],
     xAxis: [
       { ...xAxisBase(0, true), min: stereoRange.min, max: stereoRange.max },
-      { ...xAxisBase(1, true), min: stereoRange.min, max: stereoRange.max },
-      { ...xAxisBase(2, true), min: solar1Range.min, max: solar1Range.max },
-      { ...xAxisBase(3, true), min: solar1Range.min, max: solar1Range.max },
-      { ...xAxisBase(4, true), min: goesRange.min,   max: goesRange.max },
-      { ...xAxisBase(5, true), min: goesRange.min,   max: goesRange.max },
+      { ...xAxisBase(1, true), min: solar1Range.min, max: solar1Range.max },
+      { ...xAxisBase(2, true), min: epamRange.min, max: epamRange.max },
+      { ...xAxisBase(3, true), min: sisRange.min, max: sisRange.max },
+      { ...xAxisBase(4, true), min: goesRange.min, max: goesRange.max },
     ],
     yAxis: [
-      yAxisBase(0, 'STEREO Electron', '#38BDF8', 'log'),
-      yAxisBase(1, 'STEREO Proton', '#F59E0B', 'log'),
-      yAxisBase(2, 'Solar-1 Ions (pfu)', '#38BDF8', 'log'),
-      yAxisBase(3, 'Solar-1 Electrons (pfu)', '#22C55E', 'log'),
-      yAxisBase(4, 'GOES-18 Proton (pfu)', '#FBBF24', 'log'),
-      yAxisBase(5, 'GOES-18 Electron (pfu)', '#A855F7', 'log'),
+      yAxisBase(0, 'log'),
+      yAxisBase(1, 'log'),
+      yAxisBase(2, 'log'),
+      yAxisBase(3, 'log'),
+      yAxisBase(4, 'log'),
+    ],
+    series: [
+      // STEREO Proton
+      {
+        name: 'STEREO Pro (84-92 keV)', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F59E0B' }, itemStyle: { color: '#F59E0B' },
+        markLine: buildMarkLines(lines, 0),
+        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b02)])
+      },
+      {
+        name: 'STEREO Pro (110-118 keV)', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EF4444' }, itemStyle: { color: '#EF4444' },
+        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b05)])
+      },
+      {
+        name: 'STEREO Pro (192-219 keV)', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#DC2626' }, itemStyle: { color: '#DC2626' },
+        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b10)])
+      },
+      // Solar-1 STIS Ions (8 Channels: p1 - p8)
+      {
+        name: 'Solar-1 p1: 47–68 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EC4899' }, itemStyle: { color: '#EC4899' },
+        markLine: buildMarkLines(lines, 1),
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p1)])
+      },
+      {
+        name: 'Solar-1 p2: 68–117 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F97316' }, itemStyle: { color: '#F97316' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p2)])
+      },
+      {
+        name: 'Solar-1 p3: 116–180 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F59E0B' }, itemStyle: { color: '#F59E0B' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p3)])
+      },
+      {
+        name: 'Solar-1 p4: 180–342 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EAB308' }, itemStyle: { color: '#EAB308' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p4)])
+      },
+      {
+        name: 'Solar-1 p5: 342–537 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#22C55E' }, itemStyle: { color: '#22C55E' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p5)])
+      },
+      {
+        name: 'Solar-1 p6: 537–1061 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p6)])
+      },
+      {
+        name: 'Solar-1 p7: 1061–1847 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#3B82F6' }, itemStyle: { color: '#3B82F6' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p7)])
+      },
+      {
+        name: 'Solar-1 p8: 1847–5263 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#A855F7' }, itemStyle: { color: '#A855F7' },
+        data: solar1Data.map(d => [d.time_tag, safeLog(d.p8)])
+      },
+      // ACE EPAM Ions (Tier 2: p47_65, p112_187, p310_580, p761_1220)
+      {
+        name: 'ACE EPAM P (47–65 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EC4899' }, itemStyle: { color: '#EC4899' },
+        markLine: buildMarkLines(lines, 2),
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.p47_65)])
+      },
+      {
+        name: 'ACE EPAM P (112–187 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F97316' }, itemStyle: { color: '#F97316' },
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.p112_187)])
+      },
+      {
+        name: 'ACE EPAM P (310–580 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#22C55E' }, itemStyle: { color: '#22C55E' },
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.p310_580)])
+      },
+      {
+        name: 'ACE EPAM P (761–1220 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#3B82F6' }, itemStyle: { color: '#3B82F6' },
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.p761_1220)])
+      },
+      // ACE SIS High Energy Proton (Tier 3: p10, p30)
+      {
+        name: 'ACE SIS (>10 MeV)', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#38BDF8' }, itemStyle: { color: '#38BDF8' },
+        markLine: buildMarkLines(lines, 3),
+        data: aceSisData.map(d => [d.time_tag, safeLog(d.p10)])
+      },
+      {
+        name: 'ACE SIS (>30 MeV)', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F59E0B' }, itemStyle: { color: '#F59E0B' },
+        data: aceSisData.map(d => [d.time_tag, safeLog(d.p30)])
+      },
+      // GOES Proton (Tier 4 - All Energies)
+      ...goesProtonEnergies.map((e, idx) => ({
+        name: `GOES Proton ${e}`,
+        type: 'line',
+        xAxisIndex: 4,
+        yAxisIndex: 4,
+        showSymbol: false,
+        connectNulls: true,
+        lineStyle: { width: 1.8, color: GOES_PROTON_COLORS[e] || '#94A3B8' },
+        itemStyle: { color: GOES_PROTON_COLORS[e] || '#94A3B8' },
+        markLine: idx === 0 ? buildMarkLines(lines, 4) : undefined,
+        data: goesProtonData.map(d => [d.time_tag, safeLog(d[e] ?? d[e.replace(' ', '')])])
+      }))
+    ]
+  }), [stereoData, solar1Data, aceEpamData, aceSisData, goesProtonData, goesProtonEnergies, epamRange, sisRange, stereoRange, solar1Range, goesRange, limit, lines])
+
+  // ── TAB 2: SPACE ELECTRONS OPTION (4 TIERS: STEREO, Solar-1, ACE EPAM, GOES-18) ──
+  const electronsOption = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    title: [
+      { text: '● STEREO Electron (pfu)', left: 75, top: 18, textStyle: { color: '#38BDF8', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● Solar-1 STIS Electrons (pfu)', left: 75, top: 298, textStyle: { color: '#22C55E', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● ACE EPAM Electrons (pfu)', left: 75, top: 578, textStyle: { color: '#F43F5E', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● GOES-18 SEISS Electron (pfu)', left: 75, top: 858, textStyle: { color: '#A855F7', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+    ],
+    tooltip: tooltipBase('#38BDF8'),
+    axisPointer: { snap: true },
+    dataZoom: [
+      {
+        type: 'inside' as const,
+        xAxisIndex: [0, 1, 2, 3],
+        filterMode: 'none' as const,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      }
+    ],
+    grid: [
+      { top: 45,  left: 75, right: 65, height: 200 },
+      { top: 325, left: 75, right: 65, height: 200 },
+      { top: 605, left: 75, right: 65, height: 200 },
+      { top: 885, left: 75, right: 65, height: 200 },
+    ],
+    xAxis: [
+      { ...xAxisBase(0, true), min: stereoRange.min, max: stereoRange.max },
+      { ...xAxisBase(1, true), min: solar1Range.min, max: solar1Range.max },
+      { ...xAxisBase(2, true), min: epamRange.min, max: epamRange.max },
+      { ...xAxisBase(3, true), min: goesRange.min, max: goesRange.max },
+    ],
+    yAxis: [
+      yAxisBase(0, 'log'),
+      yAxisBase(1, 'log'),
+      yAxisBase(2, 'log'),
+      yAxisBase(3, 'log'),
     ],
     series: [
       // STEREO Electron
@@ -388,175 +619,84 @@ export default function RadiationMonitoring() {
         showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#0284C7' }, itemStyle: { color: '#0284C7' },
         data: stereoData.map(d => [d.time_tag, safeLog(d.ele_b10)])
       },
-      // STEREO Proton
+      // Solar-1 STIS Electrons (4 Channels: de1 - de4)
       {
-        name: 'STEREO Pro (84-92 keV)', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F59E0B' }, itemStyle: { color: '#F59E0B' },
-        markLine: buildMarkLines(lines, 1),
-        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b02)])
-      },
-      {
-        name: 'STEREO Pro (110-118 keV)', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EF4444' }, itemStyle: { color: '#EF4444' },
-        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b05)])
-      },
-      {
-        name: 'STEREO Pro (192-219 keV)', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#DC2626' }, itemStyle: { color: '#DC2626' },
-        data: stereoData.map(d => [d.time_tag, safeLog(d.pro_b10)])
-      },
-      // Solar-1 Ions (8 Channels: p1 - p8)
-      {
-        name: 'p1: 47–68 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EC4899' }, itemStyle: { color: '#EC4899' },
-        markLine: buildMarkLines(lines, 2),
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p1)])
-      },
-      {
-        name: 'p2: 68–117 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F97316' }, itemStyle: { color: '#F97316' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p2)])
-      },
-      {
-        name: 'p3: 116–180 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F59E0B' }, itemStyle: { color: '#F59E0B' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p3)])
-      },
-      {
-        name: 'p4: 180–342 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#EAB308' }, itemStyle: { color: '#EAB308' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p4)])
-      },
-      {
-        name: 'p5: 342–537 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#22C55E' }, itemStyle: { color: '#22C55E' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p5)])
-      },
-      {
-        name: 'p6: 537–1061 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p6)])
-      },
-      {
-        name: 'p7: 1061–1847 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#3B82F6' }, itemStyle: { color: '#3B82F6' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p7)])
-      },
-      {
-        name: 'p8: 1847–5263 keV', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#A855F7' }, itemStyle: { color: '#A855F7' },
-        data: solar1Data.map(d => [d.time_tag, safeLog(d.p8)])
-      },
-
-      // Solar-1 Electrons (4 Channels: de1 - de4)
-      {
-        name: 'de1: 47–63 keV', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        name: 'Solar-1 de1: 47–63 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
         showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F43F5E' }, itemStyle: { color: '#F43F5E' },
-        markLine: buildMarkLines(lines, 3),
+        markLine: buildMarkLines(lines, 1),
         data: solar1Data.map(d => [d.time_tag, safeLog(d.de1)])
       },
       {
-        name: 'de2: 63–104 keV', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        name: 'Solar-1 de2: 63–104 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
         showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#FB923C' }, itemStyle: { color: '#FB923C' },
         data: solar1Data.map(d => [d.time_tag, safeLog(d.de2)])
       },
       {
-        name: 'de3: 104–169 keV', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        name: 'Solar-1 de3: 104–169 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
         showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' },
         data: solar1Data.map(d => [d.time_tag, safeLog(d.de3)])
       },
       {
-        name: 'de4: 169–333 keV', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
+        name: 'Solar-1 de4: 169–333 keV', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
         showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#4ADE80' }, itemStyle: { color: '#4ADE80' },
         data: solar1Data.map(d => [d.time_tag, safeLog(d.de4)])
       },
-      // GOES Proton (Tier 4)
+      // ACE EPAM Electrons (Tier 2: e38_53, e175_315)
       {
-        name: 'GOES Proton ≥10 MeV', type: 'line', xAxisIndex: 4, yAxisIndex: 4,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 2, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' },
-        markLine: buildMarkLines(lines, 4),
-        data: goesProtonData.map(d => [d.time_tag, safeLog(d['>=10 MeV'] ?? d['>=10MeV'])])
+        name: 'ACE EPAM Ele (38–53 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#F43F5E' }, itemStyle: { color: '#F43F5E' },
+        markLine: buildMarkLines(lines, 2),
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.e38_53)])
       },
       {
-        name: 'GOES Proton ≥50 MeV', type: 'line', xAxisIndex: 4, yAxisIndex: 4,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 2, color: '#38BDF8' }, itemStyle: { color: '#38BDF8' },
-        data: goesProtonData.map(d => [d.time_tag, safeLog(d['>=50 MeV'] ?? d['>=50MeV'])])
+        name: 'ACE EPAM Ele (175–315 keV)', type: 'line', xAxisIndex: 2, yAxisIndex: 2,
+        showSymbol: false, connectNulls: true, lineStyle: { width: 1.8, color: '#FB923C' }, itemStyle: { color: '#FB923C' },
+        data: aceEpamData.map(d => [d.time_tag, safeLog(d.e175_315)])
       },
+      // GOES Electron (Tier 3)
       {
-        name: 'GOES Proton ≥100 MeV', type: 'line', xAxisIndex: 4, yAxisIndex: 4,
-        showSymbol: false, connectNulls: true, lineStyle: { width: 2, color: '#EF4444' }, itemStyle: { color: '#EF4444' },
-        data: goesProtonData.map(d => [d.time_tag, safeLog(d['>=100 MeV'] ?? d['>=100MeV'])])
-      },
-      // GOES Electron (Tier 5)
-      {
-        name: 'GOES Electron ≥2.0 MeV', type: 'line', xAxisIndex: 5, yAxisIndex: 5,
+        name: 'GOES Electron ≥2.0 MeV', type: 'line', xAxisIndex: 3, yAxisIndex: 3,
         showSymbol: false, connectNulls: true, lineStyle: { width: 2, color: '#A855F7' }, itemStyle: { color: '#A855F7' },
-        markLine: buildMarkLines(lines, 5),
+        markLine: buildMarkLines(lines, 3),
         data: goesElectronData.map(d => [d.time_tag, safeLog(d['>=2 MeV'] ?? d['>=2.0 MeV'] ?? d['>=2MeV'])])
       }
     ]
-  }), [stereoData, solar1Data, goesProtonData, goesElectronData, limit, zoomRange, lines])
+  }), [stereoData, solar1Data, aceEpamData, goesElectronData, epamRange, stereoRange, solar1Range, goesRange, limit, lines])
 
-  // ── TAB 2: COSMIC & LUNAR RADIATION OPTION (3 TIERS) ──
+  // ── TAB 3: COSMIC & LUNAR RADIATION OPTION (3 TIERS) ──
   const cosmicOption = useMemo(() => ({
     backgroundColor: 'transparent',
     animation: false,
-    tooltip: {
-      trigger: 'axis' as const,
-      backgroundColor: '#0F172A',
-      borderColor: 'rgba(244, 63, 94, 0.6)',
-      borderWidth: 1.5,
-      padding: 14,
-      textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
-      extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line' as const, lineStyle: { color: '#F43F5E', type: 'dashed' as const, width: 1.5 } },
-      formatter: (params: any) => {
-        if (!params || params.length === 0) return ''
-        const rawTime = params[0].axisValueLabel || params[0].value[0]
-        let timeStr = rawTime
-        if (typeof rawTime === 'number') {
-          timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-        }
-
-        let html = `<div style="font-family: var(--font-mono); font-size: 11px; min-width: 260px;">`
-        html += `<div style="color: #F43F5E; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
-
-        params.forEach((p: any) => {
-          if (!p) return
-          const name = p.seriesName
-          const val = Array.isArray(p.value) ? p.value[1] : p.value
-          if (val === undefined || val === null) return
-
-          let valDisplay = typeof val === 'number' ? val.toFixed(4) : val
-          html += `<div style="display: flex; justify-content: space-between; gap: 16px; padding: 2px 0;">`
-          html += `<span style="color: ${p.color};">● ${name}:</span>`
-          html += `<span style="font-weight: 700; color: #FFF; font-family: monospace;">${valDisplay}</span>`
-          html += `</div>`
-        })
-        html += `</div>`
-        return html
-      }
-    },
+    title: [
+      { text: '● LRO CRaTER Dose Rate (Paired D1-D6)', left: 75, top: 18, textStyle: { color: '#F43F5E', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● LRO CRaTER Dose Rate (Single Detectors)', left: 75, top: 298, textStyle: { color: '#FB923C', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+      { text: '● Ground Neutron Monitors (SOPO & OULU)', left: 75, top: 578, textStyle: { color: '#38BDF8', fontSize: 13, fontFamily: 'var(--font-mono), monospace', fontWeight: 700 } },
+    ],
+    tooltip: tooltipBase('#F43F5E'),
     axisPointer: { snap: true },
     dataZoom: [
-      { type: 'inside' as const, xAxisIndex: [0], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
-      { type: 'inside' as const, xAxisIndex: [2], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true },
+      {
+        type: 'inside' as const,
+        xAxisIndex: [0, 1, 2],
+        filterMode: 'none' as const,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      }
     ],
     grid: [
-      { top: 35,  left: 95, right: 85, height: 200 },
-      { top: 280, left: 95, right: 85, height: 200 },
-      { top: 530, left: 95, right: 85, height: 200 },
+      { top: 45,  left: 75, right: 65, height: 200 },
+      { top: 325, left: 75, right: 65, height: 200 },
+      { top: 605, left: 75, right: 65, height: 200 },
     ],
     xAxis: [
       { ...xAxisBase(0, true), min: craterRange.min, max: craterRange.max },
       { ...xAxisBase(1, true), min: craterRange.min, max: craterRange.max },
-      { ...xAxisBase(2, true), min: nmdbRange.min,   max: nmdbRange.max },
+      { ...xAxisBase(2, true), min: nmdbRange.min, max: nmdbRange.max },
     ],
     yAxis: [
-      yAxisBase(0, 'CRaTER Paired (cGy/day)', '#F43F5E'),
-      yAxisBase(1, 'CRaTER Single (cGy/day)', '#FB923C'),
-      yAxisBase(2, 'NMDB Neutron (cts/sec)', '#38BDF8'),
+      yAxisBase(0),
+      yAxisBase(1),
+      yAxisBase(2),
     ],
     series: [
       // CRaTER Paired
@@ -621,10 +761,9 @@ export default function RadiationMonitoring() {
         data: ouluData.filter((d: any) => d.count_rate > 0).map((d: any) => [d.time_tag, d.count_rate])
       }
     ]
-  }), [craterData, sopoData, ouluData, zoomRange, lines])
+  }), [craterData, sopoData, ouluData, lines])
 
-  const GRID_UNITS_TAB1 = ['intensity', 'intensity', 'pfu', 'pfu', 'pfu', 'pfu']
-  const GRID_UNITS_TAB2 = ['cGy/day', 'cGy/day', 'cts/sec']
+  const GRID_UNITS_TIERS = activeMainTab === 'cosmic' ? ['cGy/day', 'cGy/day', 'cts/sec'] : ['intensity', 'pfu', 'pfu']
 
   return (
     <div style={{ position: 'relative', width: '100%', minHeight: '100vh', overflow: 'hidden' }}>
@@ -703,15 +842,26 @@ export default function RadiationMonitoring() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', gap: 8, background: 'rgba(15, 23, 42, 0.65)', padding: '4px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
             <button
-              onClick={() => setActiveMainTab('particles')}
+              onClick={() => setActiveMainTab('protons')}
               style={{
-                padding: '8px 18px', background: activeMainTab === 'particles' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
-                border: 'none', borderBottom: activeMainTab === 'particles' ? '2px solid #38BDF8' : '2px solid transparent',
-                color: activeMainTab === 'particles' ? '#38BDF8' : '#94A3B8',
+                padding: '8px 18px', background: activeMainTab === 'protons' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                border: 'none', borderBottom: activeMainTab === 'protons' ? '2px solid #F59E0B' : '2px solid transparent',
+                color: activeMainTab === 'protons' ? '#F59E0B' : '#94A3B8',
                 fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 12, fontWeight: 700, cursor: 'pointer'
               }}
             >
-              SPACE PROTONS & ELECTRONS
+              SPACE PROTONS
+            </button>
+            <button
+              onClick={() => setActiveMainTab('electrons')}
+              style={{
+                padding: '8px 18px', background: activeMainTab === 'electrons' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                border: 'none', borderBottom: activeMainTab === 'electrons' ? '2px solid #38BDF8' : '2px solid transparent',
+                color: activeMainTab === 'electrons' ? '#38BDF8' : '#94A3B8',
+                fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 12, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              SPACE ELECTRONS
             </button>
             <button
               onClick={() => setActiveMainTab('cosmic')}
@@ -776,8 +926,6 @@ export default function RadiationMonitoring() {
           </div>
         </div>
 
-
-
         {/* Multi-tier Synchronized Frameless Plate */}
         {loading && stereoData.length === 0 && craterData.length === 0 ? (
           <div style={{ padding: '80px 0', display: 'flex', justifyContent: 'center' }}>
@@ -795,8 +943,8 @@ export default function RadiationMonitoring() {
             <ReactECharts
               ref={chartRef}
               notMerge={true}
-              option={activeMainTab === 'particles' ? particlesOption : cosmicOption}
-              style={{ height: activeMainTab === 'particles' ? 1140 : 810, width: '100%' }}
+              option={activeMainTab === 'protons' ? protonsOption : (activeMainTab === 'electrons' ? electronsOption : cosmicOption)}
+              style={{ height: activeMainTab === 'protons' ? 1420 : (activeMainTab === 'electrons' ? 1140 : 860), width: '100%' }}
               onChartReady={onChartReady}
               onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
             />
@@ -804,8 +952,8 @@ export default function RadiationMonitoring() {
             <TrendLineOverlay
               chartRef={chartRef}
               wrapperRef={chartWrapperRef}
-              gridCount={activeMainTab === 'particles' ? 6 : 3}
-              gridUnits={activeMainTab === 'particles' ? GRID_UNITS_TAB1 : GRID_UNITS_TAB2}
+              gridCount={activeMainTab === 'protons' ? 5 : (activeMainTab === 'electrons' ? 4 : 3)}
+              gridUnits={activeMainTab === 'protons' ? ['pfu', 'pfu', 'pfu', 'pfu', 'pfu'] : (activeMainTab === 'electrons' ? ['pfu', 'pfu', 'pfu', 'pfu'] : ['cGy/day', 'cGy/day', 'cts/sec'])}
               lines={lines}
               drawingMode={drawingMode}
               pendingP1={pendingP1}
@@ -814,8 +962,8 @@ export default function RadiationMonitoring() {
             />
 
             {/* Divider lines between tiers */}
-            {(activeMainTab === 'particles' ? [210, 385, 560, 735, 910] : [300, 560]).map(top => (
-              <div key={top} style={{ position: 'absolute', left: 95, right: 85, top, height: 1, background: 'rgba(255,255,255,0.06)', pointerEvents: 'none' }} />
+            {(activeMainTab === 'protons' ? [290, 570, 850, 1130] : (activeMainTab === 'electrons' ? [290, 570, 850] : [290, 570])).map(top => (
+              <div key={top} style={{ position: 'absolute', left: 75, right: 65, top, height: 1, background: 'rgba(255,255,255,0.08)', pointerEvents: 'none' }} />
             ))}
           </div>
         )}
@@ -823,17 +971,26 @@ export default function RadiationMonitoring() {
         {/* Footer info & Data Sources */}
         <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 11, color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>
-            {activeMainTab === 'particles' ? (
+            {activeMainTab === 'protons' ? (
               <>
-                <span><strong style={{ color: '#38BDF8' }}>STEREO A</strong> Uni Kiel SEPT</span>
-                <span><strong style={{ color: '#22C55E' }}>Solar-1</strong> NOAA SWPC RTSW</span>
-                <span><strong style={{ color: '#A855F7' }}>GOES-18</strong> Primary GOES Satellite</span>
+                <span>● Tier 1: STEREO HET (84–219 keV)</span>
+                <span>● Tier 2: Solar-1 STIS Ions (47–5263 keV)</span>
+                <span>● Tier 3: ACE EPAM Ions (47–1220 keV)</span>
+                <span>● Tier 4: ACE SIS Proton (&gt;10, &gt;30 MeV)</span>
+                <span>● Tier 5: GOES-18 SEISS Proton (≥1 – ≥500 MeV)</span>
+              </>
+            ) : activeMainTab === 'electrons' ? (
+              <>
+                <span>● Tier 1: STEREO HET (45–195 keV)</span>
+                <span>● Tier 2: Solar-1 STIS Electrons (47–333 keV)</span>
+                <span>● Tier 3: ACE EPAM Electrons (38–315 keV)</span>
+                <span>● Tier 4: GOES-18 SEISS Electron (≥2.0 MeV)</span>
               </>
             ) : (
               <>
-                <span><strong style={{ color: '#F43F5E' }}>CRaTER</strong> LRO Lunar Radiation</span>
-                <span><strong style={{ color: '#38BDF8' }}>SOPO</strong> South Pole Station</span>
-                <span><strong style={{ color: '#22C55E' }}>OULU</strong> Finland Station</span>
+                <span>● Tier 1: LRO CRaTER Paired (D1-D6)</span>
+                <span>● Tier 2: LRO CRaTER Single</span>
+                <span>● Tier 3: NMDB Oulu Neutron</span>
               </>
             )}
           </div>
