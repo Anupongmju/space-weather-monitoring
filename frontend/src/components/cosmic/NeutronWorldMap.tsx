@@ -826,7 +826,7 @@ export default function NeutronWorldMap({
                       border: `1px solid ${isSelected ? color : isHovered ? color : 'rgba(255, 255, 255, 0.2)'}`,
                       padding: '2px 6px',
                       borderRadius: 3,
-                      fontSize: 10,
+                      fontSize: 13,
                       fontFamily: 'monospace',
                       fontWeight: 700,
                       color: isSelected ? '#FFFFFF' : color,
@@ -887,7 +887,7 @@ export default function NeutronWorldMap({
               padding: '3px 8px',
               borderRadius: 3,
               fontFamily: 'monospace',
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: 700,
               display: 'inline-flex',
               alignItems: 'center',
@@ -928,7 +928,7 @@ export default function NeutronWorldMap({
                 border: `1px solid ${rigidityFilter === f.id ? f.color : 'rgba(255,255,255,0.12)'}`,
                 color: rigidityFilter === f.id ? '#FFFFFF' : '#CBD5E1',
                 fontFamily: 'monospace',
-                fontSize: 10,
+                fontSize: 13,
                 fontWeight: rigidityFilter === f.id ? 700 : 500,
                 cursor: 'pointer',
                 borderRadius: 3,
@@ -1168,7 +1168,7 @@ export default function NeutronWorldMap({
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
         transition: 'all 0.2s ease'
       }}>
-        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#94A3B8', fontWeight: 600, letterSpacing: 1 }}>
+        <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#94A3B8', fontWeight: 600, letterSpacing: 1 }}>
           VERTICAL CUTOFF RIGIDITY (Rc):
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1189,7 +1189,7 @@ export default function NeutronWorldMap({
               ) : (
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, boxShadow: `0 0 6px ${item.color}` }} />
               )}
-              <span style={{ color: item.isLine ? '#FDBA74' : '#CBD5E1', fontSize: 10, fontFamily: 'monospace', fontWeight: item.isLine ? 700 : 400 }}>
+              <span style={{ color: item.isLine ? '#FDBA74' : '#CBD5E1', fontSize: 13, fontFamily: 'monospace', fontWeight: item.isLine ? 700 : 400 }}>
                 {item.label}
               </span>
             </div>
@@ -1235,7 +1235,7 @@ export default function NeutronWorldMap({
               <span style={{
                 color,
                 fontWeight: 700,
-                fontSize: 12,
+                fontSize: 15,
                 fontFamily: "'Orbitron', monospace",
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -1249,7 +1249,7 @@ export default function NeutronWorldMap({
                 border: `1px solid ${isOnline ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)'}`,
                 padding: '1px 5px',
                 borderRadius: 2,
-                fontSize: 9,
+                fontSize: 12,
                 fontFamily: 'monospace',
                 fontWeight: 700,
                 flexShrink: 0
@@ -1275,7 +1275,7 @@ export default function NeutronWorldMap({
             {isOnline && (
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 {sparkline?.loading ? (
-                  <div style={{ height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 9, fontFamily: 'monospace' }}>
+                  <div style={{ height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 12, fontFamily: 'monospace' }}>
                     LOADING TELEMETRY...
                   </div>
                 ) : validPoints.length >= 2 ? (() => {
@@ -1304,10 +1304,10 @@ export default function NeutronWorldMap({
                           COUNT RATE (1H)
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#F8FAFC', fontFamily: 'monospace' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', fontFamily: 'monospace' }}>
                             {latest.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                           </span>
-                          <span style={{ fontSize: 8, color: '#64748B', fontFamily: 'monospace' }}>cpm</span>
+                          <span style={{ fontSize: 10, color: '#64748B', fontFamily: 'monospace' }}>cpm</span>
                           <span style={{
                             fontSize: 8.5,
                             fontWeight: 700,
@@ -1339,7 +1339,7 @@ export default function NeutronWorldMap({
                     </div>
                   )
                 })() : (
-                  <div style={{ height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 9, fontFamily: 'monospace' }}>
+                  <div style={{ height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 12, fontFamily: 'monospace' }}>
                     TELEMETRY FRAMES SYNCING...
                   </div>
                 )}

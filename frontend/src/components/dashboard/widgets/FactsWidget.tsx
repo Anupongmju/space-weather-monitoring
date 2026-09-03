@@ -154,12 +154,12 @@ export default function FactsWidget() {
   }, []);
 
   const cardStyle = {
-    background: '#050A14',
+    background: 'var(--bg-surface, #050A14)',
     backdropFilter: 'blur(8px)',
     borderRadius: '0px',
     padding: '24px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    border: '1px solid rgba(52, 152, 219, 0.18)',
+    boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+    border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
     fontFamily: 'var(--font-mono)'
   };
 
@@ -168,8 +168,8 @@ export default function FactsWidget() {
     fontSize: '14px',
     fontWeight: '700',
     fontFamily: "'Orbitron', monospace",
-    color: '#ffffff',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    color: 'var(--text-primary, #ffffff)',
+    borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
     paddingBottom: '12px',
     letterSpacing: '2px',
     textTransform: 'uppercase',
@@ -179,9 +179,9 @@ export default function FactsWidget() {
   };
 
   const sectionHeaderStyle = {
-    fontSize: '12px',
+    fontSize: '15px',
     fontWeight: 'normal',
-    color: '#a0aab5',
+    color: 'var(--text-muted, #a0aab5)',
     backgroundColor: 'transparent',
     padding: '6px 0',
     marginTop: '16px',
@@ -255,26 +255,26 @@ export default function FactsWidget() {
       {/* Recent Events Section (NOAA) */}
       <div style={sectionHeaderStyle}>
         <span>NOAA SWPC: Recent Events</span>
-        <span style={{ fontSize: '10px', color: '#606075', fontWeight: 'normal' }}>Source: NOAA JSON API</span>
+        <span style={{ fontSize: '13px', color: '#606075', fontWeight: 'normal' }}>Source: NOAA JSON API</span>
       </div>
       <div style={{ background: 'transparent', padding: '4px 0' }}>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Last X-flare</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastXFlare?.max_time)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Last X-flare</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastXFlare?.max_time)}</span>
           <span style={{ color: getFlareColor(data.lastXFlare?.max_class), fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
             {data.lastXFlare?.max_class || '—'}
           </span>
         </div>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Last M-flare</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastMFlare?.max_time)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Last M-flare</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastMFlare?.max_time)}</span>
           <span style={{ color: getFlareColor(data.lastMFlare?.max_class), fontWeight: 'bold', minWidth: '40px', textAlign: 'right' }}>
             {data.lastMFlare?.max_class || '—'}
           </span>
         </div>
         <div style={{ ...rowStyle, borderBottom: 'none' }}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Last geomagnetic storm</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastStorm?.time)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Last geomagnetic storm</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.lastStorm?.time)}</span>
           <span style={{ color: getStormColor(data.lastStorm?.kp), fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
             {data.lastStorm ? `Kp${data.lastStorm.kp} (${getStormLevel(data.lastStorm.kp)})` : '—'}
           </span>
@@ -285,7 +285,7 @@ export default function FactsWidget() {
       <div style={sectionHeaderStyle}>NOAA SWPC: Monthly Mean Sunspot Number</div>
       <div style={{ background: 'rgba(0,0,0,0.4)', padding: '4px 0' }}>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0' }}>{data.currentSsn ? data.currentSsn['time-tag'] : 'Current Month'}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)' }}>{data.currentSsn ? data.currentSsn['time-tag'] : 'Current Month'}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', color: '#FFF' }}>
               {data.currentSsn ? data.currentSsn.ssn.toFixed(1) : '—'}
@@ -294,7 +294,7 @@ export default function FactsWidget() {
               <span style={{ 
                 background: isSsnUp ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)', 
                 color: isSsnUp ? '#22C55E' : '#EF4444',
-                padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold'
+                padding: '2px 6px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold'
               }}>
                 {isSsnUp ? '↑' : '↓'} {Math.abs(ssnDiffNum).toFixed(1)}
               </span>
@@ -302,7 +302,7 @@ export default function FactsWidget() {
           </div>
         </div>
         <div style={{ ...rowStyle, borderBottom: 'none' }}>
-          <span style={{ color: '#E2E8F0' }}>{data.prevSsn ? data.prevSsn['time-tag'] : 'Previous Month'}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)' }}>{data.prevSsn ? data.prevSsn['time-tag'] : 'Previous Month'}</span>
           <span style={{ fontWeight: 'bold', color: '#FFF' }}>
             {data.prevSsn ? data.prevSsn.ssn.toFixed(1) : '—'}
           </span>
@@ -311,47 +311,47 @@ export default function FactsWidget() {
 
       {/* Local Extremes Section */}
       <div style={sectionHeaderStyle}>Local Database: 7-Day Extremes
-        <span style={{ fontSize: '10px', color: '#606075', fontWeight: 'normal' }}>Source: Local SQLite</span>
+        <span style={{ fontSize: '13px', color: '#606075', fontWeight: 'normal' }}>Source: Local SQLite</span>
       </div>
       <div style={{ background: 'transparent', padding: '4px 0' }}>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Max Local Solar Flare</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxXray?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Max Local Solar Flare</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxXray?.time_tag)}</span>
           <span style={{ color: getFlareColor(localFlareStr), fontWeight: 'bold', minWidth: '50px', textAlign: 'right' }}>
             {localFlareStr || '—'}
           </span>
         </div>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Min Bz (Geomagnetic)</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMinBz?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Min Bz (Geomagnetic)</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMinBz?.time_tag)}</span>
           <span style={{ color: localBzColor, fontWeight: 'bold', minWidth: '50px', textAlign: 'right' }}>
             {data.localMinBz ? `${data.localMinBz.bz.toFixed(1)} nT` : '—'}
           </span>
         </div>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Max Solar Wind Speed</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxSpeed?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Max Solar Wind Speed</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxSpeed?.time_tag)}</span>
           <span style={{ color: '#3498DB', fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
             {data.localMaxSpeed ? `${data.localMaxSpeed.bulk_speed.toFixed(0)} km/s` : '—'}
           </span>
         </div>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Max Solar Wind Density</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxDensity?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Max Solar Wind Density</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxDensity?.time_tag)}</span>
           <span style={{ color: '#3498DB', fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
             {data.localMaxDensity ? `${data.localMaxDensity.proton_density.toFixed(1)} p/cc` : '—'}
           </span>
         </div>
         <div style={rowStyle}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Max Proton Flux ({'>='}10 MeV)</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxProton?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Max Proton Flux ({'>='}10 MeV)</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxProton?.time_tag)}</span>
           <span style={{ color: '#3498DB', fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
             {data.localMaxProton ? `${data.localMaxProton.flux.toFixed(2)} pfu` : '—'}
           </span>
         </div>
         <div style={{ ...rowStyle, borderBottom: 'none' }}>
-          <span style={{ color: '#E2E8F0', flex: 1 }}>Max Electron Flux ({'>='}2 MeV)</span>
-          <span style={{ color: '#ffffff', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxElectron?.time_tag)}</span>
+          <span style={{ color: 'var(--text-primary, #E2E8F0)', flex: 1 }}>Max Electron Flux ({'>='}2 MeV)</span>
+          <span style={{ color: 'var(--text-primary, #ffffff)', textDecoration: 'underline', marginRight: '16px' }}>{formatDate(data.localMaxElectron?.time_tag)}</span>
           <span style={{ color: '#3498DB', fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
             {data.localMaxElectron ? `${data.localMaxElectron.flux.toFixed(0)} pfu` : '—'}
           </span>

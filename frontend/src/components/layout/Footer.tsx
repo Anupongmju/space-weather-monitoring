@@ -1,18 +1,29 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function Footer() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
+  const linkColor = isLight ? '#334155' : '#ffffff';
+  const linkHoverColor = isLight ? '#1A6DB5' : '#3498DB';
+  const headingColor = isLight ? '#0C1E35' : '#ffffff';
+  const mutedTextColor = isLight ? '#64748B' : 'rgba(255,255,255,0.6)';
+
   return (
     <footer style={{
-      background: 'rgba(15, 18, 25, 0.95)', // Matches the dark aesthetic of the dashboard
-      borderTop: '2px solid #3498DB', // Orange accent line
-      color: '#E2E8F0',
+      background: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 18, 25, 0.95)',
+      borderTop: isLight ? '2px solid var(--primary, #1A6DB5)' : '2px solid #3498DB',
+      color: isLight ? '#475569' : '#E2E8F0',
       fontFamily: 'var(--font-mono)',
       padding: '40px 40px 20px',
-      marginTop: 'auto', // Pushes the footer to the bottom of the flex container
-      fontSize: '12px',
+      marginTop: 'auto',
+      fontSize: '15px',
       backdropFilter: 'blur(10px)',
       WebkitBackdropFilter: 'blur(10px)',
+      boxShadow: isLight ? '0 -4px 20px rgba(0,0,0,0.03)' : 'none',
+      transition: 'background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease',
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -24,37 +35,59 @@ export default function Footer() {
       }}>
         {/* Column 1 */}
         <div>
-          <h3 style={{ color: '#ffffff', fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
             About Space Weather Hub
           </h3>
-          <p style={{ lineHeight: '1.6', color: 'rgba(255,255,255,0.6)', textAlign: 'justify' }}>
+          <p style={{ lineHeight: '1.6', color: mutedTextColor, textAlign: 'justify' }}>
             Space Weather Hub is a comprehensive dashboard providing near real-time data about Astronomy, Space Weather, aurora, and related subjects. Our mission is to promote scientific awareness of space environment events onto the worldwide web.
           </p>
         </div>
 
         {/* Column 2 */}
         <div>
-          <h3 style={{ color: '#ffffff', fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
             Our Data Sources
           </h3>
-          <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: 'rgba(255,255,255,0.6)', lineHeight: '1.8' }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: mutedTextColor, lineHeight: '1.8' }}>
             <li>
-              <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noreferrer" style={{ color: '#ffffff', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#3498DB'} onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}>
+              <a
+                href="https://www.swpc.noaa.gov/"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: linkColor, textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = linkHoverColor}
+                onMouseLeave={e => e.currentTarget.style.color = linkColor}
+              >
                 NOAA SWPC
               </a>
             </li>
             <li>
-              <Link to="/ace" style={{ color: '#ffffff', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#3498DB'} onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}>
+              <Link
+                to="/ace"
+                style={{ color: linkColor, textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = linkHoverColor}
+                onMouseLeave={e => e.currentTarget.style.color = linkColor}
+              >
                 DSCOVR / ACE Satellite
               </Link>
             </li>
             <li>
-              <Link to="/goes" style={{ color: '#ffffff', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#3498DB'} onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}>
+              <Link
+                to="/goes"
+                style={{ color: linkColor, textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = linkHoverColor}
+                onMouseLeave={e => e.currentTarget.style.color = linkColor}
+              >
                 GOES Network
               </Link>
             </li>
             <li>
-              <Link to="/cosmic" style={{ color: '#ffffff', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#3498DB'} onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}>
+              <Link
+                to="/cosmic"
+                style={{ color: linkColor, textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = linkHoverColor}
+                onMouseLeave={e => e.currentTarget.style.color = linkColor}
+              >
                 Cosmic Ray Stations
               </Link>
             </li>
@@ -63,33 +96,36 @@ export default function Footer() {
 
         {/* Column 3 */}
         <div>
-          <h3 style={{ color: '#ffffff', fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
             About
           </h3>
-          <p style={{ lineHeight: '1.6', color: 'rgba(255,255,255,0.6)', marginBottom: '16px' }}>
+          <p style={{ lineHeight: '1.6', color: mutedTextColor, marginBottom: '16px' }}>
             SpaceWeatherHub is a near-live platform where you can follow space weather from the Sun to Earth and know exactly when you can see aurora.
           </p>
-          <Link to="/about" style={{ 
-            display: 'inline-block',
-            background: 'transparent',
-            border: '1px solid rgba(255,255,255,0.2)',
-            color: 'rgba(255,255,255,0.8)',
-            padding: '6px 16px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            borderRadius: '4px',
-            transition: 'all 0.2s',
-            fontFamily: 'var(--font-mono)',
-            textDecoration: 'none'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-          }}
+          <Link
+            to="/about"
+            style={{ 
+              display: 'inline-block',
+              background: isLight ? 'rgba(26, 109, 181, 0.06)' : 'transparent',
+              border: isLight ? '1px solid rgba(26, 109, 181, 0.25)' : '1px solid rgba(255,255,255,0.2)',
+              color: isLight ? '#1A6DB5' : 'rgba(255,255,255,0.8)',
+              padding: '6px 16px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              borderRadius: '4px',
+              transition: 'all 0.2s',
+              fontFamily: 'var(--font-mono)',
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = isLight ? 'rgba(26, 109, 181, 0.15)' : 'rgba(255,255,255,0.1)';
+              e.currentTarget.style.borderColor = isLight ? 'rgba(26, 109, 181, 0.5)' : 'rgba(255,255,255,0.4)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = isLight ? 'rgba(26, 109, 181, 0.06)' : 'transparent';
+              e.currentTarget.style.borderColor = isLight ? 'rgba(26, 109, 181, 0.25)' : 'rgba(255,255,255,0.2)';
+            }}
           >
             More info...
           </Link>
@@ -100,21 +136,34 @@ export default function Footer() {
       <div style={{
         textAlign: 'center',
         paddingTop: '20px',
-        color: 'rgba(255,255,255,0.4)',
-        fontSize: '10px',
+        borderTop: isLight ? '1px solid rgba(0, 0, 0, 0.06)' : '1px solid rgba(255, 255, 255, 0.06)',
+        color: isLight ? '#94A3B8' : 'rgba(255,255,255,0.4)',
+        fontSize: '13px',
         display: 'flex',
         flexDirection: 'column',
         gap: '6px'
       }}>
         <div>
-          <span style={{ color: '#ffffff' }}>Copyright © 2024-2026 Space Weather Hub</span> © All rights reserved - Developed by your team
+          <span style={{ color: headingColor }}>Copyright © 2024-2026 Space Weather Hub</span> © All rights reserved - Developed by your team
         </div>
         <div>
-          <Link to="#" style={{ color: '#3b82f6', textDecoration: 'none' }} 
-          onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'} onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-          >Disclaimer</Link>
+          <Link
+            to="#"
+            style={{ color: isLight ? '#1A6DB5' : '#3b82f6', textDecoration: 'none' }} 
+            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+          >
+            Disclaimer
+          </Link>
           <span style={{ margin: '0 8px' }}>-</span>
-          <Link to="#" style={{ color: '#3b82f6', textDecoration: 'none' }} onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'} onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>Privacy Policy</Link>
+          <Link
+            to="#"
+            style={{ color: isLight ? '#1A6DB5' : '#3b82f6', textDecoration: 'none' }}
+            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+          >
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </footer>

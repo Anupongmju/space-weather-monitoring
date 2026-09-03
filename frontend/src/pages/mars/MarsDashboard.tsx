@@ -22,8 +22,10 @@ import {
   ArrowLeft,
   Eye,
   Maximize2,
+  Minimize2,
   Trash2
 } from 'lucide-react'
+import SciFiFullscreenOverlay from '../../components/ui/SciFiFullscreenOverlay'
 import { loadMarsRad, loadMarsSummary, fetchMarsData, MarsRadRecord, MarsSummary } from '../../services/marsService'
 import { loadCrater } from '../../services/radiationService'
 import { loadNeutron } from '../../services/cosmicService'
@@ -117,7 +119,7 @@ function DateInputDDMMYYYY({
           borderRadius: 2,
           color: '#FFF',
           fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+          fontSize: 14,
           outline: 'none',
           boxSizing: 'border-box',
         }}
@@ -175,6 +177,31 @@ export default function MarsDashboard() {
   const location = useLocation()
   const chartRef = useRef<any>(null)
   const chartWrapperRef = useRef<HTMLDivElement>(null)
+  const marsGraphContainerRef = useRef<HTMLDivElement>(null)
+  const [isMarsFs, setIsMarsFs] = useState(false)
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsMarsFs(document.fullscreenElement === marsGraphContainerRef.current)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
+    }
+    document.addEventListener('fullscreenchange', handleFsChange)
+    return () => document.removeEventListener('fullscreenchange', handleFsChange)
+  }, [])
+
+  const toggleMarsFs = async () => {
+    if (!marsGraphContainerRef.current) return
+    try {
+      if (!document.fullscreenElement) {
+        await marsGraphContainerRef.current.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   // Selected Graph Mode (null = Initial Mars view, string = Graph opened)
   const [selectedGraph, setSelectedGraph] = useState<GraphCategory | null>(null)
@@ -303,7 +330,7 @@ export default function MarsDashboard() {
   }, 60000, !appliedRange)
 
   // Chart styles
-  const axisLabelStyle = { color: '#F8FAFC', fontSize: 11, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
+  const axisLabelStyle = { color: '#F8FAFC', fontSize: 14, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
   const splitLineStyle = { show: true, lineStyle: { color: 'rgba(255,255,255,0.07)', type: 'dashed' as const } }
 
   const xAxisBase = (gi: number, showLabel = true) => ({
@@ -330,7 +357,7 @@ export default function MarsDashboard() {
     borderColor: 'rgba(239, 68, 68, 0.6)',
     borderWidth: 1.5,
     padding: 14,
-    textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
+    textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 14 },
     extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
     axisPointer: { type: 'line' as const, lineStyle: { color: '#EF4444', type: 'dashed' as const, width: 1.5 } },
     formatter: (params: any) => {
@@ -341,7 +368,7 @@ export default function MarsDashboard() {
         timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
       }
 
-      let html = `<div style="font-family: var(--font-mono); font-size: 11px; min-width: 270px;">`
+      let html = `<div style="font-family: var(--font-mono); font-size: 14px; min-width: 270px;">`
       html += `<div style="color: #EF4444; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
 
       params.forEach((p: any) => {
@@ -387,17 +414,17 @@ export default function MarsDashboard() {
         animation: false,
         legend: { show: false },
         title: [
-          { text: '● Silicon Solid-State Detectors (A1, A2, B, D) — [µGy/hr]', left: 65, top: 12, textStyle: { color: '#FBBF24', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Scintillators & Anticoincidence (Plastic E, CsI C, Shield F) — [µGy/hr]', left: 65, top: 278, textStyle: { color: '#EF4444', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Total Absorbed Dosimetry (Tissue Eq vs Silicon Absorber) — [µGy/hr]', left: 65, top: 544, textStyle: { color: '#38BDF8', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Silicon Solid-State Detectors (A1, A2, B, D) — [µGy/hr]', left: 65, top: 12, textStyle: { color: '#FBBF24', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Scintillators & Anticoincidence (Plastic E, CsI C, Shield F) — [µGy/hr]', left: 65, top: 278, textStyle: { color: '#EF4444', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Total Absorbed Dosimetry (Tissue Eq vs Silicon Absorber) — [µGy/hr]', left: 65, top: 544, textStyle: { color: '#38BDF8', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
         ],
         tooltip: tooltipBase,
         axisPointer: { snap: true },
         dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1, 2], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
         grid: [
-          { top: 40,  left: 65, right: 40, height: 195 },
-          { top: 306, left: 65, right: 40, height: 195 },
-          { top: 572, left: 65, right: 40, height: 195 },
+          { top: 40,  left: 65, right: 40, height: '26%' },
+          { top: '38%', left: 65, right: 40, height: '26%' },
+          { top: '69%', left: 65, right: 40, height: '26%' },
         ],
         xAxis: [xAxisBase(0, true), xAxisBase(1, true), xAxisBase(2, true)],
         yAxis: [yAxisBase(0), yAxisBase(1), yAxisBase(2)],
@@ -409,15 +436,15 @@ export default function MarsDashboard() {
         animation: false,
         legend: { show: false },
         title: [
-          { text: '● Level 1 Fast & Slow Trigger Rates — [counts/sec]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Level 2 Coincidence Channels (AB Directional & ADE Stopping Protons) — [counts/sec]', left: 65, top: 405, textStyle: { color: '#38BDF8', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Level 1 Fast & Slow Trigger Rates — [counts/sec]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Level 2 Coincidence Channels (AB Directional & ADE Stopping Protons) — [counts/sec]', left: 65, top: '51%', textStyle: { color: '#38BDF8', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
         ],
         tooltip: tooltipBase,
         axisPointer: { snap: true },
         dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
         grid: [
-          { top: 48,  left: 65, right: 40, height: 310 },
-          { top: 440, left: 65, right: 40, height: 310 },
+          { top: 45,  left: 65, right: 40, height: '42%' },
+          { top: '55%', left: 65, right: 40, height: '40%' },
         ],
         xAxis: [xAxisBase(0, true), xAxisBase(1, true)],
         yAxis: [yAxisBase(0), yAxisBase(1)],
@@ -434,15 +461,15 @@ export default function MarsDashboard() {
         animation: false,
         legend: { show: false },
         title: [
-          { text: '● Charged vs Neutral Particle Radiation Flux — [particles/(cm² s sr)]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Gale Crater Surface Atmospheric Pressure (Diurnal Wave) — [mbar]', left: 65, top: 405, textStyle: { color: '#4ADE80', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Charged vs Neutral Particle Radiation Flux — [particles/(cm² s sr)]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
+          { text: '● Gale Crater Surface Atmospheric Pressure (Diurnal Wave) — [mbar]', left: 65, top: '51%', textStyle: { color: '#4ADE80', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
         ],
         tooltip: tooltipBase,
         axisPointer: { snap: true },
         dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
         grid: [
-          { top: 48,  left: 65, right: 40, height: 310 },
-          { top: 440, left: 65, right: 40, height: 310 },
+          { top: 45,  left: 65, right: 40, height: '42%' },
+          { top: '55%', left: 65, right: 40, height: '40%' },
         ],
         xAxis: [xAxisBase(0, true), xAxisBase(1, true)],
         yAxis: [yAxisBase(0), yAxisBase(1)],
@@ -538,7 +565,7 @@ export default function MarsDashboard() {
                 borderRadius: 3,
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
-                fontSize: 11,
+                fontSize: 14,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
@@ -563,7 +590,7 @@ export default function MarsDashboard() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', boxShadow: '0 0 10px #EF4444' }} />
-                <span style={{ fontSize: 10, letterSpacing: 3, color: '#FCA5A5', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                <span style={{ fontSize: 13, letterSpacing: 3, color: '#FCA5A5', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                   MARS SCIENCE LABORATORY · RAD INSTRUMENT (GALE CRATER)
                 </span>
               </div>
@@ -581,7 +608,7 @@ export default function MarsDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div style={{
               background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(239, 68, 68, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 11
+              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
             }}>
               <span style={{ color: '#94A3B8' }}>MISSION: </span>
               <strong style={{ color: '#EF4444' }}>SOL {summary?.current_sol ?? 4986}</strong>
@@ -589,7 +616,7 @@ export default function MarsDashboard() {
 
             <div style={{
               background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 11
+              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
             }}>
               <span style={{ color: '#94A3B8' }}>LOCAL TIME: </span>
               <strong style={{ color: '#38BDF8' }}>{martianLmst || 'GALE CRATER'}</strong>
@@ -597,7 +624,7 @@ export default function MarsDashboard() {
 
             <div style={{
               background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(34, 197, 94, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 11
+              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
             }}>
               <span style={{ color: '#94A3B8' }}>STATUS: </span>
               <strong style={{ color: '#22C55E' }}>{summary?.status ?? 'NORMAL'}</strong>
@@ -609,7 +636,7 @@ export default function MarsDashboard() {
               style={{
                 background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444',
                 color: '#F8FAFC', padding: '7px 14px', borderRadius: 2,
-                cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
                 display: 'flex', alignItems: 'center', gap: 6
               }}
             >
@@ -650,7 +677,7 @@ export default function MarsDashboard() {
                     marginBottom: 20
                   }}>
                     <Radio size={14} color="#EF4444" />
-                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#FCA5A5', fontWeight: 700, letterSpacing: 2 }}>
+                    <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: '#FCA5A5', fontWeight: 700, letterSpacing: 2 }}>
                       LIVE ASTRONOMICAL TELEMETRY ACTIVE
                     </span>
                   </div>
@@ -682,81 +709,180 @@ export default function MarsDashboard() {
               </div>
             ) : (
               /* ── GRAPH VIEW: WHEN USER CLICKS A GRAPH TO VIEW ── */
-              <div style={{ animation: 'fadein 0.4s ease forwards' }}>
-
-                {/* Back button & Graph Title Header */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 14,
-                  background: 'rgba(5, 10, 20, 0.65)',
-                  backdropFilter: 'blur(12px)',
-                  padding: '10px 16px',
-                  border: '1px solid rgba(239, 68, 68, 0.25)'
-                }}>
-                  <button
-                    onClick={() => setSelectedGraph(null)}
-                    style={{
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: '#F8FAFC', padding: '6px 12px', borderRadius: 2,
-                      fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                    }}
+              <div
+                ref={marsGraphContainerRef}
+                style={{
+                  animation: 'fadein 0.4s ease forwards',
+                  ...(isMarsFs ? {
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    background: '#020617',
+                    zIndex: 99999,
+                    overflow: 'hidden',
+                  } : {})
+                }}
+              >
+                {isMarsFs ? (
+                  <SciFiFullscreenOverlay
+                    isFullscreen={true}
+                    onClose={toggleMarsFs}
+                    title="CURIOSITY MARS RAD DOSIMETRY"
+                    subtitle={
+                      selectedGraph === 'all_detectors' ? 'MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)' :
+                      selectedGraph === 'dosimetry' ? 'SURFACE ABSORBED DOSIMETRY (TISSUE VS SILICON)' :
+                      selectedGraph === 'counters' ? 'TRIGGER RATES & COINCIDENCES (L1 & L2 CHANNELS)' :
+                      'GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE'
+                    }
+                    accentColor="#EF4444"
                   >
-                    <ArrowLeft size={13} />
-                    CLOSE GRAPH / BACK TO PLANET VIEW
-                  </button>
-
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: '#EF4444' }}>
-                    {selectedGraph === 'all_detectors' && '🔬 MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)'}
-                    {selectedGraph === 'dosimetry' && '📊 SURFACE ABSORBED DOSIMETRY (TISSUE VS SILICON)'}
-                    {selectedGraph === 'counters' && '⚡ TRIGGER RATES & COINCIDENCES (L1 & L2 CHANNELS)'}
-                    {selectedGraph === 'flux_pressure' && '🪐 GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE'}
-                  </div>
-                </div>
-
-                {/* ECharts Canvas Container (Semi-transparent Glassmorphism) */}
-                <div
-                  ref={chartWrapperRef}
-                  style={{
-                    position: 'relative',
-                    background: 'rgba(5, 10, 20, 0.55)',
-                    backdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    padding: '16px 8px 20px',
-                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-                  }}
-                >
-                  {loading ? (
-                    <div style={{ height: 740, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
+                    <div
+                      ref={chartWrapperRef}
+                      style={{ position: 'relative', width: '100%', height: '100%' }}
+                    >
+                      {loading ? (
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
+                        </div>
+                      ) : (
+                        <>
+                          <ReactECharts
+                            key={selectedGraph}
+                            ref={chartRef}
+                            option={chartOption}
+                            notMerge={true}
+                            lazyUpdate={true}
+                            style={{ height: '100%', width: '100%' }}
+                            onEvents={{ dataZoom: onDataZoom }}
+                          />
+                          <TrendLineOverlay
+                            chartRef={chartRef}
+                            wrapperRef={chartWrapperRef}
+                            gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
+                            gridUnits={
+                              selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] :
+                              selectedGraph === 'counters' ? ['cps', 'cps'] :
+                              ['p/cm²s', 'mbar']
+                            }
+                            lines={lines}
+                            drawingMode={drawingMode}
+                            pendingP1={pendingP1}
+                            onChartClick={handleClick}
+                            onRemoveLine={removeLine}
+                          />
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      <ReactECharts
-                        key={selectedGraph}
-                        ref={chartRef}
-                        option={chartOption}
-                        notMerge={true}
-                        lazyUpdate={true}
-                        style={{ height: 740, width: '100%' }}
-                        onEvents={{ dataZoom: onDataZoom }}
-                      />
-                      <TrendLineOverlay
-                        chartRef={chartRef}
-                        wrapperRef={chartWrapperRef}
-                        gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
-                        gridUnits={selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] : selectedGraph === 'counters' ? ['cps', 'cps'] : ['p/cm²s', 'mbar']}
-                        lines={lines}
-                        drawingMode={drawingMode}
-                        pendingP1={pendingP1}
-                        onChartClick={handleClick}
-                        onRemoveLine={removeLine}
-                      />
-                    </>
-                  )}
-                </div>
+                  </SciFiFullscreenOverlay>
+                ) : (
+                  <>
+                    {/* Back button & Graph Title Header */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      marginBottom: 14,
+                      background: 'rgba(5, 10, 20, 0.65)',
+                      backdropFilter: 'blur(12px)',
+                      padding: '10px 16px',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      flexWrap: 'wrap', gap: 10
+                    }}>
+                      <button
+                        onClick={() => setSelectedGraph(null)}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          color: '#F8FAFC', padding: '6px 12px', borderRadius: 2,
+                          fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <ArrowLeft size={13} />
+                        CLOSE GRAPH / BACK TO PLANET VIEW
+                      </button>
 
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: '#EF4444' }}>
+                          {selectedGraph === 'all_detectors' && '🔬 MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)'}
+                          {selectedGraph === 'dosimetry' && '📊 SURFACE ABSORBED DOSIMETRY (TISSUE VS SILICON)'}
+                          {selectedGraph === 'counters' && '⚡ TRIGGER RATES & COINCIDENCES (L1 & L2 CHANNELS)'}
+                          {selectedGraph === 'flux_pressure' && '🪐 GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE'}
+                        </div>
+
+                        <button
+                          onClick={toggleMarsFs}
+                          title="Full Screen (F11 style)"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: 'rgba(255,255,255,0.06)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            color: '#94A3B8',
+                            padding: '5px 10px',
+                            borderRadius: 2,
+                            fontSize: 12,
+                            fontFamily: 'var(--font-mono)',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <Maximize2 size={13} />
+                          <span>FULLSCREEN</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ECharts Canvas Container (Semi-transparent Glassmorphism) */}
+                    <div
+                      ref={chartWrapperRef}
+                      style={{
+                        position: 'relative',
+                        background: 'rgba(5, 10, 20, 0.55)',
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        padding: '16px 8px 20px',
+                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+                      }}
+                    >
+                      {loading ? (
+                        <div style={{ height: 740, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
+                        </div>
+                      ) : (
+                        <>
+                          <ReactECharts
+                            key={selectedGraph}
+                            ref={chartRef}
+                            option={chartOption}
+                            notMerge={true}
+                            lazyUpdate={true}
+                            style={{ height: 740, width: '100%' }}
+                            onEvents={{ dataZoom: onDataZoom }}
+                          />
+                          <TrendLineOverlay
+                            chartRef={chartRef}
+                            wrapperRef={chartWrapperRef}
+                            gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
+                            gridUnits={
+                              selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] :
+                              selectedGraph === 'counters' ? ['cps', 'cps'] :
+                              ['p/cm²s', 'mbar']
+                            }
+                            lines={lines}
+                            drawingMode={drawingMode}
+                            pendingP1={pendingP1}
+                            onChartClick={handleClick}
+                            onRemoveLine={removeLine}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -778,7 +904,7 @@ export default function MarsDashboard() {
                 marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.08)'
               }}>
                 <BarChart2 size={16} color="#EF4444" />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: '#F8FAFC', letterSpacing: 0.5 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: '#F8FAFC', letterSpacing: 0.5 }}>
                   CHOOSE GRAPH TO VIEW
                 </span>
               </div>
@@ -836,14 +962,14 @@ export default function MarsDashboard() {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                          fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700,
                           color: active ? '#FFFFFF' : '#CBD5E1'
                         }}>
                           {item.label}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {active && (
-                            <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: item.color, fontWeight: 700 }}>
+                            <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: item.color, fontWeight: 700 }}>
                               ACTIVE
                             </span>
                           )}
@@ -857,7 +983,7 @@ export default function MarsDashboard() {
                           />
                         </div>
                       </div>
-                      {/* <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
+                      {/* <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
                         {active ? '● กำลังแสดงผล (คลิกอีกครั้งเพื่อหุบปิดกราฟ)' : item.desc}
                       </div> */}
                     </button>
@@ -880,7 +1006,7 @@ export default function MarsDashboard() {
                   marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)'
                 }}>
                   <Layers size={15} color="#38BDF8" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#F8FAFC' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
                     DETECTOR CHANNELS
                   </span>
                 </div>
@@ -909,7 +1035,7 @@ export default function MarsDashboard() {
                         }}
                       >
                         {isChecked ? <CheckSquare size={13} color={d.color} /> : <Square size={13} color="#64748B" />}
-                        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: isChecked ? '#FFF' : '#64748B' }}>
+                        <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isChecked ? '#FFF' : '#64748B' }}>
                           {d.label}
                         </span>
                       </div>
@@ -934,7 +1060,7 @@ export default function MarsDashboard() {
                   marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)'
                 }}>
                   <Clock size={15} color="#FBBF24" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#F8FAFC' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
                     TIME RANGE
                   </span>
                 </div>
@@ -961,7 +1087,7 @@ export default function MarsDashboard() {
                         color: (!isCustomDate && limit === val) ? '#FFFFFF' : '#CBD5E1',
                         border: '1px solid rgba(255,255,255,0.1)',
                         padding: '6px 0',
-                        fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                        fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700,
                         cursor: 'pointer', textAlign: 'center', borderRadius: 2
                       }}
                     >
@@ -994,9 +1120,9 @@ export default function MarsDashboard() {
                 {/* Custom Date Form (Shown ONLY when CUSTOM preset is clicked) */}
                 {isCustomDate && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadein 0.2s ease forwards' }}>
-                    <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>START DATE:</div>
+                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>START DATE:</div>
                     <DateInputDDMMYYYY value={startDateInput} onChange={setStartDateInput} accentColor="#EF4444" />
-                    <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginTop: 4 }}>END DATE:</div>
+                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginTop: 4 }}>END DATE:</div>
                     <DateInputDDMMYYYY value={endDateInput} onChange={setEndDateInput} accentColor="#EF4444" />
                     <button
                       onClick={() => {
@@ -1006,7 +1132,7 @@ export default function MarsDashboard() {
                       style={{
                         background: '#EF4444',
                         color: '#FFF', border: '1px solid #EF4444',
-                        padding: '6px 0', borderRadius: 2, fontSize: 11,
+                        padding: '6px 0', borderRadius: 2, fontSize: 14,
                         fontFamily: 'var(--font-mono)', fontWeight: 700, cursor: 'pointer',
                         marginTop: 6
                       }}
@@ -1033,7 +1159,7 @@ export default function MarsDashboard() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Compass size={15} color="#A855F7" />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: '#F8FAFC' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
                       ANALYSIS TOOLS
                     </span>
                   </div>
@@ -1045,7 +1171,7 @@ export default function MarsDashboard() {
                         background: 'rgba(239, 68, 68, 0.15)',
                         border: '1px solid rgba(239, 68, 68, 0.4)',
                         color: '#EF4444',
-                        fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                        fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700,
                         padding: '2px 8px', borderRadius: 2, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 4
                       }}
@@ -1064,7 +1190,7 @@ export default function MarsDashboard() {
                     border: `1px solid ${drawingMode ? '#EF4444' : 'rgba(255,255,255,0.15)'}`,
                     color: drawingMode ? '#EF4444' : '#F8FAFC',
                     padding: '8px 12px', borderRadius: 2,
-                    cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
                   }}
                 >
@@ -1074,7 +1200,7 @@ export default function MarsDashboard() {
 
                 {drawingMode && (
                   <div style={{
-                    fontSize: 10, color: '#FBBF24', fontFamily: 'var(--font-mono)',
+                    fontSize: 13, color: '#FBBF24', fontFamily: 'var(--font-mono)',
                     marginTop: 6, lineHeight: 1.4
                   }}>
                     {pendingP1 ? '● จุดที่ 1 ถูกเลือกแล้ว — คลิกจุดที่ 2 เพื่อสร้างเส้น' : '● คลิกจุดที่ 1 บนกราฟเพื่อเริ่มลากเส้น'}
@@ -1084,7 +1210,7 @@ export default function MarsDashboard() {
                 {/* List of drawn lines with delete buttons */}
                 {lines.length > 0 && (
                   <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
                       DRAWN LINES ({lines.length}):
                     </div>
                     {lines.map((l, i) => (
@@ -1096,7 +1222,7 @@ export default function MarsDashboard() {
                           border: `1px solid rgba(255,255,255,0.08)`,
                           borderLeft: `3px solid ${l.color}`,
                           padding: '4px 8px', borderRadius: 2,
-                          fontSize: 10, fontFamily: 'var(--font-mono)'
+                          fontSize: 13, fontFamily: 'var(--font-mono)'
                         }}
                       >
                         <span style={{ color: '#CBD5E1' }}>Line #{i + 1}</span>

@@ -39,12 +39,12 @@ export default function NewsWidget() {
   if (loading) {
     return (
       <div style={{
-        background: '#050A14',
+        background: 'var(--bg-surface, #050A14)',
         backdropFilter: 'blur(8px)',
         borderRadius: '0px',
         marginBottom: '20px',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-        border: '1px solid rgba(52, 152, 219, 0.18)',
+        boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+        border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -54,10 +54,10 @@ export default function NewsWidget() {
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%' }}></span>
           <h3 style={{
             margin: 0,
-            fontSize: '11px',
+            fontSize: '14px',
             fontWeight: '700',
             fontFamily: "'Orbitron', monospace",
-            color: '#ffffff',
+            color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px',
             textTransform: 'uppercase'
           }}>LAST NEWS</h3>
@@ -69,7 +69,7 @@ export default function NewsWidget() {
           flex: 1,
           fontFamily: 'var(--font-mono)',
           color: 'rgba(255,255,255,0.4)',
-          fontSize: '11px',
+          fontSize: '14px',
           letterSpacing: '1px'
         }}>
           // FETCHING NEWS DATA...
@@ -81,12 +81,12 @@ export default function NewsWidget() {
   if (newsList.length === 0) {
     return (
       <div style={{
-        background: '#050A14',
+        background: 'var(--bg-surface, #050A14)',
         backdropFilter: 'blur(8px)',
         borderRadius: '0px',
         marginBottom: '20px',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-        border: '1px solid rgba(52, 152, 219, 0.18)',
+        boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+        border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -96,10 +96,10 @@ export default function NewsWidget() {
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%' }}></span>
           <h3 style={{
             margin: 0,
-            fontSize: '11px',
+            fontSize: '14px',
             fontWeight: '700',
             fontFamily: "'Orbitron', monospace",
-            color: '#ffffff',
+            color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px',
             textTransform: 'uppercase'
           }}>LAST NEWS</h3>
@@ -111,7 +111,7 @@ export default function NewsWidget() {
           flex: 1,
           fontFamily: 'var(--font-mono)',
           color: 'rgba(255,255,255,0.4)',
-          fontSize: '11px',
+          fontSize: '14px',
           letterSpacing: '1px'
         }}>
           // NO ACTIVE COSMIC REPORTS AVAILABLE
@@ -155,12 +155,12 @@ export default function NewsWidget() {
 
   return (
     <div style={{
-      background: '#050A14',
+      background: 'var(--bg-surface, #050A14)',
       backdropFilter: 'blur(8px)',
       borderRadius: '0px',
       marginBottom: '20px',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-      border: '1px solid rgba(52, 152, 219, 0.18)',
+      boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+      border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
@@ -176,15 +176,15 @@ export default function NewsWidget() {
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%' }}></span>
           <h3 style={{
             margin: 0,
-            fontSize: '11px',
+            fontSize: '14px',
             fontWeight: '700',
             fontFamily: "'Orbitron', monospace",
-            color: '#ffffff',
+            color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px',
             textTransform: 'uppercase'
           }}>LAST NEWS</h3>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#606075', letterSpacing: '1px', textTransform: 'uppercase' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#606075', letterSpacing: '1px', textTransform: 'uppercase' }}>
           {currentIndex + 1} / {newsList.length}
         </span>
       </div>
@@ -215,13 +215,13 @@ export default function NewsWidget() {
 
           {/* Text Overlay */}
           <div style={{ position: 'absolute', bottom: '36px', left: '0', padding: '0 20px', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#3498DB', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '6px' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#3498DB', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '6px' }}>
               // {newsDate}
             </div>
             <h4 style={{ margin: '0 0 6px 0', color: '#fff', fontSize: '14px', fontWeight: '600', lineHeight: '1.4' }}>
               {newsTitle}
             </h4>
-            <p style={{ margin: 0, color: '#94A3B8', fontSize: '11px', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            <p style={{ margin: 0, color: 'var(--text-secondary, #94A3B8)', fontSize: '14px', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {newsSummary}
             </p>
           </div>
@@ -238,7 +238,7 @@ export default function NewsWidget() {
             background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.15)', color: 'white',
             width: '28px', height: '28px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
-            fontFamily: 'var(--font-mono)', fontSize: '11px', backdropFilter: 'blur(4px)'
+            fontFamily: 'var(--font-mono)', fontSize: '14px', backdropFilter: 'blur(4px)'
           }}
         >
           ‹
@@ -253,7 +253,7 @@ export default function NewsWidget() {
             background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.15)', color: 'white',
             width: '28px', height: '28px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
-            fontFamily: 'var(--font-mono)', fontSize: '11px', backdropFilter: 'blur(4px)'
+            fontFamily: 'var(--font-mono)', fontSize: '14px', backdropFilter: 'blur(4px)'
           }}
         >
           ›

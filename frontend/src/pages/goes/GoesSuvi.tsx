@@ -4,6 +4,8 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import Card from '../../components/ui/Card';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { loadSuviLoop } from '../../services/goesService';
+import SuviFullscreenModal from '../../components/goes/SuviFullscreenModal';
+import { useTheme } from '../../context/ThemeContext';
 
 interface SdoWavelength {
   code: string;
@@ -167,6 +169,8 @@ const SUVI_WAVELENGTHS: SuviWavelength[] = [
 ];
 
 export default function GoesSuvi() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [source, setSource] = useState<'sdo' | 'suvi'>('sdo'); // Default to NASA SDO
   const [activeSdoWl, setActiveSdoWl] = useState<SdoWavelength>(SDO_WAVELENGTHS[2]); // Default 171Å
   const [activeSuviWl, setActiveSuviWl] = useState<SuviWavelength>(SUVI_WAVELENGTHS[2]); // Default 171Å
@@ -178,12 +182,20 @@ export default function GoesSuvi() {
   const [currentSuviFrame, setCurrentSuviFrame] = useState(0);
   const [loadingSuvi, setLoadingSuvi] = useState(false);
   const [playingSuvi, setPlayingSuvi] = useState(true);
-  const [fps, setFps] = useState(5);
-  const [loopLimit, setLoopLimit] = useState(30);
+  const [fps, setFps] = useState(6);
+  const [loopLimit, setLoopLimit] = useState(20);
   const playInterval = useRef<any>(null);
 
   // Lightbox Modal States
   const [lightboxContent, setLightboxContent] = useState<{ type: 'video' | 'photo'; wl: SdoWavelength | SuviWavelength } | null>(null);
+  const [isFsModalOpen, setIsFsModalOpen] = useState(false);
+
+  const handleOpenFullscreen = () => {
+    setIsFsModalOpen(true);
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
 
   const activeWl = source === 'sdo' ? activeSdoWl : activeSuviWl;
 
@@ -249,19 +261,32 @@ export default function GoesSuvi() {
   };
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
+    <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
 
       {/* Seamless Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        marginBottom: 28, flexWrap: 'wrap', gap: 16,
-        paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
+        marginBottom: 26, flexWrap: 'wrap', gap: 16,
+        paddingBottom: 16,
+        borderBottom: isLight ? '1px solid rgba(26, 109, 181, 0.15)' : '1px solid rgba(255,255,255,0.08)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{
+            fontFamily: "'Orbitron', var(--font-sans), monospace",
+            fontSize: 26,
+            fontWeight: 700,
+            color: isLight ? '#0C1E35' : '#F8FAFC',
+            margin: 0,
+            letterSpacing: -0.5
+          }}>
             {source === 'sdo' ? 'NASA / SDO IMAGERY' : 'GOES / SUVI IMAGERY'}
           </h1>
-          <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
+          <p style={{
+            color: isLight ? '#475569' : '#CBD5E1',
+            fontSize: 13,
+            margin: '6px 0 0',
+            fontFamily: 'var(--font-mono)'
+          }}>
             {source === 'sdo'
               ? 'Solar Dynamics Observatory · High Definition Real-time Solar Corona Videos'
               : 'Solar Ultraviolet Imager · Extreme Ultraviolet Solar Corona Observations'}
@@ -270,15 +295,25 @@ export default function GoesSuvi() {
 
         {/* Source Toggle + Refresh */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{
+            display: 'flex', gap: 4,
+            background: isLight ? '#F1F5F9' : 'rgba(15, 23, 42, 0.65)',
+            padding: '4px',
+            borderRadius: 6,
+            border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
             <button
               onClick={() => setSource('sdo')}
               style={{
-                padding: '4px 10px', background: 'transparent', border: 'none',
+                padding: '6px 14px',
+                background: source === 'sdo' ? (isLight ? '#FFFFFF' : 'rgba(56, 189, 248, 0.25)') : 'transparent',
+                border: 'none',
                 borderBottom: source === 'sdo' ? `2px solid ${activeWl.color}` : '2px solid transparent',
-                color: source === 'sdo' ? '#F8FAFC' : '#94A3B8',
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: source === 'sdo' ? 700 : 500,
-                cursor: 'pointer', transition: 'all 0.15s ease'
+                color: source === 'sdo' ? (isLight ? '#0C1E35' : '#F8FAFC') : (isLight ? '#64748B' : '#94A3B8'),
+                fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: source === 'sdo' ? 700 : 500,
+                cursor: 'pointer', borderRadius: 4,
+                boxShadow: isLight && source === 'sdo' ? '0 1px 4px rgba(0,0,0,0.05)' : undefined,
+                transition: 'all 0.15s ease'
               }}
             >
               NASA SDO (HD Video)
@@ -286,11 +321,15 @@ export default function GoesSuvi() {
             <button
               onClick={() => setSource('suvi')}
               style={{
-                padding: '4px 10px', background: 'transparent', border: 'none',
+                padding: '6px 14px',
+                background: source === 'suvi' ? (isLight ? '#FFFFFF' : 'rgba(56, 189, 248, 0.25)') : 'transparent',
+                border: 'none',
                 borderBottom: source === 'suvi' ? `2px solid ${activeWl.color}` : '2px solid transparent',
-                color: source === 'suvi' ? '#F8FAFC' : '#94A3B8',
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: source === 'suvi' ? 700 : 500,
-                cursor: 'pointer', transition: 'all 0.15s ease'
+                color: source === 'suvi' ? (isLight ? '#0C1E35' : '#F8FAFC') : (isLight ? '#64748B' : '#94A3B8'),
+                fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: source === 'suvi' ? 700 : 500,
+                cursor: 'pointer', borderRadius: 4,
+                boxShadow: isLight && source === 'suvi' ? '0 1px 4px rgba(0,0,0,0.05)' : undefined,
+                transition: 'all 0.15s ease'
               }}
             >
               GOES SUVI
@@ -298,6 +337,40 @@ export default function GoesSuvi() {
           </div>
 
           <StatusBadge status="normal" label="Live Stream" />
+          
+          {/* Fullscreen Multi-View Button */}
+          <button
+            onClick={handleOpenFullscreen}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              background: isLight ? '#F0F9FF' : 'rgba(56, 189, 248, 0.12)',
+              border: isLight ? '1px solid #BAE6FD' : '1px solid rgba(56, 189, 248, 0.4)',
+              borderRadius: 6,
+              color: isLight ? '#0284C7' : '#38BDF8',
+              fontFamily: "'Orbitron', var(--font-sans), sans-serif",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              letterSpacing: '1px',
+              transition: 'all 0.2s ease',
+              boxShadow: isLight ? '0 1px 4px rgba(0,0,0,0.05)' : '0 0 14px rgba(56, 189, 248, 0.2)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isLight ? '#0284C7' : '#38BDF8';
+              e.currentTarget.style.color = '#FFFFFF';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isLight ? '#F0F9FF' : 'rgba(56, 189, 248, 0.12)';
+              e.currentTarget.style.color = isLight ? '#0284C7' : '#38BDF8';
+            }}
+          >
+            <Maximize2 size={13} />
+            FULLSCREEN MULTI-VIEW
+          </button>
+
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -306,19 +379,20 @@ export default function GoesSuvi() {
               alignItems: 'center',
               gap: '6px',
               padding: '7px 14px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 7,
-              color: '#a0a0b8',
-              fontFamily: "'Rajdhani', sans-serif",
+              background: isLight ? '#FFFFFF' : 'rgba(255,255,255,0.03)',
+              border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 6,
+              color: isLight ? '#475569' : '#a0a0b8',
+              fontFamily: 'var(--font-mono)',
               fontSize: 13,
               fontWeight: 600,
               cursor: refreshing ? 'not-allowed' : 'pointer',
               opacity: refreshing ? 0.6 : 1,
               transition: 'all 0.2s',
+              boxShadow: isLight ? '0 1px 3px rgba(0,0,0,0.04)' : undefined,
             }}
-            onMouseEnter={(e) => !refreshing && (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+            onMouseEnter={(e) => !refreshing && (e.currentTarget.style.background = isLight ? '#F8FAFC' : 'rgba(255,255,255,0.08)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = isLight ? '#FFFFFF' : 'rgba(255,255,255,0.03)')}
           >
             <RefreshCw size={13} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
             {refreshing ? 'Refreshing...' : '↺ Refresh'}
@@ -334,8 +408,8 @@ export default function GoesSuvi() {
 
           {/* THE SUN (EUV) Unified Tab Selector */}
           <div style={{
-            background: '#0D0D14',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: isLight ? '#F1F5F9' : '#0D0D14',
+            border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : '1px solid rgba(255,255,255,0.08)',
             borderRadius: '12px 12px 0 0',
             padding: '12px 16px 8px',
             borderBottom: 'none',
@@ -344,8 +418,8 @@ export default function GoesSuvi() {
             gap: 8
           }}>
             <span style={{
-              fontSize: 9,
-              color: '#606075',
+              fontSize: 12,
+              color: isLight ? '#475569' : '#606075',
               fontFamily: 'var(--font-mono)',
               letterSpacing: 2,
               textTransform: 'uppercase',
@@ -371,24 +445,24 @@ export default function GoesSuvi() {
                       else setActiveSuviWl(wl as SuviWavelength);
                     }}
                     style={{
-                      background: isActive ? wl.color : 'rgba(255,255,255,0.02)',
-                      color: isActive ? '#000' : 'rgba(255,255,255,0.6)',
-                      border: `1px solid ${isActive ? wl.color : 'rgba(255,255,255,0.08)'}`,
+                      background: isActive ? wl.color : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.02)'),
+                      color: isActive ? '#000' : (isLight ? '#334155' : 'rgba(255,255,255,0.6)'),
+                      border: `1px solid ${isActive ? wl.color : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)')}`,
                       borderRadius: 4,
                       padding: '6px 14px',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: 'bold',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       whiteSpace: 'nowrap',
-                      boxShadow: isActive ? `0 0 12px ${wl.color}66` : 'none'
+                      boxShadow: isActive ? `0 0 12px ${wl.color}66` : (isLight ? '0 1px 3px rgba(0,0,0,0.04)' : 'none')
                     }}
                     onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
+                      if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.18)';
                     }}
                     onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                      if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
                     }}
                   >
                     {wl.name}
@@ -399,11 +473,11 @@ export default function GoesSuvi() {
           </div>
 
           <div style={{
-            background: '#09090E',
-            border: `1px solid ${activeWl.color}33`,
+            background: isLight ? '#FFFFFF' : '#09090E',
+            border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : `1px solid ${activeWl.color}33`,
             borderRadius: '0 0 12px 12px',
             padding: 16,
-            boxShadow: `0 8px 32px ${activeWl.color}05`,
+            boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : `0 8px 32px ${activeWl.color}05`,
             display: 'flex',
             flexDirection: 'column',
             gap: 16
@@ -422,10 +496,12 @@ export default function GoesSuvi() {
               justifyContent: 'center'
             }}>
               {source === 'sdo' ? (
-                // SDO MP4 Video Player
+                // SDO MP4 Video Player with instant high-res poster (zero wait time)
                 <video
                   key={`${activeSdoWl.code}-${cacheBuster}`}
                   src={`${activeSdoWl.url}?t=${cacheBuster}`}
+                  poster={`https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_${activeSdoWl.code}.jpg`}
+                  preload="auto"
                   autoPlay
                   loop
                   muted
@@ -437,9 +513,26 @@ export default function GoesSuvi() {
                   }}
                 />
               ) : (
-                // SUVI PNG Frames Loop Player
-                loadingSuvi ? (
-                  <LoadingSpinner />
+                // SUVI PNG Frames Loop Player: instant preview latest image while buffering
+                loadingSuvi && suviFrames.length === 0 ? (
+                  <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img
+                      src={`${activeSuviWl.url}?t=${cacheBuster}`}
+                      alt="Latest SUVI"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                    <div style={{
+                      position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+                      background: 'rgba(0,0,0,0.8)', padding: '5px 14px', borderRadius: 20,
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      display: 'flex', alignItems: 'center', gap: 8
+                    }}>
+                      <LoadingSpinner />
+                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#38BDF8', fontWeight: 600 }}>
+                        BUFFERING SUVI LOOP...
+                      </span>
+                    </div>
+                  </div>
                 ) : suviFrames.length > 0 ? (
                   <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                     {suviFrames.map((url, idx) => (
@@ -460,9 +553,11 @@ export default function GoesSuvi() {
                     ))}
                   </div>
                 ) : (
-                  <div style={{ color: '#606075', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
-                    Failed to load animation loop
-                  </div>
+                  <img
+                    src={`${activeSuviWl.url}?t=${cacheBuster}`}
+                    alt="Latest Frame"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
                 )
               )}
 
@@ -471,7 +566,7 @@ export default function GoesSuvi() {
                 position: 'absolute', top: 12, left: 12,
                 background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
                 padding: '4px 10px', borderRadius: 4,
-                fontSize: 10, fontFamily: 'var(--font-mono)', color: activeWl.color,
+                fontSize: 13, fontFamily: 'var(--font-mono)', color: activeWl.color,
                 border: `1px solid ${activeWl.color}33`,
                 letterSpacing: '0.5px'
               }}>
@@ -480,43 +575,55 @@ export default function GoesSuvi() {
                   : `GOES-R SUVI · ${activeSuviWl.name} · LOOP PLAYBACK`}
               </div>
 
-              {/* Maximize Button overlay */}
+              {/* Fullscreen Button overlay */}
               <button
-                onClick={() => setLightboxContent({ type: 'video', wl: activeWl })}
+                onClick={handleOpenFullscreen}
+                title="Open Fullscreen Multi-View (เลือก Å ได้)"
                 style={{
-                  position: 'absolute', top: 12, right: 12,
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)',
-                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', zIndex: 10, transition: 'all 0.2s',
+                  position: 'absolute', top: 12, right: 12, zIndex: 10,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', borderRadius: 6,
+                  background: 'rgba(5, 15, 30, 0.8)', backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(56, 189, 248, 0.45)',
+                  color: '#38BDF8', cursor: 'pointer', transition: 'all 0.2s',
+                  fontFamily: "'Orbitron', var(--font-mono)", fontSize: 11, fontWeight: 700,
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)'
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#000'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#38BDF8'; e.currentTarget.style.color = '#000'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(5, 15, 30, 0.8)'; e.currentTarget.style.color = '#38BDF8'; }}
               >
-                <Maximize2 size={13} />
+                <Maximize2 size={12} />
+                <span>FULLSCREEN</span>
               </button>
             </div>
 
             {/* SUVI Loop Controls (hidden when playing SDO mp4) */}
             {source === 'suvi' && suviFrames.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0D0D14', padding: 10, borderRadius: 6, gap: 12 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: isLight ? '#F1F5F9' : '#0D0D14',
+                border: isLight ? '1px solid rgba(26, 109, 181, 0.15)' : undefined,
+                padding: 10, borderRadius: 6, gap: 12
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => setPlayingSuvi(!playingSuvi)}
                     style={{
-                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: 4, width: 28, height: 28, color: '#fff',
+                      background: isLight ? '#FFFFFF' : 'rgba(255,255,255,0.04)',
+                      border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 4, width: 28, height: 28,
+                      color: isLight ? '#0F172A' : '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
                     }}
                   >
                     {playingSuvi ? <Pause size={12} /> : <Play size={12} />}
                   </button>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#606075' }}>
+                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#475569' : '#606075' }}>
                     Frame {currentSuviFrame + 1} / {suviFrames.length}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#606075' }}>FPS: {fps}</span>
+                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#475569' : '#606075' }}>FPS: {fps}</span>
                   <input
                     type="range" min="1" max="15" value={fps}
                     onChange={(e) => setFps(Number(e.target.value))}
@@ -524,22 +631,33 @@ export default function GoesSuvi() {
                   />
                   <select
                     value={loopLimit} onChange={e => setLoopLimit(Number(e.target.value))}
-                    style={{ background: '#000', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, color: '#888', padding: '3px 6px', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                    style={{
+                      background: isLight ? '#FFFFFF' : '#000',
+                      border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 4,
+                      color: isLight ? '#0F172A' : '#888',
+                      padding: '3px 6px', fontSize: 13, fontFamily: 'var(--font-mono)'
+                    }}
                   >
-                    <option value={30}>30F Loop</option>
-                    <option value={60}>60F Loop</option>
+                    <option value={15}>15F Loop (Fast)</option>
+                    <option value={20}>20F Loop</option>
+                    <option value={40}>40F Loop</option>
                   </select>
                 </div>
               </div>
             )}
 
             {/* Wavelength Description Card */}
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
+            <div style={{
+              background: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.02)',
+              border: isLight ? '1px solid rgba(26, 109, 181, 0.12)' : '1px solid rgba(255,255,255,0.04)',
+              borderRadius: 8, padding: 14
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 'bold', color: activeWl.color }}>{activeWl.name} - {activeWl.colorName}</span>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#606075' }}>อุณหภูมิคัดแยก: {activeWl.temp}</span>
+                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#64748B' : '#606075' }}>อุณหภูมิคัดแยก: {activeWl.temp}</span>
               </div>
-              <p style={{ color: '#888898', fontSize: 12, margin: 0, lineHeight: 1.5 }}>{activeWl.desc}</p>
+              <p style={{ color: isLight ? '#334155' : '#888898', fontSize: 13, margin: 0, lineHeight: 1.6 }}>{activeWl.desc}</p>
             </div>
           </div>
         </div>
@@ -547,8 +665,16 @@ export default function GoesSuvi() {
         {/* Right Side: Information & Technical Details (40% width) */}
         <div style={{ flex: '2 1 360px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-          {/* Static Reference Card */}
-          <Card title="📷 PHOTO REFERENCE">
+          {/* Static Reference Card - disable redundant card-level fs button */}
+          <Card
+            title="📷 PHOTO REFERENCE"
+            allowFullscreen={false}
+            style={{
+              background: isLight ? '#FFFFFF' : undefined,
+              boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
+              border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
+            }}
+          >
             <div style={{
               position: 'relative',
               width: '100%',
@@ -556,7 +682,7 @@ export default function GoesSuvi() {
               background: '#000',
               borderRadius: 8,
               overflow: 'hidden',
-              border: '1px solid rgba(255,255,255,0.03)',
+              border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.03)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -573,7 +699,7 @@ export default function GoesSuvi() {
               <div style={{
                 position: 'absolute', bottom: 12, left: 12,
                 background: 'rgba(0,0,0,0.7)', padding: '4px 8px', borderRadius: 4,
-                fontSize: 9, fontFamily: 'var(--font-mono)', color: '#a0a0b8',
+                fontSize: 12, fontFamily: 'var(--font-mono)', color: '#a0a0b8',
                 border: '1px solid rgba(255,255,255,0.08)'
               }}>
                 📷 HIGH-RES REFERENCE IMAGE
@@ -597,25 +723,32 @@ export default function GoesSuvi() {
           </Card>
 
           {/* Info Card */}
-          <Card title={source === 'sdo' ? '☀️ NASA SDO MISSION INFO' : '🛰️ GOES SUVI MISSION INFO'}>
-            <p style={{ color: '#888898', fontSize: 12, lineHeight: 1.6, margin: '0 0 12px 0', textAlign: 'justify' }}>
+          <Card
+            title={source === 'sdo' ? '☀️ NASA SDO MISSION INFO' : '🛰️ GOES SUVI MISSION INFO'}
+            style={{
+              background: isLight ? '#FFFFFF' : undefined,
+              boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
+              border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
+            }}
+          >
+            <p style={{ color: isLight ? '#334155' : '#888898', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px 0', textAlign: 'justify' }}>
               {source === 'sdo'
                 ? 'กล้องถ่ายภาพสุริยะ AIA (Atmospheric Imaging Assembly) บนดาวเทียม SDO ของ NASA จะถ่ายภาพสภาพความเคลื่อนไหวของดวงอาทิตย์ในย่านคลื่นอัลตราไวโอเลตยิ่งยวด (EUV) ทุก ๆ 12 วินาที ครอบคลุม 10 ย่านแสง ช่วยให้สามารถจำแนกสภาวะพลาสม่าตั้งแต่ชั้นนอกไปจนถึงสนามแม่เหล็กดวงอาทิตย์ได้อย่างละเอียดสูงสุด'
                 : 'เครื่องมือ SUVI (Solar Ultraviolet Imager) ติดตั้งบนดาวเทียมอุตุนิยมวิทยา GOES-R ตระกูลค้างฟ้า ทำหน้าที่สแกนดวงอาทิตย์ใน 6 ย่านคลื่นรังสีอัลตราไวโอเลต เพื่อเฝ้าระวังภัยพิบัติสภาพอวกาศ เช่น การระเบิดปะทุจ้า (Solar Flares), รูโหว่โคโรนา (Coronal Holes), และมวลโคโรนาปะทุ (CMEs) ก่อนจะส่งผลกระทบถึงระบบการสื่อสารและโครงข่ายไฟฟ้าบนโลก'}
             </p>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#A0A0B0', fontFamily: 'var(--font-mono)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: isLight ? '#475569' : '#A0A0B0', fontFamily: 'var(--font-mono)' }}>
               <tbody>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '6px 0', color: '#606075' }}>OPERATOR</td>
-                  <td style={{ padding: '6px 0', color: '#FFF' }}>{source === 'sdo' ? 'NASA / GSFC' : 'NOAA / SWPC'}</td>
+                <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>OPERATOR</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF', fontWeight: 600 }}>{source === 'sdo' ? 'NASA / GSFC' : 'NOAA / SWPC'}</td>
                 </tr>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '6px 0', color: '#606075' }}>ORBIT TYPE</td>
-                  <td style={{ padding: '6px 0', color: '#FFF' }}>{source === 'sdo' ? 'Geosynchronous' : 'Geostationary'}</td>
+                <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>ORBIT TYPE</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? 'Geosynchronous' : 'Geostationary'}</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '6px 0', color: '#606075' }}>UPDATE RATE</td>
-                  <td style={{ padding: '6px 0', color: '#FFF' }}>{source === 'sdo' ? '12 Seconds (Movies hourly)' : '1 Minute'}</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>UPDATE RATE</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? '12 Seconds (Movies hourly)' : '1 Minute'}</td>
                 </tr>
               </tbody>
             </table>
@@ -662,7 +795,7 @@ export default function GoesSuvi() {
             }}>
               {source === 'sdo' ? 'NASA SDO' : 'GOES SUVI'} — {lightboxContent.wl.name} ({lightboxContent.type === 'video' ? 'VIDEO LOOP' : 'STATIC PHOTO'})
             </h3>
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#606075', marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: '#606075', marginBottom: 16 }}>
               {lightboxContent.wl.colorName} · {lightboxContent.wl.temp} · {lightboxContent.wl.desc}
             </div>
 
@@ -722,6 +855,18 @@ export default function GoesSuvi() {
           </div>
         </div>
       )}
+
+      {/* Fullscreen Multi-View Modal (Customizable Wavelength Count & Selection) */}
+      <SuviFullscreenModal
+        isOpen={isFsModalOpen}
+        onClose={() => setIsFsModalOpen(false)}
+        source={source}
+        setSource={setSource}
+        suviWavelengths={SUVI_WAVELENGTHS}
+        sdoWavelengths={SDO_WAVELENGTHS}
+        initialWlCode={activeWl.code}
+        cacheBuster={cacheBuster}
+      />
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

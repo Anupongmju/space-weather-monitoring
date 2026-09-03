@@ -250,7 +250,7 @@ export default function StatusBar({
           >
             <div
               style={{
-                fontSize: '12px',
+                fontSize: '15px',
                 color: 'rgba(255,255,255,0.3)',
                 letterSpacing: 1.2,
                 marginBottom: 4,
@@ -284,7 +284,7 @@ export default function StatusBar({
                   ? '1px solid rgba(255,255,255,0.08)'
                   : `1px solid rgba(${rgb}, 0.3)`,
                 color: loading ? '#606075' : item.color,
-                fontSize: '9px',
+                fontSize: '12px',
                 fontWeight: 700,
                 fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.5px',

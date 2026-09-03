@@ -278,10 +278,10 @@ interface ContentBlock {
         <div style={{ position: 'relative', zIndex: 1, background: 'rgba(10, 15, 30, 0.85)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '40px', width: '380px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%', display: 'inline-block', marginBottom: '16px', boxShadow: '0 0 8px #3498DB' }}></span>
           <h2 style={{ margin: '0 0 8px', fontSize: '18px', fontFamily: 'var(--font-mono)', letterSpacing: '1px', textTransform: 'uppercase' }}>Secure Admin Terminal</h2>
-          <p style={{ margin: '0 0 24px', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Authorization required</p>
+          <p style={{ margin: '0 0 24px', fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Authorization required</p>
 
           {authError && (
-            <div style={{ padding: '12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#EF4444', fontSize: '11px', fontFamily: 'var(--font-mono)', marginBottom: '16px', textAlign: 'left' }}>
+            <div style={{ padding: '12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#EF4444', fontSize: '14px', fontFamily: 'var(--font-mono)', marginBottom: '16px', textAlign: 'left' }}>
               ACCESS DENIED: {authError}
             </div>
           )}
@@ -357,7 +357,7 @@ interface ContentBlock {
               padding: '6px 12px',
               color: 'rgba(255,255,255,0.6)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
+              fontSize: '14px',
               cursor: 'pointer',
               letterSpacing: '1px',
               transition: 'all 0.2s',
@@ -397,7 +397,7 @@ interface ContentBlock {
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Article Title</label>
+                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Article Title</label>
                 <input
                   type="text"
                   placeholder="e.g. Geomagnetic Storm Warning (G3 Class)"
@@ -420,7 +420,7 @@ interface ContentBlock {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Author Name</label>
+                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Author Name</label>
                   <input
                     type="text"
                     value={author}
@@ -441,14 +441,14 @@ interface ContentBlock {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Media Banner (ImgBB Upload)</label>
+                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Media Banner (ImgBB Upload)</label>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
+                      fontSize: '14px',
                       color: 'rgba(255,255,255,0.5)',
                       padding: '8px 0',
                     }}
@@ -466,7 +466,7 @@ interface ContentBlock {
                       position: 'absolute', top: '8px', right: '8px',
                       background: '#EF4444', color: '#ffffff', border: 'none',
                       borderRadius: '50%', width: '24px', height: '24px',
-                      cursor: 'pointer', fontWeight: 'bold', fontSize: '12px',
+                      cursor: 'pointer', fontWeight: 'bold', fontSize: '15px',
                       display: 'flex', justifyContent: 'center', alignItems: 'center',
                     }}
                   >
@@ -477,7 +477,7 @@ interface ContentBlock {
 
               {/* Cosmic Layout Builder */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#3498DB', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 'bold' }}>
+                <label style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: '#3498DB', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 'bold' }}>
                   // COSMIC LAYOUT BUILDER
                 </label>
                 
@@ -496,7 +496,7 @@ interface ContentBlock {
                     >
                       {/* Block Controls Header */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px dashed rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '1px', textTransform: 'uppercase' }}>
                           BLOCK #{idx + 1}: <span style={{ color: '#3498DB' }}>{block.type === 'text' ? 'Text Paragraph' : 'Image Block'}</span>
                         </span>
                         
@@ -516,7 +516,7 @@ interface ContentBlock {
                               display: 'flex',
                               justifyContent: 'center',
                               alignItems: 'center',
-                              fontSize: '10px'
+                              fontSize: '13px'
                             }}
                           >
                             ▲
@@ -536,7 +536,7 @@ interface ContentBlock {
                               display: 'flex',
                               justifyContent: 'center',
                               alignItems: 'center',
-                              fontSize: '10px'
+                              fontSize: '13px'
                             }}
                           >
                             ▼
@@ -585,7 +585,7 @@ interface ContentBlock {
                                   border: '1px solid rgba(255,255,255,0.1)',
                                   borderRadius: '4px',
                                   padding: '4px 10px',
-                                  fontSize: '11px',
+                                  fontSize: '14px',
                                   fontFamily: 'var(--font-mono)',
                                   cursor: 'pointer',
                                   transition: 'all 0.15s'
@@ -622,7 +622,7 @@ interface ContentBlock {
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {block.uploading ? (
-                            <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)' }}>
+                            <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'rgba(255, 255, 255, 0.4)' }}>
                               // UPLOADING IMAGE TO IMGBB SERVICE...
                             </div>
                           ) : block.value ? (
@@ -631,7 +631,7 @@ interface ContentBlock {
                                 <img src={block.value} alt="Inline block" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               </div>
                               <div style={{ flex: 1, overflow: 'hidden' }}>
-                                <div style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>IMAGE URL:</div>
+                                <div style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>IMAGE URL:</div>
                                 <input
                                   type="text"
                                   readOnly
@@ -642,7 +642,7 @@ interface ContentBlock {
                                     border: '1px solid rgba(255,255,255,0.06)',
                                     color: '#3498DB',
                                     fontFamily: 'var(--font-mono)',
-                                    fontSize: '10px',
+                                    fontSize: '13px',
                                     padding: '6px',
                                     borderRadius: '4px',
                                     boxSizing: 'border-box',
@@ -669,7 +669,7 @@ interface ContentBlock {
                                   borderRadius: '4px',
                                   color: '#3498DB',
                                   fontFamily: 'var(--font-mono)',
-                                  fontSize: '11px',
+                                  fontSize: '14px',
                                   cursor: 'pointer',
                                   transition: 'all 0.2s'
                                 }}
@@ -699,7 +699,7 @@ interface ContentBlock {
                       borderRadius: '6px',
                       color: '#ffffff',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
+                      fontSize: '14px',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       display: 'flex',
@@ -723,7 +723,7 @@ interface ContentBlock {
                       borderRadius: '6px',
                       color: '#ffffff',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
+                      fontSize: '14px',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       display: 'flex',
@@ -806,13 +806,13 @@ interface ContentBlock {
             </h2>
 
             {loading && (
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-mono)', fontSize: '15px' }}>
                 LOADING ARCHIVES...
               </div>
             )}
 
             {!loading && newsList.length === 0 && (
-              <div style={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-mono)', fontSize: '11px', border: '1px dashed rgba(255,255,255,0.06)', padding: '20px', borderRadius: '6px' }}>
+              <div style={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-mono)', fontSize: '14px', border: '1px dashed rgba(255,255,255,0.06)', padding: '20px', borderRadius: '6px' }}>
                 NO REPORTS PUBLISHED
               </div>
             )}
@@ -833,14 +833,14 @@ interface ContentBlock {
                   >
                     <div>
                       <h3 style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: '500', color: '#ffffff', lineHeight: '1.4' }}>{item.title}</h3>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <span>{formatDate(item.published_at)}</span>
                           <span>•</span>
                           <span>{item.author || 'Admin'}</span>
                         </div>
                         {item.canva_url && (
-                          <span style={{ color: '#3498DB', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px', wordBreak: 'break-all' }}>
+                          <span style={{ color: '#3498DB', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', wordBreak: 'break-all' }}>
                             [Canva] {item.canva_url}
                           </span>
                         )}
@@ -857,7 +857,7 @@ interface ContentBlock {
                           padding: '4px 8px',
                           color: '#3498DB',
                           fontFamily: 'var(--font-mono)',
-                          fontSize: '9px',
+                          fontSize: '12px',
                           cursor: 'pointer',
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background = '#3498DB'; e.currentTarget.style.color = '#000000'; }}
@@ -874,7 +874,7 @@ interface ContentBlock {
                           padding: '4px 8px',
                           color: '#EF4444',
                           fontFamily: 'var(--font-mono)',
-                          fontSize: '9px',
+                          fontSize: '12px',
                           cursor: 'pointer',
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; e.currentTarget.style.color = '#ffffff'; }}

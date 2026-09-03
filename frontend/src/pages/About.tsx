@@ -147,7 +147,7 @@ export default function About() {
             alignItems: 'center',
             gap: '8px',
             fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
+            fontSize: '13px',
             letterSpacing: '3px',
             textTransform: 'uppercase',
             color: '#3498DB',
@@ -197,7 +197,7 @@ export default function About() {
               background: '#3498DB',
               color: '#000',
               fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
+              fontSize: '14px',
               letterSpacing: '2px',
               textTransform: 'uppercase',
               textDecoration: 'none',
@@ -217,7 +217,7 @@ export default function About() {
               background: 'transparent',
               color: 'rgba(255,255,255,0.7)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
+              fontSize: '14px',
               letterSpacing: '2px',
               textTransform: 'uppercase',
               textDecoration: 'none',
@@ -268,7 +268,7 @@ export default function About() {
                 <span style={{ fontSize: '28px', color: 'rgba(255,255,255,0.5)' }}>{stat.suffix}</span>
               </div>
               <div style={{
-                fontSize: '11px',
+                fontSize: '14px',
                 fontFamily: 'var(--font-mono)',
                 letterSpacing: '2px',
                 textTransform: 'uppercase',
@@ -421,7 +421,7 @@ export default function About() {
                   }}
                 >
                   <div style={{ fontSize: '40px', marginBottom: '16px' }}>{member.icon}</div>
-                  <div style={{ color: '#3498DB', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  <div style={{ color: '#3498DB', fontFamily: 'var(--font-mono)', fontSize: '13px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>
                     {member.role}
                   </div>
                   <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
@@ -440,7 +440,7 @@ export default function About() {
           <SectionLabel label="Disclaimer" />
           <p style={{
             color: 'rgba(255,255,255,0.4)',
-            fontSize: '12px',
+            fontSize: '15px',
             lineHeight: '1.8',
             fontFamily: 'var(--font-mono)',
             borderLeft: '2px solid rgba(52,152,219,0.4)',
@@ -469,7 +469,7 @@ export default function About() {
               <Link key={link.label} to={link.to} style={{
                 color: 'rgba(255,255,255,0.5)',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
+                fontSize: '14px',
                 letterSpacing: '1px',
                 textTransform: 'uppercase',
                 textDecoration: 'none',
@@ -500,7 +500,7 @@ function SectionLabel({ label }: { label: string }) {
     }}>
       <span style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: '10px',
+        fontSize: '13px',
         letterSpacing: '3px',
         textTransform: 'uppercase',
         color: '#3498DB',
@@ -530,7 +530,7 @@ function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc:
       <div style={{ fontSize: '24px', flexShrink: 0 }}>{icon}</div>
       <div style={{ textAlign: 'left' }}>
         <div style={{ color: '#ffffff', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{title}</div>
-        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', lineHeight: '1.5' }}>{desc}</div>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', lineHeight: '1.5' }}>{desc}</div>
       </div>
     </div>
   )
@@ -570,19 +570,19 @@ function DataSourceCard({ source }: { source: typeof DATA_SOURCES[0] }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
         <div style={{ color: '#ffffff', fontWeight: '700', fontSize: '14px' }}>{source.name}</div>
-        <span style={{ color: source.color, fontSize: '12px', opacity: 0.8 }}>↗</span>
+        <span style={{ color: source.color, fontSize: '15px', opacity: 0.8 }}>↗</span>
       </div>
-      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontFamily: 'var(--font-mono)', letterSpacing: '0.5px', marginBottom: '12px' }}>
+      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', fontFamily: 'var(--font-mono)', letterSpacing: '0.5px', marginBottom: '12px' }}>
         {source.full}
       </div>
-      <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', lineHeight: '1.6', margin: '0 0 16px' }}>
+      <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '15px', lineHeight: '1.6', margin: '0 0 16px' }}>
         {source.desc}
       </p>
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {source.tags.map(tag => (
           <span key={tag} style={{
             padding: '2px 8px',
-            fontSize: '9px',
+            fontSize: '12px',
             fontFamily: 'var(--font-mono)',
             letterSpacing: '1px',
             color: source.color,
@@ -620,7 +620,7 @@ function TechCard({ tech }: { tech: typeof TECH_STACK[0] }) {
       <div style={{ fontSize: '28px', flexShrink: 0 }}>{tech.icon}</div>
       <div>
         <div style={{ color: '#ffffff', fontWeight: '600', fontSize: '14px' }}>{tech.name}</div>
-        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontFamily: 'var(--font-mono)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '2px' }}>
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px', fontFamily: 'var(--font-mono)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '2px' }}>
           {tech.role}
         </div>
       </div>

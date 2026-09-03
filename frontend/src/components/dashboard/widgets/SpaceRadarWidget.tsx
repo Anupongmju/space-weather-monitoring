@@ -11,12 +11,12 @@ export default function SpaceRadarWidget() {
   }, []);
 
   const cardStyle: React.CSSProperties = {
-    background: '#050A14',
+    background: 'var(--bg-surface, #050A14)',
     backdropFilter: 'blur(8px)',
     borderRadius: '0px',
     padding: '20px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    border: '1px solid rgba(52, 152, 219, 0.18)',
+    boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+    border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
     marginBottom: '20px',
     position: 'relative',
     fontFamily: 'var(--font-mono)'
@@ -37,16 +37,16 @@ export default function SpaceRadarWidget() {
       <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none' }} />
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%', boxShadow: '0 0 6px #3498DB' }}></span>
           <h3 style={{
-            margin: 0, fontSize: '11px', fontWeight: '700',
-            fontFamily: "'Orbitron', monospace", color: '#ffffff',
+            margin: 0, fontSize: '14px', fontWeight: '700',
+            fontFamily: "'Orbitron', monospace", color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px', textTransform: 'uppercase'
           }}>HUD ORBIT RADAR</h3>
         </div>
-        <span style={{ fontSize: '9px', color: '#38BDF8', letterSpacing: '1px' }}>
+        <span style={{ fontSize: '12px', color: '#38BDF8', letterSpacing: '1px' }}>
           SWEEP 360° · REALTIME
         </span>
       </div>
@@ -99,7 +99,7 @@ export default function SpaceRadarWidget() {
         </div>
 
         {/* Satellite Coordinates Table */}
-        <div style={{ width: '100%', fontSize: '10px', color: '#94A3B8' }}>
+        <div style={{ width: '100%', fontSize: '13px', color: 'var(--text-secondary, #94A3B8)' }}>
           {satellites.map((sat) => (
             <div key={sat.name} style={{
               display: 'flex',
@@ -112,10 +112,10 @@ export default function SpaceRadarWidget() {
                 <span style={{ width: '6px', height: '6px', background: sat.color, borderRadius: '50%' }} />
                 <span style={{ color: '#F8FAFC', fontWeight: 'bold' }}>{sat.name}</span>
               </div>
-              <div style={{ color: '#CBD5E1', fontSize: '9px' }}>{sat.distance}</div>
+              <div style={{ color: '#CBD5E1', fontSize: '12px' }}>{sat.distance}</div>
               <span style={{
                 color: sat.color,
-                fontSize: '8px',
+                fontSize: '10px',
                 padding: '1px 4px',
                 background: `${sat.color}15`,
                 border: `1px solid ${sat.color}44`,

@@ -7,22 +7,22 @@ import ProtonWidget from './widgets/ProtonWidget';
 import ElectronWidget from './widgets/ElectronWidget';
 import SunspotWidget from './widgets/SunspotWidget';
 import ThuleWidget from './widgets/ThuleWidget';
-
 import FactsWidget from './widgets/FactsWidget';
 import SolarImagesWidget from './widgets/SolarImagesWidget';
 
 export default function LeftColumn() {
   const cardStyle: React.CSSProperties = {
-    background: '#050A14',
+    background: 'var(--bg-surface, #050A14)',
     backdropFilter: 'blur(8px)',
     borderRadius: '0px',
     padding: '24px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    border: '1px solid rgba(52, 152, 219, 0.18)',
+    boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+    border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
     display: 'flex',
     flexDirection: 'column',
     position: 'relative',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    transition: 'background-color 0.25s ease, border-color 0.25s ease',
   };
 
   const titleStyle = {
@@ -30,11 +30,11 @@ export default function LeftColumn() {
     fontSize: '14px',
     fontWeight: '700',
     fontFamily: "'Orbitron', monospace",
-    color: '#ffffff',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    color: 'var(--text-primary, #ffffff)',
+    borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
     paddingBottom: '12px',
     letterSpacing: '2px',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
     display: 'flex',
     alignItems: 'center',
     gap: '8px'
@@ -43,9 +43,11 @@ export default function LeftColumn() {
   const textStyle = {
     margin: 0,
     fontSize: '14px',
-    color: '#a0aab5',
+    color: 'var(--text-muted, #a0aab5)',
     flex: 1,
   };
+
+  const accentColor = 'var(--primary, #3498DB)';
 
   return (
     <div style={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -54,12 +56,12 @@ export default function LeftColumn() {
       {/* Top Row: 2 columns */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
         <div style={{ ...cardStyle, position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -1, left: -1, width: 10, height: 10, borderTop: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', top: -1, right: -1, width: 10, height: 10, borderTop: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: -1, left: -1, width: 10, height: 10, borderTop: `2px solid ${accentColor}`, borderLeft: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: -1, right: -1, width: 10, height: 10, borderTop: `2px solid ${accentColor}`, borderRight: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: `2px solid ${accentColor}`, borderLeft: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: `2px solid ${accentColor}`, borderRight: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
           <h3 style={titleStyle}>
-            <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%' }}></span> 
+            <span style={{ width: '8px', height: '8px', background: accentColor, borderRadius: '50%' }}></span> 
             SYSTEM TELEMETRY
           </h3>
           <p style={textStyle}>REAL-TIME SENSOR DATA</p>
@@ -83,4 +85,3 @@ export default function LeftColumn() {
     </div>
   );
 }
-

@@ -95,7 +95,7 @@ export default function AceIndex(){
           background: status.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
           border: `1px solid ${status.ok ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
           borderRadius: 8, color: status.ok ? '#22C55E' : '#EF4444',
-          fontFamily: 'var(--font-mono)', fontSize: 12,
+          fontFamily: 'var(--font-mono)', fontSize: 15,
         }}>
           {status.ok ? '✓' : '✗'} {status.msg}
         </div>
@@ -134,10 +134,10 @@ export default function AceIndex(){
               <div style={{ fontFamily: "'Orbitron', monospace", fontSize: 14, fontWeight: 700, color: card.color, marginBottom: 4 }}>
                 {card.label}
               </div>
-              <div style={{ fontSize: 12, color: '#A0A0B8', marginBottom: 8, fontWeight: 600 }}>
+              <div style={{ fontSize: 15, color: '#A0A0B8', marginBottom: 8, fontWeight: 600 }}>
                 {card.sub}
               </div>
-              <div style={{ fontSize: 11, color: '#606075', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 14, color: '#606075', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>
                 {card.desc}
               </div>
             </div>

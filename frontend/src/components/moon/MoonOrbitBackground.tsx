@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MoonEventPosition } from '../../services/moonService'
+import { useTheme } from '../../context/ThemeContext'
 
 interface MoonOrbitBackgroundProps {
   events: MoonEventPosition[]
@@ -20,6 +21,9 @@ export default React.memo(function MoonOrbitBackground({
   initialPosition = 'dashboard',
   replayIntroTrigger = 0,
 }: MoonOrbitBackgroundProps) {
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
   // SVG Canvas dimensions matching OrbitBackground.tsx (1920x1080)
   const W = 1920
   const H = 1080
@@ -1245,10 +1249,10 @@ export default React.memo(function MoonOrbitBackground({
             boxShadow: '0 0 8px #FBBF24',
           }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#FDE68A', letterSpacing: 1.5 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#FDE68A', letterSpacing: 1.5 }}>
               1-ROUND ORBIT REVOLUTION SCAN
             </span>
-            <span ref={hudProgressRef} style={{ fontSize: 10, color: '#94A3B8' }}>
+            <span ref={hudProgressRef} style={{ fontSize: 13, color: '#94A3B8' }}>
               0° / 360° · 0/{events.length} stations active
             </span>
           </div>
@@ -1260,7 +1264,7 @@ export default React.memo(function MoonOrbitBackground({
               color: '#E2E8F0',
               padding: '4px 10px',
               borderRadius: 3,
-              fontSize: 10,
+              fontSize: 13,
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
@@ -1296,7 +1300,7 @@ export default React.memo(function MoonOrbitBackground({
             borderRadius: 3,
             cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 700,
             display: 'inline-flex',
             alignItems: 'center',
@@ -1328,7 +1332,7 @@ export default React.memo(function MoonOrbitBackground({
             borderRadius: 3,
             cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 700,
             display: 'inline-flex',
             alignItems: 'center',
@@ -1356,7 +1360,7 @@ export default React.memo(function MoonOrbitBackground({
               borderRadius: 3,
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 14,
               transition: 'all 0.2s',
               boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
             }}

@@ -255,12 +255,20 @@ export const PRESET_EVENT_DATES = [
   '2021/11/03',
 ]
 
+let _cachedEvents: MoonEventPosition[] | null = null
+const _eventDetailCache = new Map<number, MoonEventPosition>()
+
 export async function loadMoonEventPositions(): Promise<MoonEventPosition[]> {
+  if (_cachedEvents && _cachedEvents.length > 0) {
+    return _cachedEvents
+  }
+
   try {
     const res = await fetch(`${BASE}/events`)
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data) && data.length > 0) {
+        _cachedEvents = data
         return data
       }
     }
@@ -269,8 +277,30 @@ export async function loadMoonEventPositions(): Promise<MoonEventPosition[]> {
   }
 
   // Fallback calculation
-  return PRESET_EVENT_DATES.map((dateStr, idx) => computeMoonPositionClient(dateStr, idx + 1))
+  const fallback = PRESET_EVENT_DATES.map((dateStr, idx) => computeMoonPositionClient(dateStr, idx + 1))
+  return fallback
 }
+
+export async function loadMoonEventDetail(id: number): Promise<MoonEventPosition | null> {
+  if (_eventDetailCache.has(id)) {
+    return _eventDetailCache.get(id)!
+  }
+
+  try {
+    const res = await fetch(`${BASE}/event/${id}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data && !data.error) {
+        _eventDetailCache.set(id, data)
+        return data
+      }
+    }
+  } catch (err) {
+    console.warn('[MoonService] Error loading event detail:', err)
+  }
+  return null
+}
+
 
 export async function calculateMoonPosition(dateStr: string): Promise<MoonEventPosition> {
   try {

@@ -79,7 +79,7 @@ export default function MarsStatusBar({ summary, loading = false }: MarsStatusBa
         >
           <div
             style={{
-              fontSize: '11px',
+              fontSize: '14px',
               color: 'rgba(255,255,255,0.4)',
               letterSpacing: 1.2,
               marginBottom: 4,
@@ -109,7 +109,7 @@ export default function MarsStatusBar({ summary, loading = false }: MarsStatusBa
               background: `rgba(255,255,255,0.06)`,
               border: `1px solid ${item.color}55`,
               color: item.color,
-              fontSize: '9px',
+              fontSize: '12px',
               fontWeight: 700,
               fontFamily: 'var(--font-mono)',
               letterSpacing: '0.5px',

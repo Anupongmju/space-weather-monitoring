@@ -27,7 +27,7 @@ export default function TelemetryTicker() {
       position: 'relative',
       zIndex: 900,
       fontFamily: 'var(--font-mono)',
-      fontSize: '11px',
+      fontSize: '14px',
       userSelect: 'none'
     }}>
       {/* Fixed Left Label Badge */}
@@ -76,7 +76,7 @@ export default function TelemetryTicker() {
             <span style={{ color: '#94A3B8' }}>{item.metric}:</span>
             <span style={{ color: '#FFFFFF', fontWeight: 'bold' }}>{item.val}</span>
             <span style={{
-              fontSize: '9px',
+              fontSize: '12px',
               padding: '1px 5px',
               borderRadius: '2px',
               background: `${item.color}15`,

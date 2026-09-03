@@ -4,9 +4,9 @@ const getAlertType = (msg) => {
   if (msg.includes('WARNING:')) return { label: 'WARNING', color: '#3498DB' };
   if (msg.includes('ALERT:')) return { label: 'ALERT', color: '#EF4444' };
   if (msg.includes('WATCH:')) return { label: 'WATCH', color: '#FBBF24' };
-  if (msg.includes('SUMMARY:')) return { label: 'SUMMARY', color: '#94A3B8' };
+  if (msg.includes('SUMMARY:')) return { label: 'SUMMARY', color: 'var(--text-secondary, #94A3B8)' };
   if (msg.includes('EXTENDED WARNING:')) return { label: 'EXT WARNING', color: '#3498DB' };
-  return { label: 'INFO', color: '#94A3B8' };
+  return { label: 'INFO', color: 'var(--text-secondary, #94A3B8)' };
 };
 
 const parseTitle = (msg) => {
@@ -40,12 +40,12 @@ export default function AlertsWidget() {
 
   return (
     <div style={{
-      background: '#050A14',
+      background: 'var(--bg-surface, #050A14)',
       backdropFilter: 'blur(8px)',
       borderRadius: '0px',
       marginBottom: '20px',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-      border: '1px solid rgba(52, 152, 219, 0.18)',
+      boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+      border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
       padding: '20px',
       position: 'relative'
     }}>
@@ -54,7 +54,7 @@ export default function AlertsWidget() {
       <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none' }} />
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Pulsing red dot for live alerts */}
           <span style={{ position: 'relative', width: '8px', height: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -66,18 +66,18 @@ export default function AlertsWidget() {
             <span style={{ width: '8px', height: '8px', background: '#EF4444', borderRadius: '50%', position: 'relative' }}></span>
           </span>
           <h3 style={{
-            margin: 0, fontSize: '11px', fontWeight: '700',
-            fontFamily: "'Orbitron', monospace", color: '#ffffff',
+            margin: 0, fontSize: '14px', fontWeight: '700',
+            fontFamily: "'Orbitron', monospace", color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px', textTransform: 'uppercase'
           }}>NOAA ALERTS</h3>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#606075', letterSpacing: '1px', textTransform: 'uppercase' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#606075', letterSpacing: '1px', textTransform: 'uppercase' }}>
           LIVE · SWPC
         </span>
       </div>
 
       {loading ? (
-        <div style={{ fontFamily: 'var(--font-mono)', color: '#606075', fontSize: '12px', padding: '8px 0' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', color: '#606075', fontSize: '15px', padding: '8px 0' }}>
           Fetching latest alerts...
         </div>
       ) : (
@@ -102,18 +102,18 @@ export default function AlertsWidget() {
                 {/* Type badge + date */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '9px',
+                    fontFamily: 'var(--font-mono)', fontSize: '12px',
                     color: type.color, letterSpacing: '1px',
                     textTransform: 'uppercase'
                   }}>
                     // {type.label}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#606075' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#606075' }}>
                     {date} UTC
                   </span>
                 </div>
                 <p style={{
-                  margin: 0, fontSize: '12px', color: '#E2E8F0',
+                  margin: 0, fontSize: '15px', color: 'var(--text-primary, #E2E8F0)',
                   lineHeight: '1.45', fontWeight: '500',
                   display: '-webkit-box', WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical', overflow: 'hidden'

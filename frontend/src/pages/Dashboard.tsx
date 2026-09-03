@@ -107,7 +107,7 @@ const css = `
     border: 1px solid #EF4444;
     color: #FFFFFF;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
     padding: 4px 10px;
@@ -133,6 +133,7 @@ import OrbitBackground from '../components/space/OrbitBackground'
 import LeftColumn from '../components/dashboard/LeftColumn'
 import RightColumn from '../components/dashboard/RightColumn'
 import StatusBar from '../components/dashboard/StatusBar'
+import { useTheme } from '../context/ThemeContext'
 
 // ── Expanding Card ─────────────────────────────────────────────────────────────
 function DataCard({ index, tag, icon, title, sub, desc, path, isActive, onHover, onLeave, navigate }) {
@@ -157,7 +158,7 @@ function DataCard({ index, tag, icon, title, sub, desc, path, isActive, onHover,
             {icon}
           </div>
           <div>
-            <div style={{ fontSize: 9, letterSpacing: 3, color: 'var(--accent)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>
+            <div style={{ fontSize: 12, letterSpacing: 3, color: 'var(--accent)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>
               {tag}
             </div>
             <div style={{
@@ -172,26 +173,26 @@ function DataCard({ index, tag, icon, title, sub, desc, path, isActive, onHover,
         </div>
 
         <div className="card-desc">
-          <div style={{ fontSize: 9, color: 'var(--accent)', letterSpacing: 2, fontFamily: 'var(--font-mono)', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: 2, fontFamily: 'var(--font-mono)', marginBottom: 10 }}>
             {sub}
           </div>
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, lineHeight: 1.7, fontFamily: 'var(--font-sans)', margin: '0 0 24px' }}>
             {desc}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: 2 }}>
             <span>EXPLORE DATA</span>
             <div style={{ width: 40, height: 1, background: 'rgba(52,152,219,0.4)' }} />
             <span>→</span>
           </div>
         </div>
 
-        <div style={{ position: 'absolute', top: 24, right: 24, fontSize: 9, color: 'rgba(255,255,255,0.15)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
+        <div style={{ position: 'absolute', top: 24, right: 24, fontSize: 12, color: 'rgba(255,255,255,0.15)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
           0{index + 1} / 03
         </div>
 
         <div className="card-tag-vert">
           <div style={{ width: 1, height: 40, background: 'white' }} />
-          <span style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', fontSize: 8, letterSpacing: 4, fontFamily: 'var(--font-mono)', color: 'white' }}>
+          <span style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', fontSize: 10, letterSpacing: 4, fontFamily: 'var(--font-mono)', color: 'white' }}>
             {tag}
           </span>
         </div>
@@ -203,6 +204,8 @@ function DataCard({ index, tag, icon, title, sub, desc, path, isActive, onHover,
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
   const [activeCard, setActiveCard] = useState(null)
   const [time, setTime] = useState(new Date())
   const [summary, setSummary] = useState({
@@ -320,7 +323,7 @@ export default function Dashboard() {
             marginBottom: 16,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4caf50', boxShadow: '0 0 6px #4caf50' }} />
-            <span style={{ fontSize: 8, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-mono)' }}>
+            <span style={{ fontSize: 10, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-mono)' }}>
               REAL-TIME MONITORING
             </span>
           </div>
@@ -348,7 +351,7 @@ export default function Dashboard() {
 
           {/* Subtitle */}
           <p style={{
-            fontSize: 10, color: 'rgba(255,255,255,0.35)',
+            fontSize: 13, color: 'rgba(255,255,255,0.35)',
             letterSpacing: 4, textTransform: 'uppercase',
             fontFamily: 'var(--font-mono)', marginBottom: 20,
           }}>
@@ -364,7 +367,7 @@ export default function Dashboard() {
             style={{
               border: '1px solid var(--accent)', color: 'var(--accent)',
               background: 'rgba(0,0,0,0.3)', padding: '10px 24px',
-              fontFamily: 'var(--font-mono)', fontSize: 10,
+              fontFamily: 'var(--font-mono)', fontSize: 13,
               letterSpacing: 3, cursor: 'pointer', transition: 'all 0.25s',
               backdropFilter: 'blur(8px)',
             }}
@@ -375,18 +378,41 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Scroll indicator */}
+        {/* ── BOTTOM FADE: orbit stars fade DOWN into dark at the very bottom edge (40px) ── */}
+        <div style={{
+          position: 'absolute', bottom: -1, left: 0, right: 0,
+          height: '40px', pointerEvents: 'none', zIndex: 5,
+          background: 'linear-gradient(to bottom, transparent 0%, #020617 100%)',
+        }} />
       </section>
 
       {/* ── Dashboard Content ── */}
-      <section style={{ width: '100%', padding: '60px 5vw', position: 'relative', zIndex: 10, background: '#03060C', borderTop: '1px solid rgba(52, 152, 219, 0.15)', boxSizing: 'border-box' }}>
+      <section style={{
+        width: '100%', padding: '60px 5vw', position: 'relative', zIndex: 10,
+        background: isLight ? 'var(--bg-base, #EEF4FB)' : '#03060C',
+        borderTop: 'none',
+        boxSizing: 'border-box',
+        transition: 'background-color 0.3s ease',
+      }}>
+        {/* ── TOP SEAM FADE DOWN: Deep orbit dark fades DOWN into dashboard (54px) ── */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          height: 54, pointerEvents: 'none', zIndex: 4,
+          background: isLight
+            ? 'linear-gradient(to bottom, #020617 0%, rgba(2, 6, 23, 0.32) 40%, rgba(2, 6, 23, 0.08) 70%, transparent 100%)'
+            : 'linear-gradient(to bottom, #020617 0%, rgba(3, 6, 12, 0.75) 50%, transparent 100%)',
+        }} />
+
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid rgba(52, 152, 219, 0.15)' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#3498DB', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '8px' }}>
+          <div style={{
+            marginBottom: '32px', paddingBottom: '20px',
+            borderBottom: isLight ? '1px solid var(--border, rgba(26, 109, 181, 0.15))' : '1px solid rgba(52, 152, 219, 0.15)',
+          }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--primary, #3498DB)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '8px' }}>
               // SECTION_01 / LIVE SENSOR DATA
             </p>
-            <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.025em', margin: 0, lineHeight: '1.1' }}>
-              Live <em style={{ color: '#3498DB', fontStyle: 'normal' }}>sensor</em> readings.
+            <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: '700', color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.025em', margin: 0, lineHeight: '1.1' }}>
+              Live <em style={{ color: 'var(--primary, #3498DB)', fontStyle: 'normal' }}>sensor</em> readings.
             </h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 7fr) minmax(0, 3fr)', gap: '30px' }}>

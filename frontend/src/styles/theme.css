@@ -1,11 +1,11 @@
-:root {
-  /* === OCEAN SKY BLUE THEME === */
+:root, [data-theme="dark"] {
+  /* === DEEP SPACE BLACK THEME === */
   --primary: #3498DB;
   --primary-dark: #2980B9;
   --primary-light: #89CFF0;
-  --primary-glow: rgba(52, 152, 219, 0.3);
+  --primary-glow: rgba(52, 152, 219, 0.35);
 
-  /* Backgrounds — Subtle Deep Ocean Atmosphere */
+  /* Backgrounds — Midnight Deep Space */
   --bg-base: #03060C;
   --bg-surface: #050A14;
   --bg-card: #060E1A;
@@ -32,6 +32,7 @@
   --font-display: 'Orbitron', monospace;
   --font-body: 'Rajdhani', sans-serif;
   --font-mono: 'Share Tech Mono', monospace;
+  --font-sans: 'Rajdhani', 'Helvetica Neue', Arial, sans-serif;
 
   /* Spacing */
   --sidebar-width: 260px;
@@ -41,6 +42,60 @@
   --shadow-glow: 0 0 20px rgba(52, 152, 219, 0.2);
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
   --transition: all 0.2s ease;
+
+  /* Navbar */
+  --navbar-bg: rgba(5, 14, 30, 0.92);
+  --navbar-border: rgba(52, 152, 219, 0.2);
+}
+
+[data-theme="light"] {
+  /* === BRIGHT BLUE DAYLIGHT THEME — White + Royal Blue === */
+  /* Accent color: Keep the same navy blue family */
+  --primary: #1A6DB5;
+  --primary-dark: #115090;
+  --primary-light: #4A9FD9;
+  --primary-glow: rgba(26, 109, 181, 0.25);
+
+  /* Backgrounds — Clean Bright White with Blue tint */
+  --bg-base: #EEF4FB;        /* very light ice blue page */
+  --bg-surface: #FFFFFF;     /* pure white card */
+  --bg-card: #F5F9FF;        /* slightly blue-tinted card */
+  --bg-card-hover: #EBF3FC;  /* hover card */
+  --bg-sidebar: #F0F6FF;
+
+  /* Borders — blue-tinted subtle */
+  --border: rgba(26, 109, 181, 0.15);
+  --border-active: rgba(26, 109, 181, 0.4);
+
+  /* Text — dark navy on white */
+  --text-primary: #0C1E35;   /* very dark navy */
+  --text-secondary: #2E5B8A; /* medium navy */
+  --text-muted: #5A84A8;     /* muted blue-grey */
+  --text-accent: #1A6DB5;
+
+  /* Status colors */
+  --status-normal: #16A34A;
+  --status-warning: #D97706;
+  --status-danger: #DC2626;
+  --status-info: #1A6DB5;
+
+  /* Fonts — same as dark */
+  --font-display: 'Orbitron', monospace;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-sans: 'Rajdhani', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Spacing */
+  --sidebar-width: 260px;
+  --navbar-height: 64px;
+
+  /* Effects */
+  --shadow-glow: 0 0 20px rgba(26, 109, 181, 0.15);
+  --shadow-card: 0 2px 16px rgba(26, 109, 181, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  /* Navbar */
+  --navbar-bg: rgba(255, 255, 255, 0.95);
+  --navbar-border: rgba(26, 109, 181, 0.18);
 }
 
 * {
@@ -56,14 +111,18 @@ body {
   font-size: 16px;
   line-height: 1.6;
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-track { background: var(--bg-base); }
 ::-webkit-scrollbar-thumb { 
-  background: var(--primary-dark); 
+  background: var(--primary); 
   border-radius: 3px; 
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
 }
 
 /* Glow text utility */
@@ -71,10 +130,18 @@ body {
   text-shadow: 0 0 20px var(--primary-glow);
 }
 
-/* Grid background */
-.grid-bg {
-  background-image: 
-    linear-gradient(rgba(52, 152, 219, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(52, 152, 219, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
+/* ─── Light Mode: Global widget overrides ───────────────────────────────── */
+/* Widget card containers that still use rgba dark backgrounds */
+[data-theme="light"] .widget-card,
+[data-theme="light"] [class*="card"] {
+  background: var(--bg-surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override common inline rgba dark backgrounds in light mode */
+/* (These are applied via JS for any element using CSS variables) */
+[data-theme="light"] body {
+  background: var(--bg-base);
+  color: var(--text-primary);
 }

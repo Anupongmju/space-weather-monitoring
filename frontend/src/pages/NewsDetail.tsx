@@ -165,7 +165,7 @@ export default function NewsDetail() {
           <div style={{ padding: '30px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', color: '#EF4444', fontFamily: 'var(--font-mono)', fontSize: '14px', marginBottom: '24px' }}>
             COSMIC ERROR: {error || 'Article not found in database archives'}
           </div>
-          <Link to="/news" style={{ textDecoration: 'none', fontFamily: 'var(--font-mono)', color: '#3498DB', fontSize: '12px', border: '1px solid #3498DB', padding: '10px 20px', borderRadius: '6px' }}>
+          <Link to="/news" style={{ textDecoration: 'none', fontFamily: 'var(--font-mono)', color: '#3498DB', fontSize: '15px', border: '1px solid #3498DB', padding: '10px 20px', borderRadius: '6px' }}>
             RETURN TO ARCHIVES
           </Link>
         </div>
@@ -190,7 +190,7 @@ export default function NewsDetail() {
             border: 'none',
             color: '#3498DB',
             fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
+            fontSize: '14px',
             cursor: 'pointer',
             letterSpacing: '2px',
             display: 'flex',
@@ -218,7 +218,7 @@ export default function NewsDetail() {
           width: '100%'
         }}>
           {/* Meta Information */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
             <span>By {news.author || 'Admin'}</span>
             <span style={{ width: '4px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '50%' }}></span>
             <span>{formatDate(news.published_at)}</span>

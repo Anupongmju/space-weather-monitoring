@@ -23,7 +23,7 @@ export default function StatusBadge({ status = 'normal', label, size = 'md' }: S
       background: `${c.color}18`,
       border: `1px solid ${c.color}44`,
       borderRadius: 20,
-      fontSize: isSmall ? 11 : 12,
+      fontSize: isSmall ? 13 : 14,
       fontFamily: "'Share Tech Mono', monospace",
       color: c.color,
       letterSpacing: '0.5px',

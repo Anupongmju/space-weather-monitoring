@@ -1,162 +1,332 @@
 import { useEffect, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
-import { fetchMawToday, loadMawData } from '../../services/mawService'
+import { fetchMawToday, loadMawData, loadMawRange } from '../../services/mawService'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { useTheme } from '../../context/ThemeContext'
+import { RefreshCw } from 'lucide-react'
 
 const LINES = [
-    {key:'nm_corrected', color:'#3498DB',label:'NM Corrected'},
-    {key:'nm_uncorrected', color:'#3b82f6',label:'NM Uncorrected'},
-    {key:'bare_corrected', color:'#22c55e',label:'Bare Corrected'},
-    {key:'bare_uncorrected', color:'#a855f7',label:'Bare Uncorrected'}
+  { key: 'nm_corrected', color: '#0284C7', darkColor: '#38BDF8', label: 'NM Corrected' },
+  { key: 'nm_uncorrected', color: '#2563EB', darkColor: '#60A5FA', label: 'NM Uncorrected' },
+  { key: 'bare_corrected', color: '#059669', darkColor: '#34D399', label: 'Bare Corrected' },
+  { key: 'bare_uncorrected', color: '#7C3AED', darkColor: '#C084FC', label: 'Bare Uncorrected' }
 ]
 
-export default function MawCounts(){
-    const [data,setData] =useState([])
-    const [loading,setLoading] =useState(true)
-    const [fetching,setFetching]=useState(false)
-    const [limit, setLimit] = useState(360)
-    const [activeTab, setActiveTab] = useState('usage')
+export default function MawCounts() {
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
 
-    const load = async () => { setLoading(true); const d = await loadMawData(limit); setData(d); setLoading(false); }
-    const fetch_ = async () => { setFetching(true); await fetchMawToday(); await load(); setFetching(false); }
-    useEffect(() => { load() }, [limit])
+  const [data, setData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [fetching, setFetching] = useState(false)
+  const [limit, setLimit] = useState<TimeRange>(360)
+  const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
+  const [activeTab, setActiveTab] = useState('usage')
 
-    const latest = data.length > 0 ? data[data.length - 1] : null;
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    try {
+      let d: any[]
+      if (appliedRange?.startDate && appliedRange?.endDate) {
+        d = await loadMawRange(appliedRange.startDate, appliedRange.endDate)
+      } else {
+        d = await loadMawData(limit)
+      }
+      setData(Array.isArray(d) ? d : [])
+    } catch (e) {
+      console.error('Failed loading MAW data:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    const option = {
+  const fetch_ = async () => {
+    setFetching(true)
+    try {
+      await fetchMawToday()
+      await load(false)
+    } catch (e) {
+      console.error('Failed fetching today MAW data:', e)
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [limit, appliedRange])
+
+  useAutoFetch(async () => {
+    if (appliedRange) return
+    const d = await loadMawData(limit)
+    setData(Array.isArray(d) ? d : [])
+  }, 60000)
+
+  const latest = data.length > 0 ? data[data.length - 1] : null
+
+  const option = {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#0F172A',
-      borderColor: 'rgba(99, 102, 241, 0.6)',
+      backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+      borderColor: isLight ? '#0284C7' : 'rgba(56, 189, 248, 0.6)',
       borderWidth: 1.5,
-      padding: 14,
-      textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
-      extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
+      padding: 12,
+      extraCssText: isLight
+        ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 6px;'
+        : 'box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border-radius: 6px;',
+      textStyle: {
+        color: isLight ? '#0F172A' : '#F8FAFC',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 13
+      },
       formatter: (params: any) => {
-        let res = `<div style="color: #A5B4FC; font-weight:700; margin-bottom: 6px">${params[0].axisValueLabel}</div>`;
+        if (!params || !params.length) return ''
+        const time = params[0]?.axisValueLabel || ''
+        const timeStr = time ? new Date(time).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : ''
+
+        let res = `
+          <div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};">
+            <strong style="color:${isLight ? '#0284C7' : '#38BDF8'};font-family:var(--font-mono);font-size:13px;">🕒 ${timeStr}</strong>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;font-size:12px;font-family:var(--font-mono);">
+        `
         params.forEach((p: any) => {
-          res += `<div style="color: ${p.color}; margin-bottom: 2px">${p.seriesName}: ${p.value[1]?.toFixed(1)} cts/min</div>`;
-        });
-        return res;
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? `${val.toFixed(1)} cts/min` : 'N/A'
+          res += `
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+            <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};text-align:right;">${valStr}</strong>
+          `
+        })
+        res += `</div>`
+        return res
       }
     },
-    grid: { top: 30, right: 20, bottom: 30, left: 65 },
-    dataZoom: [{ type: 'inside', xAxisIndex: 0, filterMode: 'none' }],
+    grid: { top: 25, right: 30, bottom: 45, left: 85 },
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        filterMode: 'none',
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      },
+      {
+        type: 'slider',
+        xAxisIndex: 0,
+        height: 22,
+        bottom: 10,
+        fillerColor: isLight ? 'rgba(2, 132, 199, 0.12)' : 'rgba(56, 189, 248, 0.15)',
+        borderColor: isLight ? 'rgba(2, 132, 199, 0.25)' : 'rgba(56, 189, 248, 0.3)',
+        handleStyle: { color: isLight ? '#0284C7' : '#38BDF8' },
+        textStyle: { color: isLight ? '#475569' : '#94A3B8', fontSize: 11, fontFamily: 'var(--font-mono)' },
+        dataBackground: {
+          lineStyle: { color: isLight ? '#0284C7' : '#38BDF8' },
+          areaStyle: { color: isLight ? 'rgba(2, 132, 199, 0.2)' : 'rgba(56, 189, 248, 0.2)' }
+        }
+      }
+    ],
     xAxis: {
       type: 'time',
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-      axisLabel: { color: '#CBD5E1', fontSize: 10, fontFamily: 'var(--font-mono)' },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+          type: 'dashed'
+        }
+      },
+      axisLine: {
+        lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' }
+      },
+      axisLabel: {
+        color: isLight ? '#475569' : '#CBD5E1',
+        fontSize: 13,
+        fontFamily: 'var(--font-mono)'
+      }
     },
     yAxis: {
       type: 'value',
       scale: true,
-      splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' } },
-      axisLabel: { color: '#E2E8F0', fontSize: 10, fontFamily: 'var(--font-mono)' },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+      name: 'COUNTS (cts/min)',
+      nameLocation: 'middle',
+      nameGap: 52,
+      nameTextStyle: {
+        color: isLight ? '#0284C7' : '#38BDF8',
+        fontSize: 16,
+        fontWeight: 800,
+        fontFamily: 'var(--font-mono)'
+      },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+          type: 'dashed'
+        }
+      },
+      axisLine: {
+        lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' }
+      },
+      axisLabel: {
+        color: isLight ? '#475569' : '#CBD5E1',
+        fontSize: 13,
+        fontFamily: 'var(--font-mono)'
+      }
     },
-    series: LINES.map(l => ({
-      name: l.label,
-      type: 'line',
-      showSymbol: false,
-      lineStyle: { width: 2 },
-      itemStyle: { color: l.color },
-      data: data.map(d => [d.time_tag, d[l.key]])
-    }))
-  };
+    series: LINES.map(l => {
+      const color = isLight ? l.color : l.darkColor
+      return {
+        name: l.label,
+        type: 'line',
+        showSymbol: false,
+        connectNulls: true,
+        triggerEvent: true,
+        lineStyle: { width: 2.2, color },
+        itemStyle: { color },
+        emphasis: {
+          focus: 'series',
+          lineStyle: { width: 4.0 }
+        },
+        blur: {
+          lineStyle: { opacity: 0.15 }
+        },
+        data: data.map(d => [d.time_tag, d[l.key]])
+      }
+    })
+  }
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px 60px' }}>
-      
-      {/* Seamless Header */}
+    <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
+      {/* Header Bar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        marginBottom: 28, flexWrap: 'wrap', gap: 16,
-        paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)'
+        marginBottom: 24, flexWrap: 'wrap', gap: 16,
+        paddingBottom: 16,
+        borderBottom: isLight ? '1px solid rgba(2, 132, 199, 0.15)' : '1px solid rgba(255,255,255,0.08)'
       }}>
         <div>
-          <h1 style={{ fontFamily: "'Orbitron', var(--font-sans), monospace", fontSize: 26, fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{
+            fontFamily: "'Orbitron', var(--font-sans), monospace",
+            fontSize: 26,
+            fontWeight: 700,
+            color: isLight ? '#0369A1' : '#38BDF8',
+            margin: 0,
+            letterSpacing: -0.5
+          }}>
             MAW / TOTAL COUNTS
           </h1>
-          <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Mawson Antarctic Station · Cosmic Ray Count Rate Channels
+          <p style={{
+            color: isLight ? '#475569' : '#CBD5E1',
+            fontSize: 13,
+            margin: '6px 0 0',
+            fontFamily: 'var(--font-mono)'
+          }}>
+            Mawson Antarctic Station · Cosmic Ray Count Rate Channels & Forbush Modulation
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[360, 1440, 4320, 10080].map(v => (
-              <button
-                key={v}
-                onClick={() => setLimit(v)}
-                style={{
-                  padding: '4px 10px', background: 'transparent', border: 'none',
-                  borderBottom: limit === v ? '2px solid #818CF8' : '2px solid transparent',
-                  color: limit === v ? '#F8FAFC' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: limit === v ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease'
-                }}
-              >
-                {v === 360 ? '6H' : v === 1440 ? '1D' : v === 4320 ? '3D' : '7D'}
-              </button>
-            ))}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <StatusBadge status={data.length ? 'normal' : 'offline'} />
           <button
             onClick={fetch_}
             disabled={fetching}
             style={{
-              padding: '4px 10px', background: 'transparent', border: 'none',
-              color: '#818CF8', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', background: 'transparent', border: 'none',
+              color: isLight ? '#0284C7' : '#38BDF8', fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
               cursor: fetching ? 'not-allowed' : 'pointer', opacity: fetching ? 0.6 : 1
             }}
           >
-            {fetching ? 'FETCHING...' : 'REFRESH'}
+            <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
+            <span>{fetching ? 'FETCHING...' : 'REFRESH'}</span>
           </button>
         </div>
       </div>
 
-      {/* Transparent Telemetry Metrics Strip */}
+      {/* Row 2 Toolbar: DateRangeToolbar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+        <DateRangeToolbar
+          limit={limit}
+          onLimitChange={setLimit}
+          appliedRange={appliedRange}
+          onApplyRange={setAppliedRange}
+          accentColor={isLight ? '#0284C7' : '#38BDF8'}
+          loading={loading}
+        />
+      </div>
+
+      {/* Telemetry Metrics Strip */}
       {latest && (
         <div style={{
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, marginBottom: 24, padding: '0 8px', background: 'transparent', border: 'none'
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+          marginBottom: 20
         }}>
-          {LINES.map((l, idx) => (
-            <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#CBD5E1', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
+          {LINES.map(l => {
+            const color = isLight ? l.color : l.darkColor
+            return (
+              <div
+                key={l.key}
+                style={{
+                  padding: '12px 18px',
+                  background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
+                  border: `1px solid ${isLight ? 'rgba(2, 132, 199, 0.12)' : 'rgba(255, 255, 255, 0.08)'}`,
+                  borderLeft: `4px solid ${color}`,
+                  borderRadius: 6,
+                  boxShadow: isLight ? '0 2px 6px rgba(0,0,0,0.03)' : undefined
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
                   {l.label.toUpperCase()}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: l.color }}>
-                    {latest[l.key]?.toFixed(0) ?? '—'}
+                  <span style={{
+                    fontSize: 22,
+                    fontWeight: 700,
+                    fontFamily: "'Orbitron', var(--font-sans), monospace",
+                    color
+                  }}>
+                    {latest[l.key] ? Number(latest[l.key]).toFixed(1) : '—'}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
                     cts/min
                   </span>
                 </div>
               </div>
-              {idx < LINES.length - 1 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
       {loading ? <LoadingSpinner /> : (
-        <Card title="TOTAL COSMIC RAY COUNTS — MAW MAWSON" subtitle="Forbush decrease visible as sudden drop across all channels">
-          <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
-            {LINES.map(l => (
-              <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: l.color }}>
-                <div style={{ width: 16, height: 2, background: l.color }} />{l.label}
-              </div>
-            ))}
+        <Card
+          title="TOTAL COSMIC RAY COUNTS — MAWSON STATION"
+          subtitle="MONITORING 4 DISCRETE CHANNELS (FORBUSH DECREASE OBSERVED AS SUDDEN DROP)"
+          style={{
+            marginBottom: 20,
+            background: isLight ? '#FFFFFF' : undefined,
+            boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
+            border: isLight ? '1px solid rgba(2, 132, 199, 0.18)' : undefined,
+          }}
+        >
+          <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
+            {LINES.map(l => {
+              const color = isLight ? l.color : l.darkColor
+              return (
+                <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontFamily: 'var(--font-mono)', color, fontWeight: 600 }}>
+                  <div style={{ width: 18, height: 3, background: color, borderRadius: 2 }} />
+                  {l.label}
+                </div>
+              )
+            })}
           </div>
-          <ReactECharts option={option} style={{ height: 320, width: '100%' }} notMerge={true} />
+          <ReactECharts option={option} style={{ height: 520, width: '100%' }} notMerge={true} />
         </Card>
       )}
 
@@ -164,38 +334,48 @@ export default function MawCounts(){
       <InstrumentInfoGuide
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        accentColor="#FB923C"
+        accentColor={isLight ? '#0284C7' : '#38BDF8'}
         tabs={[
-          { id: 'usage', label: 'Usage (การใช้งาน)' },
-          { id: 'impacts', label: 'Impacts (ผลกระทบ)' },
-          { id: 'details', label: 'Details (ข้อมูลอุปกรณ์)' },
-          { id: 'credits', label: 'Data Source & Credits (แหล่งข้อมูล)' }
+          { id: 'usage', label: '01. USAGE (การใช้งาน)' },
+          { id: 'impacts', label: '02. IMPACTS (ผลกระทบ)' },
+          { id: 'details', label: '03. DETAILS (ข้อมูลอุปกรณ์)' },
+          { id: 'credits', label: '04. DATA SOURCE & CREDITS (แหล่งข้อมูล)' }
         ]}
       >
         {activeTab === 'usage' && (
           <div>
-            <h4 style={{ color: '#F8FAFC', margin: '0 0 14px 0', fontSize: 15, fontFamily: "'Orbitron', var(--font-sans), monospace", fontWeight: 600 }}>
-              ความหมายและการอ่านค่าจำนวนการนับนิวตรอน (Total Counts)
+            <h4 style={{
+              color: isLight ? '#0C1E35' : '#F8FAFC',
+              margin: '0 0 14px 0',
+              fontSize: 15,
+              fontFamily: "'Orbitron', var(--font-sans), monospace",
+              fontWeight: 700
+            }}>
+              การติดตามช่องสัญญาณตรวจวัดนิวตรอนสถานี Mawson
             </h4>
-            <p style={{ color: '#CBD5E1', fontSize: 13, margin: '0 0 16px 0', textAlign: 'justify', lineHeight: '1.7' }}>
-              <strong>Total Counts</strong> คือ กราฟสรุปจำนวนนับนิวตรอนทั้งหมดจากสถานี Mawson (MAW) ทวีปแอนตาร์กติกา:
+            <p style={{ color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, margin: '0 0 16px 0', lineHeight: '1.7' }}>
+              สถานี Mawson แอนตาร์กติกา เป็นหนึ่งในสถานีตรวจวัดรังสีคอสมิกที่สำคัญที่สุดในซีกโลกใต้ มีการแบ่งช่องสัญญาณออกเป็น 4 ประเภท:
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ borderLeft: '2px solid #FB923C', paddingLeft: 14 }}>
-                <span style={{ color: '#F8FAFC', fontWeight: 600, fontSize: 13 }}>NM Corrected (ปรับแก้ - มีเกราะ):</span>
-                <span style={{ color: '#94A3B8', fontSize: 13, marginLeft: 6 }}>หักล้างผลความกดอากาศแล้ว เป็นค่าหลักพยากรณ์รังสีคอสมิก</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+              <div style={{
+                background: isLight ? '#F0F9FF' : 'rgba(56, 189, 248, 0.06)',
+                padding: 14, borderRadius: 6,
+                border: `1px solid ${isLight ? '#BAE6FD' : 'rgba(56, 189, 248, 0.2)'}`
+              }}>
+                <strong style={{ color: isLight ? '#0284C7' : '#38BDF8', fontSize: 13 }}>NM Corrected (ปรับแก้ความกดแล้ว): </strong>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: isLight ? '#334155' : '#94A3B8', lineHeight: '1.5' }}>
+                  เป็นค่ามาตรฐานทางวิทยาศาสตร์ที่หักล้างผลกระทบของความกดอากาศออก เพื่อสังเกตการณ์ความแปรผันของรังสีคอสมิกจากอวกาศอย่างแท้จริง
+                </p>
               </div>
-              <div style={{ borderLeft: '2px solid #38BDF8', paddingLeft: 14 }}>
-                <span style={{ color: '#F8FAFC', fontWeight: 600, fontSize: 13 }}>NM Uncorrected (ค่าดิบ - มีเกราะ):</span>
-                <span style={{ color: '#94A3B8', fontSize: 13, marginLeft: 6 }}>ค่าดิบอ่านโดยตรงจากเครื่องวัดมาตรฐานมีเกราะตะกั่ว</span>
-              </div>
-              <div style={{ borderLeft: '2px solid #34D399', paddingLeft: 14 }}>
-                <span style={{ color: '#F8FAFC', fontWeight: 600, fontSize: 13 }}>Bare Corrected (ปรับแก้ - ไร้เกราะ):</span>
-                <span style={{ color: '#94A3B8', fontSize: 13, marginLeft: 6 }}>ค่านิวตรอนจากเครื่องวัดชนิดไม่มีตะกั่วล้อมรอบที่หักล้างความกดอากาศแล้ว</span>
-              </div>
-              <div style={{ borderLeft: '2px solid #C084FC', paddingLeft: 14 }}>
-                <span style={{ color: '#F8FAFC', fontWeight: 600, fontSize: 13 }}>Bare Uncorrected (ค่าดิบ - ไร้เกราะ):</span>
-                <span style={{ color: '#94A3B8', fontSize: 13, marginLeft: 6 }}>ค่าดิบอ่านจากเครื่องวัดนิวตรอนไร้เกราะ</span>
+              <div style={{
+                background: isLight ? '#F5F3FF' : 'rgba(168, 85, 247, 0.06)',
+                padding: 14, borderRadius: 6,
+                border: `1px solid ${isLight ? '#DDD6FE' : 'rgba(168, 85, 247, 0.2)'}`
+              }}>
+                <strong style={{ color: isLight ? '#7C3AED' : '#C084FC', fontSize: 13 }}>Bare Tubes (หลอดเปลือย): </strong>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: isLight ? '#334155' : '#94A3B8', lineHeight: '1.5' }}>
+                  ตรวจวัดอนุภาคนิวตรอนพลังงานต่ำ (Thermal/Epithermal) ช่วยเปรียบเทียบสเปกตรัมพลังงานของอนุภาค
+                </p>
               </div>
             </div>
           </div>
@@ -203,51 +383,61 @@ export default function MawCounts(){
 
         {activeTab === 'impacts' && (
           <div>
-            <h4 style={{ color: '#F8FAFC', margin: '0 0 14px 0', fontSize: 15, fontFamily: "'Orbitron', var(--font-sans), monospace", fontWeight: 600 }}>
-              การเปรียบเทียบระดับพลังงานรังสีคอสมิก (NM vs Bare)
+            <h4 style={{
+              color: isLight ? '#0C1E35' : '#F8FAFC',
+              margin: '0 0 14px 0',
+              fontSize: 15,
+              fontFamily: "'Orbitron', var(--font-sans), monospace",
+              fontWeight: 700
+            }}>
+              การเฝ้าระวังพายุสุริยะและเหตุการณ์ Forbush Decrease
             </h4>
-            <p style={{ color: '#CBD5E1', fontSize: 13, margin: '0 0 16px 0', textAlign: 'justify', lineHeight: '1.7' }}>
-              การเปรียบเทียบระหว่างสเปกตรัมเครื่องวัดมีเกราะ (NM) และไร้เกราะ (Bare) ช่วยจำแนกพลังงานรังสี:
+            <p style={{ color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, margin: '0 0 16px 0', lineHeight: '1.7' }}>
+              เมื่อเกิดพายุสุริยะรุนแรง (CME) พัดผ่านโลก ม่านแม่เหล็กของพายุจะปัดรังสีคอสมิก ทำให้อัตราการนับนิวตรอนทุติยภูมิดิ่งลงอย่างฉับพลัน:
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 0, border: '1px solid rgba(255,255,255,0.06)' }}>
-                <h5 style={{ color: '#FB923C', margin: '0 0 6px 0', fontSize: 13, fontFamily: 'var(--font-mono)' }}>เครื่องวัดมาตรฐาน (NM)</h5>
-                <p style={{ color: '#94A3B8', fontSize: 12, margin: 0, lineHeight: '1.6' }}>
-                  เกราะตะกั่วทำหน้าที่เป็นตัวทวีคูณอนุภาค (Multiplier) มีความไวสูงต่อรังสีคอสมิกพลังงานสูงจากอวกาศลึก
-                </p>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 0, border: '1px solid rgba(255,255,255,0.06)' }}>
-                <h5 style={{ color: '#34D399', margin: '0 0 6px 0', fontSize: 13, fontFamily: 'var(--font-mono)' }}>เครื่องวัดไร้เกราะ (Bare)</h5>
-                <p style={{ color: '#94A3B8', fontSize: 12, margin: 0, lineHeight: '1.6' }}>
-                  มีความไวต่ออนุภาคนิวตรอนพลังงานต่ำ ช่วยให้วิเคราะห์ประเภทพายุสุริยะที่เข้าปะทะโลกได้ทันที
-                </p>
-              </div>
+            <div style={{
+              background: isLight ? '#FFFBEB' : 'rgba(245, 158, 11, 0.08)',
+              padding: 16, borderRadius: 6,
+              border: `1px solid ${isLight ? '#FDE68A' : 'rgba(245, 158, 11, 0.25)'}`
+            }}>
+              <h5 style={{ color: '#D97706', margin: '0 0 6px 0', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                จุดสังเกตสำคัญในกราฟ
+              </h5>
+              <p style={{ color: isLight ? '#78350F' : '#FCD34D', fontSize: 13, margin: 0, lineHeight: '1.6' }}>
+                หากเส้น NM Corrected และ Bare Corrected ตกฮวบลงพร้อมกันเกิน 3-10% ภายในไม่กี่ชั่วโมง แสดงว่าโลกกำลังอยู่ในใจกลางของพายุสุริยะขนาดใหญ่
+              </p>
             </div>
           </div>
         )}
 
         {activeTab === 'details' && (
           <div>
-            <h4 style={{ color: '#F8FAFC', margin: '0 0 14px 0', fontSize: 15, fontFamily: "'Orbitron', var(--font-sans), monospace", fontWeight: 600 }}>
-              รายละเอียดระบบเครื่องวัดนิวตรอน Mawson
+            <h4 style={{
+              color: isLight ? '#0C1E35' : '#F8FAFC',
+              margin: '0 0 14px 0',
+              fontSize: 15,
+              fontFamily: "'Orbitron', var(--font-sans), monospace",
+              fontWeight: 700
+            }}>
+              ข้อมูลสถานีวิจัย Mawson (Antarctica)
             </h4>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-mono)' }}>
               <tbody>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: '#64748B', width: '35%' }}>พิกัดและตำแหน่ง</td>
-                  <td style={{ padding: '10px 0', color: '#F8FAFC' }}>Mawson Station (MAW) — ทวีปแอนตาร์กติกา (ขั้วโลกใต้)</td>
+                <tr style={{ borderBottom: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#94A3B8', width: '35%' }}>ตำแหน่งพิกัด</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC', fontWeight: 600 }}>67°36'S, 62°52'E (ชายฝั่ง Mac. Robertson Land)</td>
                 </tr>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: '#64748B' }}>อุปกรณ์มีเกราะหลัก (NM)</td>
-                  <td style={{ padding: '10px 0', color: '#F8FAFC' }}>เครื่องวัดมาตรฐานประเภท 18-NM-64 (เกราะตะกั่ว)</td>
+                <tr style={{ borderBottom: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#94A3B8' }}>ความสูงจากระดับน้ำทะเล</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC', fontWeight: 600 }}>15 เมตร</td>
                 </tr>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: '#64748B' }}>อุปกรณ์ไร้เกราะ (Bare)</td>
-                  <td style={{ padding: '10px 0', color: '#F8FAFC' }}>เครื่องวัดชนิด Lead-Free</td>
+                <tr style={{ borderBottom: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#94A3B8' }}>Rigidity Cutoff</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC', fontWeight: 600 }}>0.22 GV (ตรวจจับอนุภาคพลังงานต่ำได้ละเอียดมาก)</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '10px 0', color: '#64748B' }}>หน่วยการวัด</td>
-                  <td style={{ padding: '10px 0', color: '#F8FAFC' }}>counts (จำนวนครั้งปฏิกิริยากับก๊าซในหลอดวัด)</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#94A3B8' }}>การจัดประเภทอุปกรณ์</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC', fontWeight: 600 }}>18-NM64 Neutron Monitor + 6 Bare Counters</td>
                 </tr>
               </tbody>
             </table>
@@ -256,31 +446,32 @@ export default function MawCounts(){
 
         {activeTab === 'credits' && (
           <div>
-            <h4 style={{ color: '#F8FAFC', margin: '0 0 14px 0', fontSize: 15, fontFamily: "'Orbitron', var(--font-sans), monospace", fontWeight: 600 }}>
+            <h4 style={{
+              color: isLight ? '#0C1E35' : '#F8FAFC',
+              margin: '0 0 14px 0',
+              fontSize: 15,
+              fontFamily: "'Orbitron', var(--font-sans), monospace",
+              fontWeight: 700
+            }}>
               แหล่งที่มาของข้อมูล & เครดิต (Data Source & Credits)
             </h4>
-            <p style={{ color: '#CBD5E1', fontSize: 13, margin: '0 0 14px 0', lineHeight: '1.7' }}>
-              ข้อมูลได้รับการสนับสนุนจากเครือข่ายฐานข้อมูลนิวตรอน:
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, color: '#94A3B8' }}>
-              <div style={{ borderLeft: '2px solid rgba(255,255,255,0.2)', paddingLeft: 12 }}>
-                <strong style={{ color: '#F8FAFC' }}>Australian Antarctic Division (AAD):</strong> ผู้ดูแลประมวลผลเครื่องตรวจจับ Mawson
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+              <div style={{
+                borderLeft: `3px solid ${isLight ? '#0284C7' : '#38BDF8'}`,
+                paddingLeft: 12,
+                color: isLight ? '#475569' : '#CBD5E1'
+              }}>
+                <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>Australian Antarctic Division (AAD): </strong>
+                Space and Atmospheric Physics (SAP) Group
               </div>
-              <div style={{ borderLeft: '2px solid rgba(255,255,255,0.2)', paddingLeft: 12 }}>
-                <strong style={{ color: '#F8FAFC' }}>NMDB Database Network:</strong> เครือข่ายรวบรวมข้อมูลสถานีนิวตรอนสากล
+              <div style={{
+                borderLeft: `3px solid ${isLight ? '#0284C7' : '#38BDF8'}`,
+                paddingLeft: 12,
+                color: isLight ? '#475569' : '#CBD5E1'
+              }}>
+                <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>Bureau of Meteorology (BOM / SWS): </strong>
+                Australian Space Weather Forecasting Centre
               </div>
-            </div>
-            <div style={{ 
-              marginTop: 16, 
-              padding: '10px 14px', 
-              background: 'rgba(255,255,255,0.02)', 
-              border: '1px solid rgba(255,255,255,0.06)', 
-              borderRadius: 0, 
-              fontSize: 12, 
-              color: '#FBBF24',
-              fontFamily: 'var(--font-mono)'
-            }}>
-              ข้อมูลอ้างอิง API: ดึงผ่าน <a href="https://www.nmdb.eu/" target="_blank" rel="noopener noreferrer" style={{ color: '#38BDF8', textDecoration: 'underline' }}>NMDB Nest services</a>
             </div>
           </div>
         )}

@@ -239,7 +239,7 @@ export default function Help() {
               alignItems: 'center',
               gap: '8px',
               fontFamily: 'var(--font-mono)',
-              fontSize: '10px',
+              fontSize: '13px',
               letterSpacing: '3px',
               textTransform: 'uppercase',
               color: '#3498DB',
@@ -290,7 +290,7 @@ export default function Help() {
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
+                fontSize: '14px',
                 fontWeight: '700',
                 transition: 'all 0.2s',
                 borderRadius: '2px'
@@ -307,7 +307,7 @@ export default function Help() {
                 border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
+                fontSize: '14px',
                 fontWeight: '700',
                 transition: 'all 0.2s',
                 borderRadius: '2px'
@@ -485,7 +485,7 @@ export default function Help() {
                       {lang === 'TH' ? faq.qTH : faq.qEN}
                     </span>
                     <span style={{ 
-                      fontSize: '12px', 
+                      fontSize: '15px', 
                       transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                       transition: 'transform 0.25s',
                       color: '#3498DB'
@@ -532,8 +532,8 @@ export default function Help() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <th style={{ padding: '12px 24px', fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase', width: '220px' }}>Term / Acronym</th>
-                  <th style={{ padding: '12px 24px', fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase' }}>Definition</th>
+                  <th style={{ padding: '12px 24px', fontSize: '14px', fontFamily: 'var(--font-mono)', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase', width: '220px' }}>Term / Acronym</th>
+                  <th style={{ padding: '12px 24px', fontSize: '14px', fontFamily: 'var(--font-mono)', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase' }}>Definition</th>
                 </tr>
               </thead>
               <tbody>
@@ -580,7 +580,7 @@ function InstrumentCard({ data }: { data: InfoCardData }) {
           {data.name}
         </h4>
         <span style={{
-          fontSize: '9px',
+          fontSize: '12px',
           fontFamily: 'var(--font-mono)',
           color: '#3498DB',
           background: 'rgba(52,152,219,0.08)',
@@ -597,7 +597,7 @@ function InstrumentCard({ data }: { data: InfoCardData }) {
       </p>
       <div style={{ 
         marginTop: 'auto', 
-        fontSize: '11px', 
+        fontSize: '14px', 
         color: 'rgba(249,115,22,0.7)', 
         borderTop: '1px solid rgba(255,255,255,0.03)', 
         paddingTop: '6px',

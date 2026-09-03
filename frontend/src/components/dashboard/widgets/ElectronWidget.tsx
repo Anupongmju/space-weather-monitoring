@@ -1,36 +1,38 @@
-import React, { useEffect, useState } from 'react'
-import ReactECharts from 'echarts-for-react'
-import { useNavigate } from 'react-router-dom'
-import { loadElectron } from '../../../services/goesService'
+import { useEffect, useState } from 'react';
+import ReactECharts from 'echarts-for-react';
+import { useNavigate } from 'react-router-dom';
+import { loadElectron } from '../../../services/goesService';
+import { useWidgetTheme } from './useWidgetTheme';
 
 export default function ElectronWidget() {
-  const navigate = useNavigate()
-  const [data, setData] = useState<any[]>([])
-  const [energies, setEnergies] = useState<string[]>([])
+  const navigate = useNavigate();
+  const [data, setData] = useState<any[]>([]);
+  const [energies, setEnergies] = useState<string[]>([]);
+  const { isLight, containerStyle, axisLabelColor, splitLine, tooltip, emptyTextColor } = useWidgetTheme();
 
   useEffect(() => {
     loadElectron(4320).then(d => {
-      const map: Record<string, any> = {}
+      const map: Record<string, any> = {};
       d.forEach((r: any) => {
-        if (!map[r.time_tag]) map[r.time_tag] = { time_tag: r.time_tag }
-        map[r.time_tag][r.energy] = r.flux
-      })
-      const pivoted = Object.values(map).sort((a: any, b: any) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
-      const keys = [...new Set(d.map((r: any) => r.energy))].filter(Boolean) as string[]
-      setData(pivoted)
-      setEnergies(keys)
-    }).catch(() => {})
-  }, [])
+        if (!map[r.time_tag]) map[r.time_tag] = { time_tag: r.time_tag };
+        map[r.time_tag][r.energy] = r.flux;
+      });
+      const pivoted = Object.values(map).sort((a: any, b: any) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime());
+      const keys = [...new Set(d.map((r: any) => r.energy))].filter(Boolean) as string[];
+      setData(pivoted);
+      setEnergies(keys);
+    }).catch(() => {});
+  }, []);
 
   const option = {
     grid: { top: 10, right: 10, bottom: 20, left: 45 },
-    xAxis: { type: 'time', splitLine: { show: false }, axisLabel: { color: '#606075', fontSize: 9 } },
+    xAxis: { type: 'time', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
     yAxis: {
       type: 'log',
-      splitLine: { show: false },
+      splitLine,
       axisLabel: {
-        color: '#606075',
-        fontSize: 9,
+        color: axisLabelColor,
+        fontSize: 12,
         formatter: (v: number) => {
           if (v <= 0) return '0';
           const log = Math.round(Math.log10(v));
@@ -50,30 +52,30 @@ export default function ElectronWidget() {
       lineStyle: { width: 1.5 },
       data: data.map(d => [d.time_tag, d[energy]])
     })) : [
-      { name: '>=2 MeV', type: 'line', showSymbol: false, itemStyle: { color: '#A855F7' }, lineStyle: { width: 1.5 }, data: [] }
+      { name: '>=2 MeV', type: 'line', showSymbol: false, itemStyle: { color: isLight ? '#7C3AED' : '#A855F7' }, lineStyle: { width: 1.5 }, data: [] }
     ],
-    tooltip: { trigger: 'axis', backgroundColor: '#16161F', textStyle: { color: '#FFF', fontSize: 10 } }
+    tooltip
   };
 
   const latest = data.length > 0 ? data[data.length - 1] : null;
   const latestTwoMev = latest ? latest['>=2 MeV'] || latest['>=2MeV'] || Object.values(latest).find(v => typeof v === 'number') : null;
 
   return (
-    <div style={{ height: '240px', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '16px' }}>
+    <div style={containerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div 
           onClick={() => navigate('/goes/electron')}
           style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           title="Click to view GOES Electron Flux details"
         >
-          <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
+          <span style={{ fontSize: 13, color: isLight ? '#2E5B8A' : 'var(--text-secondary, #94A3B8)', fontFamily: 'var(--font-mono)', letterSpacing: 1, fontWeight: isLight ? 600 : 400 }}>
             // ELECTRON FLUX
           </span>
-          <span style={{ fontSize: 9, color: '#A855F7', fontFamily: 'var(--font-mono)', letterSpacing: 1, background: 'rgba(168, 85, 247, 0.12)', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+          <span style={{ fontSize: 12, color: isLight ? '#7C3AED' : '#A855F7', fontFamily: 'var(--font-mono)', letterSpacing: 1, background: isLight ? 'rgba(124, 58, 237, 0.08)' : 'rgba(168, 85, 247, 0.12)', padding: '1px 6px', borderRadius: '3px', border: isLight ? '1px solid rgba(124, 58, 237, 0.25)' : '1px solid rgba(168, 85, 247, 0.3)' }}>
             DETAIL ↗
           </span>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: '#A855F7' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: isLight ? '#7C3AED' : '#A855F7' }}>
           {latestTwoMev != null ? `${Number(latestTwoMev).toExponential(1)}` : '—'}
         </div>
       </div>
@@ -81,7 +83,7 @@ export default function ElectronWidget() {
         {data.length > 0 ? (
           <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
         ) : (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#606075', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: emptyTextColor, fontSize: 14, fontFamily: 'var(--font-mono)' }}>
             NO ELECTRON DATA AVAILABLE
           </div>
         )}

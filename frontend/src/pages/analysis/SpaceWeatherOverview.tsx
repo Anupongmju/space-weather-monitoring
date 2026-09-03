@@ -11,8 +11,11 @@ import {
   Database,
   Globe,
   Satellite,
-  Calendar
+  Calendar,
+  Maximize2,
+  Minimize2
 } from 'lucide-react'
+import SciFiFullscreenOverlay from '../../components/ui/SciFiFullscreenOverlay'
 import OrbitBackground from '../../components/space/OrbitBackground'
 import { loadMag, loadSwepam, fetchArchiveSwepam } from '../../services/aceService'
 import { loadProton } from '../../services/goesService'
@@ -20,9 +23,12 @@ import { loadNeutron } from '../../services/cosmicService'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import StatusBadge from '../../components/ui/StatusBadge'
 import { useLineDrawing } from '../../hooks/useLineDrawing'
 import TrendLineOverlay, { buildMarkLines } from '../../components/ui/TrendLineOverlay'
 import { formatPowerOf10 } from '../../utils/formatters'
+import { useTheme } from '../../context/ThemeContext'
 
 const PROTON_COLORS: Record<string, string> = {
   '>=1 MeV': '#60A5FA',   // Bright Blue
@@ -53,10 +59,12 @@ function DateInputDDMMYYYY({
   value,
   onChange,
   accentColor = '#818CF8',
+  isLight = false,
 }: {
   value: string
   onChange: (val: string) => void
   accentColor?: string
+  isLight?: boolean
 }) {
   const hiddenRef = useRef<HTMLInputElement>(null)
 
@@ -115,11 +123,11 @@ function DateInputDDMMYYYY({
         onChange={handleTextChange}
         style={{
           width: 115,
-          background: 'rgba(2, 6, 23, 0.9)',
-          color: '#F8FAFC',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          background: isLight ? '#FFFFFF' : 'rgba(2, 6, 23, 0.9)',
+          color: isLight ? '#0F172A' : '#F8FAFC',
+          border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)'}`,
           padding: '3px 24px 3px 8px',
-          fontSize: 11,
+          fontSize: 14,
           fontFamily: 'var(--font-mono)',
           outline: 'none',
           textAlign: 'center',
@@ -167,8 +175,35 @@ function DateInputDDMMYYYY({
 }
 
 export default function SpaceWeatherOverview() {
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
   const chartRef = useRef<any>(null)
   const chartWrapperRef = useRef<HTMLDivElement>(null)
+  const [isOverviewFs, setIsOverviewFs] = useState(false)
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsOverviewFs(document.fullscreenElement === chartWrapperRef.current)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
+    }
+    document.addEventListener('fullscreenchange', handleFsChange)
+    return () => document.removeEventListener('fullscreenchange', handleFsChange)
+  }, [])
+
+  const toggleOverviewFs = async () => {
+    if (!chartWrapperRef.current) return
+    try {
+      if (!document.fullscreenElement) {
+        await chartWrapperRef.current.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const initialZoomDispatchedRef = useRef(false)
   const [limit, setLimit] = useState<TimeRange>(1440)
   const [loading, setLoading] = useState(true)
@@ -178,6 +213,7 @@ export default function SpaceWeatherOverview() {
   const { lines, drawingMode, pendingP1, toggleDrawingMode, handleClick, removeLine, clearLines } = useLineDrawing()
   const GRID_UNITS = ['cts/min', 'ratio', 'nT', 'nT', 'km/s', 'pfu']
 
+  const [activeGuideTab, setActiveGuideTab] = useState('usage')
   const [isCustomDate, setIsCustomDate] = useState(false)
   const [startDateInput, setStartDateInput] = useState(getPastDateStr(3))
   const [endDateInput, setEndDateInput] = useState(getTodayStr())
@@ -354,44 +390,57 @@ export default function SpaceWeatherOverview() {
     { top: 875, left: 95, right: 85, height: 135 },
   ]
 
-  const axisLabelStyle = { color: '#F8FAFC', fontSize: 13, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
-  const splitLineStyle = { show: true, lineStyle: { color: 'rgba(255,255,255,0.08)', type: 'dashed' as const } }
+  const axisLabelStyle = { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
+  const splitLineStyle = { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' as const } }
 
   const xAxisBase = (gi: number, showLabel: boolean) => ({
     gridIndex: gi,
     type: 'time' as const,
     splitLine: splitLineStyle,
     axisLabel: showLabel ? axisLabelStyle : { show: false },
-    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+    axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
   })
 
-  const yAxisBase = (gi: number, name: string, color: string, type: 'value' | 'log' = 'value') => ({
-    gridIndex: gi,
-    type,
-    name,
-    nameLocation: 'middle' as const,
-    nameGap: 55,
-    nameTextStyle: { color, fontSize: 13, fontFamily: 'sans-serif', fontWeight: 700 },
-    splitLine: splitLineStyle,
-    axisLabel: {
-      ...axisLabelStyle,
-      color: '#F8FAFC',
-      ...(type === 'log' ? { formatter: formatPowerOf10 } : {}),
-    },
-    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
-  })
+  const yAxisBase = (gi: number, name: string, color: string, type: 'value' | 'log' = 'value') => {
+    const textColor = isLight ? (
+      color === '#A5B4FC' ? '#4F46E5' :
+      color === '#93C5FD' ? '#2563EB' :
+      color === '#FDBA74' ? '#D97706' :
+      color === '#E879F9' ? '#C026D3' :
+      color === '#6EE7B7' ? '#059669' :
+      color === '#FDE047' ? '#D97706' : color
+    ) : color
+
+    return {
+      gridIndex: gi,
+      type,
+      name,
+      nameLocation: 'middle' as const,
+      nameGap: 55,
+      nameTextStyle: { color: textColor, fontSize: 13, fontFamily: 'sans-serif', fontWeight: 700 },
+      splitLine: splitLineStyle,
+      axisLabel: {
+        ...axisLabelStyle,
+        color: isLight ? '#475569' : '#CBD5E1',
+        ...(type === 'log' ? { formatter: formatPowerOf10 } : {}),
+      },
+      axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
+    }
+  }
 
   const option = useMemo(() => ({
     backgroundColor: 'transparent',
     animation: false,
     tooltip: {
       trigger: 'axis' as const,
-      backgroundColor: '#0F172A',
-      borderColor: 'rgba(99, 102, 241, 0.6)',
+      backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+      borderColor: isLight ? '#6366F1' : 'rgba(99, 102, 241, 0.6)',
       borderWidth: 1.5,
-      padding: 14,
-      textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 11 },
-      extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
+      padding: 12,
+      textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
+      extraCssText: isLight
+        ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 6px;'
+        : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
       axisPointer: {
         type: 'line' as const,
         lineStyle: { color: '#818CF8', type: 'dashed' as const, width: 1.5 },
@@ -437,14 +486,14 @@ export default function SpaceWeatherOverview() {
           }
         });
 
-        let html = `<div style="font-family: var(--font-mono); font-size: 11px; min-width: 240px;">`;
+        let html = `<div style="font-family: var(--font-mono); font-size: 14px; min-width: 240px;">`;
         html += `<div style="color: #94A3B8; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 600; letter-spacing: 0.5px;">`;
         html += `⏱ ${timeStr}</div>`;
 
         Object.values(groups).forEach(g => {
           if (g.items.length === 0) return;
 
-          html += `<div style="color: ${g.color}; font-weight: 700; margin-top: 8px; margin-bottom: 4px; font-size: 10px; letter-spacing: 0.8px; display: flex; align-items: center; gap: 4px;">`;
+          html += `<div style="color: ${g.color}; font-weight: 700; margin-top: 8px; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.8px; display: flex; align-items: center; gap: 4px;">`;
           html += `<span style="display:inline-block; width:8px; height:8px; background:${g.color}; border-radius:2px;"></span>${g.label}</div>`;
 
           g.items.forEach(item => {
@@ -455,7 +504,7 @@ export default function SpaceWeatherOverview() {
               valDisplay = item.value.toExponential(2);
             }
             html += `<div style="display: flex; justify-content: space-between; gap: 20px; padding: 2px 0 2px 10px; color: #E2E8F0;">`;
-            html += `<span style="display:flex; align-items:center; gap:6px;"><span style="color: ${item.color}; font-size:12px;">●</span>${item.name}</span>`;
+            html += `<span style="display:flex; align-items:center; gap:6px;"><span style="color: ${item.color}; font-size: 15px;">●</span>${item.name}</span>`;
             html += `<span style="font-weight: 700; color: #FFFFFF; font-family: monospace;">${valDisplay}</span>`;
             html += `</div>`;
           });
@@ -488,8 +537,8 @@ export default function SpaceWeatherOverview() {
       itemWidth: 10,
       itemHeight: 4,
       textStyle: {
-        color: '#CBD5E1',
-        fontSize: 11,
+        color: isLight ? '#475569' : '#CBD5E1',
+        fontSize: 13,
         fontFamily: 'var(--font-mono)',
         fontWeight: 600,
       },
@@ -609,7 +658,7 @@ export default function SpaceWeatherOverview() {
           show: true,
           formatter: (params: any) => params.seriesName,
           color: PROTON_COLORS[e] || '#94A3B8',
-          fontSize: 10,
+          fontSize: 13,
           fontFamily: 'var(--font-mono)',
           fontWeight: 700,
           distance: 6,
@@ -617,7 +666,7 @@ export default function SpaceWeatherOverview() {
         data: protonPivoted.map((d: any) => [d.time_tag, safeLog(d[e])]),
       })),
     ],
-  }), [ouluData, sopoData, sopbSopoRatioData, magData, swepamData, protonPivoted, energyBands, cosmicRange, magRange, swepamRange, protonRange, lines])
+  }), [ouluData, sopoData, sopbSopoRatioData, magData, swepamData, protonPivoted, energyBands, cosmicRange, magRange, swepamRange, protonRange, lines, isLight])
 
   const PANEL_LABELS = [
     { y: 50, label: 'COSMIC RAY', target: 'OULU & SOPO (NMDB)', color: '#A5B4FC', icon: Globe },
@@ -635,8 +684,8 @@ export default function SpaceWeatherOverview() {
 
   return (
     <div style={{ position: 'relative', width: '100%', minHeight: '100vh', overflow: 'hidden' }}>
-      {/* Content area with frameless layout */}
-      <div style={{ position: 'relative', zIndex: 10, maxWidth: 1200, margin: '0 auto', padding: '24px 20px 60px' }}>
+      {/* Content area with fluid wide layout */}
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* Seamless Header */}
         <div style={{
@@ -647,27 +696,27 @@ export default function SpaceWeatherOverview() {
           flexWrap: 'wrap',
           gap: 16,
           paddingBottom: 16,
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
+          borderBottom: isLight ? '1px solid rgba(99, 102, 241, 0.15)' : '1px solid rgba(255,255,255,0.1)'
         }}>
           <div>
             <h1 style={{
               fontFamily: "'Orbitron', var(--font-sans), monospace",
               fontSize: 26,
               fontWeight: 700,
-              color: '#F8FAFC',
+              color: isLight ? '#3730A3' : '#F8FAFC',
               margin: 0,
               letterSpacing: -0.5
             }}>
               SPACE WEATHER OVERVIEW
             </h1>
-            <p style={{ color: '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
+            <p style={{ color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
               Synchronized 6-Tier Analytics: Cosmic Ray · Polar Ratio · Magnetic Field · Solar Wind · Proton Flux
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {panLoading && (
-              <span style={{ fontSize: 11, color: '#818CF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              <span style={{ fontSize: 14, color: '#818CF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                 ◀ LOADING HISTORICAL DATA...
               </span>
             )}
@@ -675,7 +724,7 @@ export default function SpaceWeatherOverview() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {drawingMode && (
                 <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-mono)', color: pendingP1 ? '#FBBF24' : '#A78BFA',
+                  fontSize: 13, fontFamily: 'var(--font-mono)', color: pendingP1 ? '#FBBF24' : '#A78BFA',
                   fontWeight: 600, letterSpacing: 0.3,
                 }}>
                   {pendingP1 ? '● P1 SET — CLICK P2' : '○ CLICK P1 ON ANY CHART'}
@@ -686,12 +735,14 @@ export default function SpaceWeatherOverview() {
                 title="วาดเส้น trend line: คลิก P1 → คลิก P2"
                 style={{
                   padding: '4px 10px',
-                  background: drawingMode ? 'rgba(167,139,250,0.2)' : 'transparent',
-                  border: `1px solid ${drawingMode ? '#A78BFA' : 'rgba(255,255,255,0.2)'}`,
-                  color: drawingMode ? '#A78BFA' : '#94A3B8',
-                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                  background: drawingMode
+                    ? (isLight ? 'rgba(99, 102, 241, 0.15)' : 'rgba(167,139,250,0.2)')
+                    : (isLight ? '#F1F5F9' : 'transparent'),
+                  border: `1px solid ${drawingMode ? (isLight ? '#6366F1' : '#A78BFA') : (isLight ? '#CBD5E1' : 'rgba(255,255,255,0.2)')}`,
+                  color: drawingMode ? (isLight ? '#4F46E5' : '#A78BFA') : (isLight ? '#475569' : '#94A3B8'),
+                  fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600,
                   cursor: 'pointer', letterSpacing: 0.5,
-                  transition: 'all 0.2s', borderRadius: 2,
+                  transition: 'all 0.2s', borderRadius: 4,
                 }}
               >
                 {drawingMode ? '╱ DRAWING ON' : '╱ DRAW LINE'}
@@ -700,10 +751,10 @@ export default function SpaceWeatherOverview() {
                 <button
                   onClick={clearLines}
                   style={{
-                    padding: '4px 10px', background: 'transparent',
-                    border: '1px solid rgba(248,113,113,0.4)', color: '#F87171',
-                    fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                    cursor: 'pointer', letterSpacing: 0.5, borderRadius: 2,
+                    padding: '4px 10px', background: isLight ? '#FEF2F2' : 'transparent',
+                    border: `1px solid ${isLight ? '#FECACA' : 'rgba(248,113,113,0.4)'}`, color: isLight ? '#DC2626' : '#F87171',
+                    fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', letterSpacing: 0.5, borderRadius: 4,
                   }}
                 >
                   CLEAR ({lines.length})
@@ -721,9 +772,9 @@ export default function SpaceWeatherOverview() {
                 padding: '4px 10px',
                 background: 'transparent',
                 border: 'none',
-                color: '#818CF8',
+                color: isLight ? '#4F46E5' : '#818CF8',
                 fontFamily: 'var(--font-mono)',
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 600,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 opacity: loading ? 0.6 : 1
@@ -732,8 +783,11 @@ export default function SpaceWeatherOverview() {
               <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               {loading ? 'SYNCING...' : 'REFRESH'}
             </button>
+            <StatusBadge status={ouluData.length > 0 || magData.length > 0 ? 'normal' : (loading ? 'info' : 'offline')} />
           </div>
         </div>
+
+
 
         {/* Row 2 Toolbar (Below Header Line): Presets, CUSTOM toggle & Date Pickers */}
         <div style={{
@@ -749,10 +803,10 @@ export default function SpaceWeatherOverview() {
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            background: 'rgba(15, 23, 42, 0.65)',
+            background: isLight ? '#F1F5F9' : 'rgba(15, 23, 42, 0.75)',
             padding: '3px 6px',
-            // borderRadius: 8,
-            border: '1px solid rgba(255, 255, 255, 0.1)'
+            border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 6
           }}>
             {([360, 1440, 4320, 10080] as TimeRange[]).map(v => (
               <button
@@ -764,15 +818,22 @@ export default function SpaceWeatherOverview() {
                 }}
                 style={{
                   padding: '4px 10px',
-                  background: (!isCustomDate && limit === v) ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                  background: (!isCustomDate && limit === v)
+                    ? (isLight ? '#FFFFFF' : 'rgba(99, 102, 241, 0.25)')
+                    : 'transparent',
                   border: 'none',
-                  // borderRadius: 6,
-                  borderBottom: (!isCustomDate && limit === v) ? '2px solid #818CF8' : '2px solid transparent',
-                  color: (!isCustomDate && limit === v) ? '#F8FAFC' : '#94A3B8',
+                  borderBottom: (!isCustomDate && limit === v)
+                    ? `2px solid ${isLight ? '#4F46E5' : '#818CF8'}`
+                    : '2px solid transparent',
+                  color: (!isCustomDate && limit === v)
+                    ? (isLight ? '#3730A3' : '#F8FAFC')
+                    : (isLight ? '#64748B' : '#94A3B8'),
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  fontWeight: (!isCustomDate && limit === v) ? 700 : 500,
+                  fontSize: 13,
+                  fontWeight: 700,
                   cursor: 'pointer',
+                  borderRadius: 4,
+                  boxShadow: isLight && (!isCustomDate && limit === v) ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -789,15 +850,18 @@ export default function SpaceWeatherOverview() {
                 alignItems: 'center',
                 gap: 6,
                 padding: '4px 10px',
-                background: isCustomDate ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                background: isCustomDate
+                  ? (isLight ? '#FFFFFF' : 'rgba(99, 102, 241, 0.25)')
+                  : 'transparent',
                 border: 'none',
-                // borderRadius: 6,
-                borderBottom: isCustomDate ? '2px solid #818CF8' : '2px solid transparent',
-                color: isCustomDate ? '#F8FAFC' : '#94A3B8',
+                borderBottom: isCustomDate ? `2px solid ${isLight ? '#4F46E5' : '#818CF8'}` : '2px solid transparent',
+                color: isCustomDate ? (isLight ? '#3730A3' : '#F8FAFC') : (isLight ? '#64748B' : '#94A3B8'),
                 fontFamily: 'var(--font-mono)',
-                fontSize: 12,
-                fontWeight: isCustomDate ? 700 : 500,
+                fontSize: 13,
+                fontWeight: 700,
                 cursor: 'pointer',
+                borderRadius: 4,
+                boxShadow: isLight && isCustomDate ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
                 transition: 'all 0.15s ease'
               }}
             >
@@ -806,27 +870,27 @@ export default function SpaceWeatherOverview() {
             </button>
           </div>
 
-          {/* Inline Custom Date Inputs (Appears on Row 2 next to CUSTOM when active) */}
+          {/* Inline Custom Date Inputs */}
           {isCustomDate && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: 10,
-              background: 'rgba(15, 23, 42, 0.85)',
+              background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.85)',
               padding: '4px 12px',
-              // borderRadius: 8,
-              border: '1px solid rgba(129, 140, 248, 0.4)',
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+              border: isLight ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(129, 140, 248, 0.4)',
+              borderRadius: 6,
+              boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.05)' : '0 4px 14px rgba(0, 0, 0, 0.4)',
               animation: 'fadeIn 0.2s ease-in-out'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>FROM:</span>
-                <DateInputDDMMYYYY value={startDateInput} onChange={setStartDateInput} accentColor="#818CF8" />
+                <span style={{ fontSize: 13, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>FROM:</span>
+                <DateInputDDMMYYYY value={startDateInput} onChange={setStartDateInput} accentColor={isLight ? '#4F46E5' : '#818CF8'} isLight={isLight} />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TO:</span>
-                <DateInputDDMMYYYY value={endDateInput} onChange={setEndDateInput} accentColor="#818CF8" />
+                <span style={{ fontSize: 13, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TO:</span>
+                <DateInputDDMMYYYY value={endDateInput} onChange={setEndDateInput} accentColor={isLight ? '#4F46E5' : '#818CF8'} isLight={isLight} />
               </div>
 
               <button
@@ -843,22 +907,74 @@ export default function SpaceWeatherOverview() {
                   background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
                   color: '#FFFFFF',
                   border: 'none',
-                  // borderRadius: 5,
-                  fontSize: 11,
+                  borderRadius: 4,
+                  fontSize: 13,
                   fontWeight: 700,
                   fontFamily: 'var(--font-mono)',
                   cursor: 'pointer',
-                  boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                  boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)',
                   transition: 'all 0.15s ease'
                 }}
               >
                 APPLY
               </button>
+              <button
+                onClick={toggleOverviewFs}
+                title={isOverviewFs ? 'Exit Full Screen (ESC)' : 'Full Screen (F11 style)'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
+                  border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
+                  color: isLight ? '#334155' : '#94A3B8',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Maximize2 size={13} />
+                <span>FULLSCREEN</span>
+              </button>
             </div>
           )}
+          {!isCustomDate && (
+            <button
+              onClick={toggleOverviewFs}
+              title={isOverviewFs ? 'Exit Full Screen (ESC)' : 'Full Screen (F11 style)'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 12px',
+                background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
+                border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
+                color: isLight ? '#334155' : '#94A3B8',
+                fontSize: 13,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                cursor: 'pointer',
+                borderRadius: 4,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = isLight ? '#4F46E5' : '#818CF8'
+                e.currentTarget.style.color = isLight ? '#4F46E5' : '#818CF8'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = isLight ? '#CBD5E1' : 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.color = isLight ? '#334155' : '#94A3B8'
+              }}
+            >
+              <Maximize2 size={13} />
+              <span>FULLSCREEN</span>
+            </button>
+          )}
         </div>
-
-
 
         {/* Translucent & Delicate Chart Canvas Plate */}
         {loading && magData.length === 0 ? (
@@ -871,48 +987,95 @@ export default function SpaceWeatherOverview() {
             style={{
               position: 'relative',
               width: '100%',
-              background: 'rgba(10, 15, 30, 0.45)',
-              // borderRadius: 0,
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              padding: '16px 0',
-              backdropFilter: 'blur(8px)',
-              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)'
+              ...(isOverviewFs ? {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: '#020617',
+                zIndex: 99999,
+                overflow: 'hidden',
+              } : {
+                background: isLight ? '#FFFFFF' : 'rgba(10, 15, 30, 0.45)',
+                border: isLight ? '1px solid rgba(99, 102, 241, 0.18)' : '1px solid rgba(255, 255, 255, 0.06)',
+                padding: '16px 0',
+                backdropFilter: 'blur(8px)',
+                boxShadow: isLight ? '0 4px 20px rgba(0, 0, 0, 0.06)' : '0 12px 30px rgba(0, 0, 0, 0.4)',
+                borderRadius: 8
+              })
             }}
           >
-            <ReactECharts
-              ref={chartRef}
-              option={option}
-              style={{ height: 1040, width: '100%' }}
-              notMerge={true}
-              lazyUpdate={false}
-              onChartReady={onChartReady}
-              onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
-            />
+            {isOverviewFs ? (
+              <SciFiFullscreenOverlay
+                isFullscreen={true}
+                onClose={toggleOverviewFs}
+                scrollable={true}
+                title="SPACE WEATHER OVERVIEW // 6-TIER TELEMETRY"
+                subtitle="Synchronized Real-Time Analysis: ACE Mag, Solar Wind, GOES Protons, Cosmic Rays"
+                accentColor="#818CF8"
+              >
+                <div style={{ width: '100%', minHeight: 1040, position: 'relative', paddingRight: 6 }}>
+                  <ReactECharts
+                    ref={chartRef}
+                    option={option}
+                    style={{ height: 1040, width: '100%' }}
+                    notMerge={true}
+                    lazyUpdate={false}
+                    onChartReady={onChartReady}
+                    onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+                  />
+                  <TrendLineOverlay
+                    chartRef={chartRef}
+                    wrapperRef={chartWrapperRef}
+                    gridCount={6}
+                    gridUnits={GRID_UNITS}
+                    lines={lines}
+                    drawingMode={drawingMode}
+                    pendingP1={pendingP1}
+                    onChartClick={handleClick}
+                    onRemoveLine={removeLine}
+                  />
+                </div>
+              </SciFiFullscreenOverlay>
+            ) : (
+              <>
+                <ReactECharts
+                  ref={chartRef}
+                  option={option}
+                  style={{ height: 1040, width: '100%' }}
+                  notMerge={true}
+                  lazyUpdate={false}
+                  onChartReady={onChartReady}
+                  onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
+                />
 
-            <TrendLineOverlay
-              chartRef={chartRef}
-              wrapperRef={chartWrapperRef}
-              gridCount={6}
-              gridUnits={GRID_UNITS}
-              lines={lines}
-              drawingMode={drawingMode}
-              pendingP1={pendingP1}
-              onChartClick={handleClick}
-              onRemoveLine={removeLine}
-            />
+                <TrendLineOverlay
+                  chartRef={chartRef}
+                  wrapperRef={chartWrapperRef}
+                  gridCount={6}
+                  gridUnits={GRID_UNITS}
+                  lines={lines}
+                  drawingMode={drawingMode}
+                  pendingP1={pendingP1}
+                  onChartClick={handleClick}
+                  onRemoveLine={removeLine}
+                />
 
-            {/* Horizontal Panel Dividers */}
-            {[215, 385, 555, 715, 875].map(top => (
-              <div key={top} style={{
-                position: 'absolute',
-                left: 95,
-                right: 85,
-                top,
-                height: 1,
-                background: 'rgba(255,255,255,0.06)',
-                pointerEvents: 'none',
-              }} />
-            ))}
+                {/* Horizontal Panel Dividers */}
+                {[215, 385, 555, 715, 875].map(top => (
+                  <div key={top} style={{
+                    position: 'absolute',
+                    left: 95,
+                    right: 85,
+                    top,
+                    height: 1,
+                    background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255, 255, 255, 0.08)',
+                    pointerEvents: 'none'
+                  }} />
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -925,22 +1088,150 @@ export default function SpaceWeatherOverview() {
           gap: 16,
           flexWrap: 'wrap',
           paddingTop: 16,
-          borderTop: '1px solid rgba(255,255,255,0.1)'
+          borderTop: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)'
         }}>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 11, color: '#CBD5E1', fontFamily: 'var(--font-mono)' }}>
-            <span><strong style={{ color: '#818CF8' }}>OULU</strong> Oulu, Finland</span>
-            <span><strong style={{ color: '#FB923C' }}>SOPO</strong> South Pole, Antarctica</span>
-            <span><strong style={{ color: '#E879F9' }}>SOPB/SOPO</strong> Polar Ratio</span>
-            <span><strong style={{ color: '#F8FAFC' }}>ACE</strong> L1 Orbit Sensors</span>
-            <span><strong style={{ color: '#F8FAFC' }}>GOES</strong> NOAA Satellites</span>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)' }}>
+            <span><strong style={{ color: isLight ? '#4F46E5' : '#818CF8' }}>OULU</strong> Oulu, Finland</span>
+            <span><strong style={{ color: isLight ? '#EA580C' : '#FB923C' }}>SOPO</strong> South Pole, Antarctica</span>
+            <span><strong style={{ color: isLight ? '#C026D3' : '#E879F9' }}>SOPB/SOPO</strong> Polar Ratio</span>
+            <span><strong style={{ color: isLight ? '#2563EB' : '#93C5FD' }}>ACE</strong> L1 Orbit Sensors</span>
+            <span><strong style={{ color: isLight ? '#D97706' : '#FBBF24' }}>GOES</strong> NOAA Satellites</span>
           </div>
 
           {lastUpdated && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
               <Clock size={12} />
               Synced: {lastUpdated.toLocaleTimeString()}
             </div>
           )}
+        </div>
+
+        {/* Refined Instrument Info Guide */}
+        <div style={{ marginTop: 32 }}>
+          <InstrumentInfoGuide
+            activeTab={activeGuideTab}
+            onTabChange={setActiveGuideTab}
+            accentColor="#818CF8"
+            tabs={[
+              { id: 'usage', label: '01. USAGE (การใช้งาน)' },
+              { id: 'impacts', label: '02. IMPACTS (ผลกระทบ)' },
+              { id: 'details', label: '03. DETAILS (ข้อมูลอุปกรณ์)' },
+              { id: 'credits', label: '04. DATA SOURCE & CREDITS (แหล่งข้อมูล)' }
+            ]}
+          >
+            {activeGuideTab === 'usage' && (
+              <div>
+                <h4 style={{
+                  color: isLight ? '#1E1B4B' : '#F8FAFC',
+                  margin: '0 0 14px 0',
+                  fontSize: 15,
+                  fontFamily: "'Orbitron', var(--font-sans), monospace",
+                  fontWeight: 700
+                }}>
+                  ภาพรวมสภาพอวกาศแบบประสานเวลา 6 มิติ (Synchronized Space Weather Analytics)
+                </h4>
+                <p style={{ color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, margin: '0 0 16px 0', lineHeight: '1.7' }}>
+                  หน้านี้แสดงข้อมูลสภาพอวกาศแบบ Real-Time จากแหล่งตรวจวัดอวกาศและพื้นผิวโลกที่สำคัญ 6 ระดับ โดยจัดแกนเวลาให้ตรงกัน (Synchronized Timeline) เพื่อให้ตรวจพบความสัมพันธ์ระหว่างการระเบิดบนดวงอาทิตย์กับผลกระทบต่อโลกได้อย่างแม่นยำ:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ borderLeft: '3px solid #818CF8', paddingLeft: 12, fontSize: 13, color: isLight ? '#334155' : '#CBD5E1' }}>
+                    <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>1. Cosmic Ray & Polar Ratio: </strong>
+                    ฟลักซ์รังสีคอสมิกจากนอกระบบสุริยะ และอัตราส่วนขั้วโลกใต้ บ่งชี้การลดลงแบบฟอร์บุช (Forbush Decrease) เมื่อพายุสุริยะพัดผ่านโลก
+                  </div>
+                  <div style={{ borderLeft: '3px solid #60A5FA', paddingLeft: 12, fontSize: 13, color: isLight ? '#334155' : '#CBD5E1' }}>
+                    <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>2. Interplanetary Magnetic Field (Bt, Bz, Bx, By): </strong>
+                    สนามแม่เหล็กระหว่างดาวเคราะห์ ณ จุด L1 หากค่า <strong>Bz ติดลบลงลึก (ชี้ลงใต้)</strong> จะเกิดการเชื่อมต่อกับสนามแม่เหล็กโลกและทำให้เกิดพายุแม่เหล็กโลก (Geomagnetic Storm)
+                  </div>
+                  <div style={{ borderLeft: '3px solid #34D399', paddingLeft: 12, fontSize: 13, color: isLight ? '#334155' : '#CBD5E1' }}>
+                    <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>3. Solar Wind Speed & Proton Flux: </strong>
+                    ความเร็วพลาสมาลมสุริยะและฟลักซ์โปรตอนพลังงานสูงจากดาวเทียม GOES วงโคจรค้างฟ้า
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeGuideTab === 'impacts' && (
+              <div>
+                <h4 style={{
+                  color: isLight ? '#1E1B4B' : '#F8FAFC',
+                  margin: '0 0 14px 0',
+                  fontSize: 15,
+                  fontFamily: "'Orbitron', var(--font-sans), monospace",
+                  fontWeight: 700
+                }}>
+                  ผลกระทบต่อโครงสร้างพื้นฐานและเทคโนโลยี
+                </h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-mono)' }}>
+                  <tbody>
+                    <tr style={{ borderBottom: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                      <td style={{ padding: '10px 0', color: isLight ? '#4F46E5' : '#818CF8', width: '28%', fontWeight: 700 }}>Bz &lt; -10 nT ต่อเนื่อง</td>
+                      <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC' }}>เสี่ยงเกิดพายุแม่เหล็กโลกระดับ G2 ถึง G5 รบกวนระบบส่งจ่ายไฟฟ้า หม้อแปลงไฟแรงสูง และเกิดแสงออโรร่าละติจูดต่ำ</td>
+                    </tr>
+                    <tr style={{ borderBottom: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                      <td style={{ padding: '10px 0', color: isLight ? '#059669' : '#34D399', width: '28%', fontWeight: 700 }}>Solar Wind &gt; 600 km/s</td>
+                      <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC' }}>ลมสุริยะความเร็วสูง (HSS) จากหลุมโคโรนา บีบอัดแมกนีโตสเฟียร์ของโลก ทำให้ดาวเทียมเกิดแรงฉุดและสะสมประจุไฟฟ้าสถิต</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 0', color: isLight ? '#D97706' : '#FBBF24', width: '28%', fontWeight: 700 }}>Proton Flux &gt; 10 pfu</td>
+                      <td style={{ padding: '10px 0', color: isLight ? '#0F172A' : '#F8FAFC' }}>พายุรังสีสุริยะ (Solar Radiation Storm - S1+) เกิดการดูดกลืนคลื่นวิทยุแถบขั้วโลก (Polar Cap Absorption - PCA) กระทบการบินข้ามขั้วโลกและการสื่อสาร HF</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {activeGuideTab === 'details' && (
+              <div>
+                <h4 style={{
+                  color: isLight ? '#1E1B4B' : '#F8FAFC',
+                  margin: '0 0 14px 0',
+                  fontSize: 15,
+                  fontFamily: "'Orbitron', var(--font-sans), monospace",
+                  fontWeight: 700
+                }}>
+                  อุปกรณ์และเครือข่ายเซนเซอร์ที่ตรวจวัด
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                  <div style={{ padding: '12px 16px', background: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.03)', borderRadius: 6, border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                    <div style={{ fontWeight: 700, color: isLight ? '#4F46E5' : '#818CF8', fontSize: 13, marginBottom: 4 }}>ACE / DSCOVR (L1 Point)</div>
+                    <div style={{ fontSize: 12, color: isLight ? '#64748B' : '#94A3B8', lineHeight: 1.6 }}>ตรวจวัดสนามแม่เหล็ก MAG (Bt, Bx, By, Bz) และพลาสมา SWEPAM (Speed, Density, Temp) ล่วงหน้าก่อนปะทะโลก 30-60 นาที</div>
+                  </div>
+                  <div style={{ padding: '12px 16px', background: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.03)', borderRadius: 6, border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                    <div style={{ fontWeight: 700, color: isLight ? '#059669' : '#34D399', fontSize: 13, marginBottom: 4 }}>NMDB (Oulu & South Pole)</div>
+                    <div style={{ fontSize: 12, color: isLight ? '#64748B' : '#94A3B8', lineHeight: 1.6 }}>หอตรวจวัดนิวตรอนบนพื้นผิวโลก ตรวจจับอนุภาครองจากการชนของรังสีคอสมิกพลังงานสูงในชั้นบรรยากาศ</div>
+                  </div>
+                  <div style={{ padding: '12px 16px', background: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.03)', borderRadius: 6, border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)'}` }}>
+                    <div style={{ fontWeight: 700, color: isLight ? '#D97706' : '#FBBF24', fontSize: 13, marginBottom: 4 }}>NOAA GOES-16/18 (SEISS)</div>
+                    <div style={{ fontSize: 12, color: isLight ? '#64748B' : '#94A3B8', lineHeight: 1.6 }}>เซนเซอร์ตรวจจับฟลักซ์โปรตอนพลังงานสูง (1 MeV ถึง &gt;500 MeV) ณ ระดับวงโคจรค้างฟ้าประจำวันตลอด 24 ชม.</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeGuideTab === 'credits' && (
+              <div>
+                <h4 style={{
+                  color: isLight ? '#1E1B4B' : '#F8FAFC',
+                  margin: '0 0 14px 0',
+                  fontSize: 15,
+                  fontFamily: "'Orbitron', var(--font-sans), monospace",
+                  fontWeight: 700
+                }}>
+                  แหล่งที่มาของข้อมูล & เครดิต
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                  <div style={{ borderLeft: '3px solid #818CF8', paddingLeft: 12, color: isLight ? '#475569' : '#CBD5E1' }}>
+                    <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>NOAA Space Weather Prediction Center (SWPC): </strong>
+                    ACE Real-Time Solar Wind (RTSW), DSCOVR, GOES SEISS
+                  </div>
+                  <div style={{ borderLeft: '3px solid #E879F9', paddingLeft: 12, color: isLight ? '#475569' : '#CBD5E1' }}>
+                    <strong style={{ color: isLight ? '#0F172A' : '#F8FAFC' }}>Neutron Monitor Database (NMDB): </strong>
+                    University of Oulu, Finland & University of Delaware / Bartol Research Institute (South Pole)
+                  </div>
+                </div>
+              </div>
+            )}
+          </InstrumentInfoGuide>
         </div>
       </div>
     </div>

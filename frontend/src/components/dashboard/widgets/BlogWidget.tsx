@@ -30,12 +30,12 @@ const BLOG_POSTS = [
 export default function BlogWidget() {
   return (
     <div style={{
-      background: '#050A14',
+      background: 'var(--bg-surface, #050A14)',
       backdropFilter: 'blur(8px)',
       borderRadius: '0px',
       marginBottom: '20px',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-      border: '1px solid rgba(52, 152, 219, 0.18)',
+      boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
+      border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
       padding: '20px',
       position: 'relative'
     }}>
@@ -44,16 +44,16 @@ export default function BlogWidget() {
       <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none' }} />
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ width: '8px', height: '8px', background: '#3498DB', borderRadius: '50%' }}></span>
           <h3 style={{
-            margin: 0, fontSize: '11px', fontWeight: '700',
-            fontFamily: "'Orbitron', monospace", color: '#ffffff',
+            margin: 0, fontSize: '14px', fontWeight: '700',
+            fontFamily: "'Orbitron', monospace", color: 'var(--text-primary, #ffffff)',
             letterSpacing: '2px', textTransform: 'uppercase'
           }}>COMMUNITY BLOG</h3>
         </div>
-        {/* <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}>
+        {/* <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#3498DB', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer' }}>
           VIEW ALL →
         </span> */}
       </div>
@@ -87,21 +87,21 @@ export default function BlogWidget() {
             <div style={{ flex: 1, minWidth: 0 }}>
               {/* Tag + date row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#3498DB', letterSpacing: '1px' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#3498DB', letterSpacing: '1px' }}>
                   // {post.tag}
                 </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#606075', letterSpacing: '0.5px' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#606075', letterSpacing: '0.5px' }}>
                   {post.date}
                 </span>
               </div>
               <h4 style={{
-                margin: '0 0 4px 0', fontSize: '12px', color: '#E2E8F0',
+                margin: '0 0 4px 0', fontSize: '15px', color: 'var(--text-primary, #E2E8F0)',
                 fontWeight: '600', lineHeight: '1.45',
                 display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
               }}>
                 {post.title}
               </h4>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#606075' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: '#606075' }}>
                 {post.author}
               </span>
             </div>

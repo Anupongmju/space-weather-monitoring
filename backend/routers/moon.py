@@ -1,9 +1,11 @@
 import os
 import glob
 import math
+import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/moon", tags=["Moon Orbit & Space Weather"])
@@ -148,29 +150,70 @@ def _load_doserate_data():
 # Preload cache on module import
 _load_doserate_data()
 
-def get_doserate_for_date(date_str: str) -> Dict[str, Any]:
+def get_doserate_for_date(date_str: str, window_days_before: int = 3, window_days_after: int = 4) -> Dict[str, Any]:
     """
-    Look up CRaTER doserate data for 1 single day (24 hours) on the event date.
+    Look up CRaTER doserate data for a 1-week window around the event date
+    (default: 3 days before + event day + 4 days after).
     """
     clean_d = date_str.strip().replace('-', '/')
     cache = _load_doserate_data()
-    if clean_d in cache:
-        return cache[clean_d]
+
+    parts = clean_d.split('/')
+    if len(parts) != 3:
+        return {"status": "DATA_GAP", "samples_count": 0, "hourly": []}
+
+    try:
+        y_int, m_int, day_int = int(parts[0]), int(parts[1]), int(parts[2])
+        target_dt = datetime(y_int, m_int, day_int, tzinfo=timezone.utc)
+    except Exception:
+        return {"status": "DATA_GAP", "samples_count": 0, "hourly": []}
+
+    start_dt = target_dt - timedelta(days=window_days_before)
+    end_dt = target_dt + timedelta(days=window_days_after)
+
+    event_day_data = cache.get(clean_d, {})
+
+    combined_hourly = []
+    for offset in range(-window_days_before, window_days_after + 1):
+        cur_dt = target_dt + timedelta(days=offset)
+        cur_key = cur_dt.strftime("%Y/%m/%d")
+        day_entry = cache.get(cur_key)
+        if day_entry and day_entry.get("hourly"):
+            m_s = cur_dt.strftime("%m-%d")
+            for h in day_entry["hourly"]:
+                combined_hourly.append({
+                    "time": f"{m_s} {h['time']}",
+                    "d12": h.get("d12"),
+                    "d34": h.get("d34"),
+                    "d56": h.get("d56"),
+                    "d1": h.get("d1"),
+                    "d2": h.get("d2"),
+                    "d3": h.get("d3"),
+                    "d4": h.get("d4"),
+                    "d5": h.get("d5"),
+                    "d6": h.get("d6"),
+                })
+
+    status = event_day_data.get("status", "VALID" if combined_hourly else "DATA_GAP")
     return {
-        "d12": None,
-        "d34": None,
-        "d56": None,
-        "d1": None,
-        "d2": None,
-        "d3": None,
-        "d4": None,
-        "d5": None,
-        "d6": None,
-        "status": "DATA_GAP",
+        "d12": event_day_data.get("d12"),
+        "d34": event_day_data.get("d34"),
+        "d56": event_day_data.get("d56"),
+        "d1": event_day_data.get("d1"),
+        "d2": event_day_data.get("d2"),
+        "d3": event_day_data.get("d3"),
+        "d4": event_day_data.get("d4"),
+        "d5": event_day_data.get("d5"),
+        "d6": event_day_data.get("d6"),
+        "status": status,
         "unit": "cGy/yr",
-        "samples_count": 0,
-        "hourly": []
+        "samples_count": len(combined_hourly),
+        "window_start": start_dt.strftime("%Y-%m-%d"),
+        "window_end": end_dt.strftime("%Y-%m-%d"),
+        "event_date": target_dt.strftime("%Y-%m-%d"),
+        "hourly": combined_hourly
     }
+
 
 # ── INGEST & INDEX GOES PROTON DIFFERENTIAL FLUX (GOES-18 NC / GOES-16 TXT) ──
 GOES_NC_DIR = os.path.join(BASE_DIR, "data", "GOES18")
@@ -613,21 +656,35 @@ def calculate_moon_gse(dt: datetime):
 class DateRequest(BaseModel):
     date_str: str
 
-_PRESET_EVENTS_CACHE = None
+LITE_CACHE_FILE = os.path.join(BASE_DIR, "data", "moon_events_lite.json")
+FULL_CACHE_FILE = os.path.join(BASE_DIR, "data", "moon_events_full.json")
 
-@router.get("/events")
-def get_moon_event_positions():
-    """
-    Returns high-precision Moon GSE orbital positions, lunar phases,
-    CRaTER radiation doserate values, and GOES differential proton flux for all preset event dates.
-    """
-    global _PRESET_EVENTS_CACHE
-    if _PRESET_EVENTS_CACHE is not None:
-        return _PRESET_EVENTS_CACHE
+_LITE_CACHE_BYTES: Optional[bytes] = None
+_FULL_CACHE_BYTES: Optional[bytes] = None
+_FULL_EVENTS_BY_ID: Dict[int, Any] = {}
+_PRESET_EVENTS_CACHE: Optional[List[Dict[str, Any]]] = None
 
-    results = []
-    for idx, d_str in enumerate(EVENT_DATES):
-        try:
+def _load_moon_cache():
+    global _LITE_CACHE_BYTES, _FULL_CACHE_BYTES, _FULL_EVENTS_BY_ID, _PRESET_EVENTS_CACHE
+    try:
+        if os.path.exists(LITE_CACHE_FILE):
+            with open(LITE_CACHE_FILE, "rb") as f:
+                _LITE_CACHE_BYTES = f.read()
+        if os.path.exists(FULL_CACHE_FILE):
+            with open(FULL_CACHE_FILE, "rb") as f:
+                _FULL_CACHE_BYTES = f.read()
+            _PRESET_EVENTS_CACHE = json.loads(_FULL_CACHE_BYTES.decode("utf-8"))
+            for evt in _PRESET_EVENTS_CACHE:
+                _FULL_EVENTS_BY_ID[evt.get("id")] = evt
+            print(f"[Moon Router] Instantly loaded {len(_PRESET_EVENTS_CACHE)} moon events from disk cache.")
+            return
+    except Exception as e:
+        print(f"[Moon Router] Error reading cache files: {e}")
+
+    # Fallback calculation if cache files missing
+    try:
+        results = []
+        for idx, d_str in enumerate(EVENT_DATES):
             parts = d_str.strip().replace('-', '/').split('/')
             dt = datetime(int(parts[0]), int(parts[1]), int(parts[2]), 12, 0, 0, tzinfo=timezone.utc)
             pos = calculate_moon_gse(dt)
@@ -637,22 +694,44 @@ def get_moon_event_positions():
                 "iso_time": dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 **pos
             })
-        except Exception as e:
-            continue
-
-    _PRESET_EVENTS_CACHE = results
-    return _PRESET_EVENTS_CACHE
-
-def _preload_moon_cache():
-    global _PRESET_EVENTS_CACHE
-    try:
-        get_moon_event_positions()
-        print(f"[Moon Router] Preloaded {len(_PRESET_EVENTS_CACHE) if _PRESET_EVENTS_CACHE else 0} moon events with CRaTER & GOES data into memory.")
+        _PRESET_EVENTS_CACHE = results
+        for evt in _PRESET_EVENTS_CACHE:
+            _FULL_EVENTS_BY_ID[evt.get("id")] = evt
+        _FULL_CACHE_BYTES = json.dumps(_PRESET_EVENTS_CACHE).encode("utf-8")
+        with open(FULL_CACHE_FILE, "wb") as f:
+            f.write(_FULL_CACHE_BYTES)
+        print(f"[Moon Router] Successfully generated and persisted full moon events cache.")
     except Exception as e:
-        print(f"[Moon Router] Error preloading moon events cache: {e}")
+        print(f"[Moon Router] Error generating moon events: {e}")
 
-import threading
-threading.Thread(target=_preload_moon_cache, daemon=True).start()
+# Preload cache on startup
+_load_moon_cache()
+
+@router.get("/events")
+def get_moon_event_positions(full: bool = False):
+    """
+    Returns high-precision Moon GSE orbital positions, lunar phases,
+    CRaTER radiation doserate values, and GOES differential proton flux for all preset event dates.
+    Zero-overhead streaming from memory cache.
+    """
+    global _LITE_CACHE_BYTES, _FULL_CACHE_BYTES, _PRESET_EVENTS_CACHE
+    if not full and _LITE_CACHE_BYTES:
+        return Response(content=_LITE_CACHE_BYTES, media_type="application/json")
+    if full and _FULL_CACHE_BYTES:
+        return Response(content=_FULL_CACHE_BYTES, media_type="application/json")
+    if _PRESET_EVENTS_CACHE is not None:
+        return Response(content=json.dumps(_PRESET_EVENTS_CACHE), media_type="application/json")
+    return Response(content="[]", media_type="application/json")
+
+@router.get("/event/{event_id}")
+def get_moon_event_detail(event_id: int):
+    """
+    Returns the complete high-resolution time-series for a single event in < 1ms.
+    """
+    if event_id in _FULL_EVENTS_BY_ID:
+        return Response(content=json.dumps(_FULL_EVENTS_BY_ID[event_id]), media_type="application/json")
+    return JSONResponse(status_code=404, content={"error": f"Event {event_id} not found"})
+
 
 @router.post("/position")
 def get_custom_moon_position(req: DateRequest):

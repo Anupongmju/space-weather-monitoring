@@ -45,32 +45,29 @@ import Help from './pages/Help'
 
 import './App.css'
 import OrbitBackground from './components/space/OrbitBackground'
+import { useTheme } from './context/ThemeContext'
 
 export default function App() {
   const location = useLocation()
-  const isCustomSpacePage =
-    location.pathname.startsWith('/moon') ||
-    location.pathname.startsWith('/lunar') ||
-    location.pathname.startsWith('/mars') ||
-    location.pathname.startsWith('/cosmic/map') ||
-    location.pathname.startsWith('/cosmic/globe')
+  const { theme } = useTheme()
+  const isDashboard = location.pathname === '/'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#020617', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-base, #020617)', position: 'relative', overflow: 'hidden', transition: 'background-color 0.3s ease' }}>
       <ScrollToTop />
-      {/* Universal Real-Time Astronomical Orbit Background (disabled on pages with dedicated custom backgrounds) */}
-      {!isCustomSpacePage && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-          <OrbitBackground />
-        </div>
+      {/* Astronomical Orbit Background & Overlay — active exclusively on Dashboard Home */}
+      {isDashboard && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+            <OrbitBackground />
+          </div>
+          <div style={{
+            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 1,
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.45) 40%, rgba(0,0,0,0.75) 100%)',
+            pointerEvents: 'none',
+          }} />
+        </>
       )}
-
-      {/* Gentle dark gradient overlay */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 1,
-        background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.75) 100%)',
-        pointerEvents: 'none'
-      }} />
 
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',

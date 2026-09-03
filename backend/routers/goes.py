@@ -137,19 +137,30 @@ def get_mag(limit: int = 1440, start_date: Optional[str] = None, end_date: Optio
 def get_wind(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
     return get_time_filtered_query("goes_wind", limit, start_date, end_date)
 
+_suvi_cache = {}
 
 @router.get("/suvi-loop/{wavelength}")
-def get_suvi_loop(wavelength: str, limit: int = 40):
+def get_suvi_loop(wavelength: str, limit: int = 25):
+    import time
+    now = time.time()
+    cache_key = f"{wavelength}_{limit}"
+    if cache_key in _suvi_cache:
+        cached_time, cached_data = _suvi_cache[cache_key]
+        if now - cached_time < 120:
+            return cached_data
+
     import httpx
     url = f"https://services.swpc.noaa.gov/products/animations/suvi-primary-{wavelength}.json"
     try:
-        r = httpx.get(url, timeout=10.0)
+        r = httpx.get(url, timeout=8.0)
         if r.status_code != 200:
             return {"urls": [], "error": f"NOAA returned status code {r.status_code}"}
         data = r.json()
         # Extract and format the URLs
         urls = [f"https://services.swpc.noaa.gov{item['url']}" for item in data[-limit:]]
-        return {"urls": urls}
+        result = {"urls": urls}
+        _suvi_cache[cache_key] = (now, result)
+        return result
     except Exception as e:
         return {"urls": [], "error": str(e)}
 

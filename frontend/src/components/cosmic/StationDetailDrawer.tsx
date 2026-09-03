@@ -79,7 +79,7 @@ export default function StationDetailDrawer({
       borderColor: color,
       borderWidth: 1,
       padding: [8, 10],
-      textStyle: { color: '#F8FAFC', fontSize: 11, fontFamily: 'monospace' },
+      textStyle: { color: '#F8FAFC', fontSize: 14, fontFamily: 'monospace' },
       axisPointer: {
         type: 'line',
         lineStyle: { color: `${color}80`, width: 1, type: 'dashed' }
@@ -99,14 +99,14 @@ export default function StationDetailDrawer({
           ? (((p.value[1] - avgCount) / avgCount) * 100)
           : 0
 
-        return `<div style="font-family:monospace;font-size:11px;line-height:1.6;padding:2px 4px">
-          <div style="color:#94A3B8;font-size:10px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:2px">
+        return `<div style="font-family:monospace;font-size: 14px;line-height:1.6;padding:2px 4px">
+          <div style="color:#94A3B8;font-size: 13px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:2px">
             📅 <b style="color:#F8FAFC">${dateStr}</b> · ⏱️ <b style="color:#38BDF8">${timeStr}</b>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="color:${color}">●</span> Count Rate: <b style="color:#FFF">${val}</b> counts/min
           </div>
-          <div style="color:${pct >= 0 ? '#22C55E' : '#EF4444'};font-size:10px;margin-top:2px">
+          <div style="color:${pct >= 0 ? '#22C55E' : '#EF4444'};font-size: 13px;margin-top:2px">
             Variation: <b>${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</b>
           </div>
         </div>`
@@ -117,7 +117,7 @@ export default function StationDetailDrawer({
       type: 'time',
       splitLine: { show: false },
       axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
-      axisLabel: { color: '#64748B', fontSize: 9, fontFamily: 'monospace' }
+      axisLabel: { color: '#64748B', fontSize: 12, fontFamily: 'monospace' }
     },
     yAxis: {
       type: 'value',
@@ -125,7 +125,7 @@ export default function StationDetailDrawer({
       splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.05)', type: 'dashed' } },
       axisLabel: {
         color: '#64748B',
-        fontSize: 9,
+        fontSize: 12,
         fontFamily: 'monospace',
         formatter: (val: number) => val.toLocaleString()
       }
@@ -196,14 +196,14 @@ export default function StationDetailDrawer({
               border: `1px solid ${color}60`,
               padding: '2px 6px',
               fontFamily: 'monospace',
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: 700,
               letterSpacing: 1,
               borderRadius: 2
             }}>
               {station.id}
             </span>
-            <span style={{ color: '#94A3B8', fontSize: 12, fontFamily: 'monospace' }}>
+            <span style={{ color: '#94A3B8', fontSize: 15, fontFamily: 'monospace' }}>
               {station.country}
             </span>
           </div>
@@ -250,14 +250,14 @@ export default function StationDetailDrawer({
             padding: '10px 12px',
             borderRadius: 3
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 10, fontFamily: 'monospace' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 13, fontFamily: 'monospace' }}>
               <ShieldAlert size={12} color={color} /> CUTOFF RIGIDITY (Rc)
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Orbitron', monospace", color }}>
                 {station.cutoffRigidity.toFixed(2)}
               </span>
-              <span style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace' }}>GV</span>
+              <span style={{ fontSize: 14, color: '#94A3B8', fontFamily: 'monospace' }}>GV</span>
             </div>
           </div>
 
@@ -268,14 +268,14 @@ export default function StationDetailDrawer({
             padding: '10px 12px',
             borderRadius: 3
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 10, fontFamily: 'monospace' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 13, fontFamily: 'monospace' }}>
               <Mountain size={12} color="#38BDF8" /> ELEVATION (ASL)
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: '#38BDF8' }}>
                 {station.altitude.toLocaleString()}
               </span>
-              <span style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'monospace' }}>m</span>
+              <span style={{ fontSize: 14, color: '#94A3B8', fontFamily: 'monospace' }}>m</span>
             </div>
           </div>
         </div>
@@ -290,7 +290,7 @@ export default function StationDetailDrawer({
           justifyContent: 'space-between',
           alignItems: 'center',
           fontFamily: 'monospace',
-          fontSize: 11
+          fontSize: 14
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8' }}>
             <Compass size={13} color="#94A3B8" />
@@ -309,10 +309,10 @@ export default function StationDetailDrawer({
           padding: '10px 12px',
           borderRadius: '0 3px 3px 0'
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color, fontFamily: 'monospace', marginBottom: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color, fontFamily: 'monospace', marginBottom: 2 }}>
             🛡️ {shielding.level}
           </div>
-          <div style={{ fontSize: 11, color: '#CBD5E1', lineHeight: '1.5' }}>
+          <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: '1.5' }}>
             {shielding.desc}
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function StationDetailDrawer({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Activity size={13} color={color} />
-              <span style={{ fontSize: 11, fontFamily: "'Orbitron', monospace", color: '#F8FAFC', fontWeight: 600 }}>
+              <span style={{ fontSize: 14, fontFamily: "'Orbitron', monospace", color: '#F8FAFC', fontWeight: 600 }}>
                 COUNT RATE TELEMETRY
               </span>
             </div>
@@ -338,7 +338,7 @@ export default function StationDetailDrawer({
                 background: 'transparent',
                 border: 'none',
                 color: fetching ? '#64748B' : color,
-                fontSize: 10,
+                fontSize: 13,
                 fontFamily: 'monospace',
                 cursor: fetching ? 'not-allowed' : 'pointer',
                 display: 'flex',
@@ -361,13 +361,13 @@ export default function StationDetailDrawer({
               padding: '6px 4px'
             }}>
               {loading ? (
-                <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 11, fontFamily: 'monospace' }}>
+                <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 14, fontFamily: 'monospace' }}>
                   LOADING TELEMETRY...
                 </div>
               ) : telemetry.length > 0 ? (
                 <ReactECharts option={chartOption} style={{ height: 140, width: '100%' }} notMerge={true} />
               ) : (
-                <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 11, fontFamily: 'monospace' }}>
+                <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 14, fontFamily: 'monospace' }}>
                   NO DATA AVAILABLE
                 </div>
               )}
@@ -377,7 +377,7 @@ export default function StationDetailDrawer({
 
         {/* Station Details / Description */}
         <div style={{
-          fontSize: 11,
+          fontSize: 14,
           color: '#94A3B8',
           lineHeight: '1.6',
           borderTop: '1px solid rgba(255,255,255,0.06)',
@@ -412,7 +412,7 @@ export default function StationDetailDrawer({
               border: `1px solid ${color}60`,
               color: '#FFF',
               fontFamily: 'monospace',
-              fontSize: 11,
+              fontSize: 14,
               fontWeight: 600,
               cursor: 'pointer',
               borderRadius: 3,

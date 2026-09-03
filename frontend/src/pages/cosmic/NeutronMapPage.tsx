@@ -57,7 +57,7 @@ export default function NeutronMapPage() {
             border: 'none',
             color: '#CBD5E1',
             fontFamily: 'monospace',
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 600,
             cursor: 'pointer',
             display: 'flex',

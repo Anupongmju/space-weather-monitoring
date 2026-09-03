@@ -28,12 +28,16 @@ async def custom_swagger_ui_html():
         swagger_favicon_url="/static/swagger-ui/favicon-32x32.png",
     )
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 from routers import ace, goes, cosmic, maw, news, enlil, archive_ace, radiation, sunspot, mars, moon
 

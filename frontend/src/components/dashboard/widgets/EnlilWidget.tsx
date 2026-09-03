@@ -66,11 +66,11 @@ export default function EnlilWidget() {
 
   return (
     <div style={{
-      background: '#050A14',
+      background: 'var(--bg-surface, #050A14)',
       backdropFilter: 'blur(8px)',
       padding: '20px',
       marginBottom: '20px',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+      boxShadow: 'var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.4))',
       border: '1px solid rgba(52, 152, 219, 0.2)',
       fontFamily: 'var(--font-mono)'
     }}>
@@ -80,7 +80,7 @@ export default function EnlilWidget() {
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '14px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
         paddingBottom: '10px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -95,12 +95,12 @@ export default function EnlilWidget() {
             WSA-ENLIL CME MODEL
           </span>
           <span style={{
-            fontSize: '9px',
+            fontSize: '12px',
             padding: '2px 6px',
             borderRadius: '4px',
             background: 'rgba(52, 152, 219, 0.15)',
             border: '1px solid rgba(52, 152, 219, 0.3)',
-            color: '#A0AEC0'
+            color: 'var(--text-secondary, #A0AEC0)'
           }}>
             NOAA SWPC
           </span>
@@ -113,7 +113,7 @@ export default function EnlilWidget() {
             background: fetching ? 'rgba(52,152,219,0.2)' : 'transparent',
             border: '1px solid rgba(52, 152, 219, 0.4)',
             color: '#3498DB',
-            fontSize: '10px',
+            fontSize: '13px',
             padding: '4px 8px',
             cursor: fetching ? 'wait' : 'pointer',
             transition: 'all 0.2s',
@@ -141,9 +141,9 @@ export default function EnlilWidget() {
         pointerEvents: 'none'
       }}>
         {loading ? (
-          <div style={{ color: '#A0AEC0', fontSize: '11px' }}>LOADING MODEL VIDEO...</div>
+          <div style={{ color: 'var(--text-secondary, #A0AEC0)', fontSize: '14px' }}>LOADING MODEL VIDEO...</div>
         ) : error ? (
-          <div style={{ color: '#E53E3E', fontSize: '11px', textAlign: 'center', padding: '16px' }}>
+          <div style={{ color: '#E53E3E', fontSize: '14px', textAlign: 'center', padding: '16px' }}>
             ⚠ {error}
           </div>
         ) : (
@@ -171,7 +171,7 @@ export default function EnlilWidget() {
         marginTop: '12px',
         display: 'flex',
         justifyContent: 'space-between',
-        fontSize: '9px',
+        fontSize: '12px',
         color: '#718096',
         letterSpacing: '0.5px'
       }}>

@@ -6,6 +6,7 @@ export const fetchAndSaveXray     = (): Promise<any> => fetch(`${BASE}/fetch/xra
 export const fetchAndSaveProton   = (): Promise<any> => fetch(`${BASE}/fetch/proton`, { method: 'POST' }).then(r => r.json())
 export const fetchAndSaveElectron = (): Promise<any> => fetch(`${BASE}/fetch/electron`, { method: 'POST' }).then(r => r.json())
 export const fetchAndSaveGosMag   = (): Promise<any> => fetch(`${BASE}/fetch/mag`, { method: 'POST' }).then(r => r.json())
+export const fetchAndSaveGoesMag  = fetchAndSaveGosMag
 export const fetchAndSaveGoesWind = (): Promise<any> => fetch(`${BASE}/fetch/wind`, { method: 'POST' }).then(r => r.json())
 
 export const fetchAllGOES = (): Promise<any> => fetch(`${BASE}/fetch`, { method: 'POST' }).then(r => r.json())

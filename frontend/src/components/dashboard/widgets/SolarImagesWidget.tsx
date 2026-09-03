@@ -1,13 +1,16 @@
 import React, { useState, useRef } from 'react';
+import { useTheme } from '../../../context/ThemeContext';
 
 export default function SolarImagesWidget() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
   const cardStyle: React.CSSProperties = {
-    background: '#050A14',
+    background: 'var(--bg-surface, #050A14)',
     backdropFilter: 'blur(8px)',
-    // borderRadius: '0px',
     padding: '24px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    border: '1px solid rgba(52, 152, 219, 0.18)',
+    boxShadow: isLight ? '0 4px 20px rgba(26, 109, 181, 0.08)' : '0 8px 24px rgba(0, 0, 0, 0.4)',
+    border: '1px solid var(--border, rgba(52, 152, 219, 0.18))',
     fontFamily: 'var(--font-mono)'
   };
 
@@ -16,8 +19,8 @@ export default function SolarImagesWidget() {
     fontSize: '14px',
     fontWeight: '700',
     fontFamily: "'Orbitron', monospace",
-    color: '#ffffff',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    color: 'var(--text-primary, #ffffff)',
+    borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.1))',
     paddingBottom: '12px',
     letterSpacing: '2px',
     textTransform: 'uppercase',
@@ -27,10 +30,9 @@ export default function SolarImagesWidget() {
   };
 
   const panelHeaderStyle: React.CSSProperties = {
-    background: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
+    background: isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.03)',
+    border: isLight ? '1px solid var(--border)' : '1px solid rgba(255, 255, 255, 0.06)',
     padding: '14px 10px',
-    // borderRadius: '8px 8px 0 0',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -41,17 +43,16 @@ export default function SolarImagesWidget() {
   const panelTitleStyle: React.CSSProperties = {
     fontSize: '14px',
     fontWeight: 'bold',
-    color: '#E2E8F0',
+    color: isLight ? '#0F172A' : 'var(--text-primary, #E2E8F0)',
     textAlign: 'center',
   };
 
   const buttonGroupStyle: React.CSSProperties = {
     display: 'flex',
     gap: '6px',
-    background: 'rgba(0, 0, 0, 0.4)',
+    background: isLight ? '#EDF2F7' : 'rgba(0, 0, 0, 0.4)',
     padding: '4px',
-    // borderRadius: '6px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    border: isLight ? '1px solid var(--border)' : '1px solid rgba(255, 255, 255, 0.08)',
     flexWrap: 'wrap',
     justifyContent: 'center'
   };
@@ -158,22 +159,21 @@ export default function SolarImagesWidget() {
       <style>{`
         .solar-btn {
           padding: 6px 12px;
-          font-size: 11px;
+          font-size: 14px;
           font-family: var(--font-mono), monospace;
           font-weight: bold;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          // border-radius: 4px;
+          border: ${isLight ? '1px solid rgba(26, 109, 181, 0.2)' : '1px solid rgba(255, 255, 255, 0.08)'};
           cursor: pointer;
-          background: rgba(255, 255, 255, 0.04);
-          color: rgba(255, 255, 255, 0.7);
+          background: ${isLight ? '#FFFFFF' : 'rgba(255, 255, 255, 0.04)'};
+          color: ${isLight ? '#334155' : 'rgba(255, 255, 255, 0.7)'};
           transition: all 0.2s ease-in-out;
           outline: none;
           user-select: none;
         }
         .solar-btn:hover {
-          background: rgba(255, 255, 255, 0.12);
-          border-color: rgba(255, 255, 255, 0.25);
-          color: #ffffff;
+          background: ${isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.12)'};
+          border-color: ${isLight ? 'rgba(26, 109, 181, 0.4)' : 'rgba(255, 255, 255, 0.25)'};
+          color: ${isLight ? '#0F172A' : '#ffffff'};
         }
         .solar-btn-active {
           border-color: transparent;

@@ -12,7 +12,7 @@ export default function LoadingSpinner({ text = 'Loading Data...' }: LoadingSpin
         width: 40, height: 40, border: '3px solid rgba(52,152,219,0.15)', borderTop: '3px solid #3498DB',
         borderRadius: '50%', animation: 'spin 0.8s linear infinite'
       }} />
-      <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 12, color: '#606075', letterSpacing: 1 }}>
+      <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 15, color: '#606075', letterSpacing: 1 }}>
         {text}
       </span>
       <style>

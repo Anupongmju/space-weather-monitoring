@@ -69,10 +69,29 @@ export default React.memo(function OrbitBackground() {
   const isDashboard = location.pathname === '/'
   const [marsHovered, setMarsHovered] = useState(false)
   const [moonHovered, setMoonHovered] = useState(false)
+  const [earthHovered, setEarthHovered] = useState(false)
+  const [isScrolledDown, setIsScrolledDown] = useState(false)
   const [moonRA, setMoonRA] = useState(null)
   const [activePlayer, setActivePlayer] = useState<'A' | 'B'>('A');
   const [dayIndexA, setDayIndexA] = useState(0);
   const [dayIndexB, setDayIndexB] = useState(1);
+
+  // Disable interactive orbit targets when user scrolls down into content
+  useEffect(() => {
+    if (!isDashboard) return;
+    const handleScroll = () => {
+      const scrolled = window.scrollY > 80;
+      setIsScrolledDown(scrolled);
+      if (scrolled) {
+        setEarthHovered(false);
+        setMarsHovered(false);
+        setMoonHovered(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isDashboard]);
 
   const videoRefA = useRef<HTMLVideoElement | null>(null);
   const videoRefB = useRef<HTMLVideoElement | null>(null);
@@ -1311,7 +1330,7 @@ export default React.memo(function OrbitBackground() {
     </div>
 
     {/* ── INTERACTIVE OVERLAY via Portal — rendered directly onto document.body, bypasses ALL stacking contexts ── */}
-    {isDashboard && ReactDOM.createPortal(
+    {isDashboard && !isScrolledDown && ReactDOM.createPortal(
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMid slice"
@@ -1325,7 +1344,41 @@ export default React.memo(function OrbitBackground() {
           pointerEvents: 'none',
         }}
       >
-        {/* 1. Interactive Mars Target */}
+        {/* 1. Interactive Earth Target */}
+        <g
+          transform={`translate(${EARTH_X}, ${CY})`}
+          style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+          onClick={() => navigate('/cosmic/map', { state: { fromDashboard: true, startPos: 'dashboard' } })}
+          onMouseEnter={() => setEarthHovered(true)}
+          onMouseLeave={() => setEarthHovered(false)}
+        >
+          <circle cx="0" cy="0" r="142" fill="rgba(255,255,255,0.001)" />
+          <circle
+            cx="0" cy="0" r="142"
+            fill="none"
+            stroke="#38BDF8"
+            strokeWidth="1.5"
+            strokeDasharray="6 6"
+            opacity={earthHovered ? 1 : 0}
+            style={{ transition: 'opacity 0.25s ease' }}
+          >
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite" />
+          </circle>
+          {earthHovered && (
+            <circle cx="0" cy="0" r="148" fill="none" stroke="#60A5FA" strokeWidth="1.2" opacity="0.6">
+              <animate attributeName="r" values="142;155;142" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+            </circle>
+          )}
+          {earthHovered && (
+            <g transform="translate(0, 168)" style={{ pointerEvents: 'none' }}>
+              <rect x="-105" y="-13" width="210" height="26" rx="3" fill="rgba(5, 14, 30, 0.95)" stroke="#38BDF8" strokeWidth="1" />
+              <text x="0" y="5" fill="#38BDF8" fontSize="12" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🌍 EXPLORE NEUTRON MAP →</text>
+            </g>
+          )}
+        </g>
+
+        {/* 2. Interactive Mars Target */}
         <g
           transform={`translate(${MARS_X}, ${MARS_Y})`}
           style={{ pointerEvents: 'auto', cursor: 'pointer' }}
@@ -1346,12 +1399,12 @@ export default React.memo(function OrbitBackground() {
           {marsHovered && (
             <g transform="translate(0, 64)" style={{ pointerEvents: 'none' }}>
               <rect x="-80" y="-12" width="160" height="24" rx="3" fill="rgba(239, 68, 68, 0.95)" stroke="#FFFFFF" strokeWidth="1" />
-              <text x="0" y="4" fill="#FFFFFF" fontSize="9.5" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🚀 EXPLORE MARS RAD →</text>
+              <text x="0" y="4" fill="#FFFFFF" fontSize="12" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🚀 EXPLORE MARS RAD →</text>
             </g>
           )}
         </g>
 
-        {/* 2. Interactive Moon Target — ref is updated every RAF frame by the animation loop */}
+        {/* 3. Interactive Moon Target — ref is updated every RAF frame by the animation loop */}
         <g
           ref={moonInteractiveRef}
           transform={`translate(${EARTH_X + MOON_RX}, ${CY})`}
@@ -1373,10 +1426,11 @@ export default React.memo(function OrbitBackground() {
           {moonHovered && (
             <g transform="translate(0, 64)" style={{ pointerEvents: 'none' }}>
               <rect x="-85" y="-12" width="170" height="24" rx="3" fill="rgba(5, 10, 24, 0.95)" stroke="#FBBF24" strokeWidth="1" />
-              <text x="0" y="4" fill="#FBBF24" fontSize="9.5" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🌕 EXPLORE MOON ORBIT →</text>
+              <text x="0" y="4" fill="#FBBF24" fontSize="12" fontFamily="var(--font-mono)" fontWeight="bold" textAnchor="middle" letterSpacing="0.8">🌕 EXPLORE MOON ORBIT →</text>
             </g>
           )}
         </g>
+
       </svg>,
       document.body
     )}

@@ -233,7 +233,7 @@ export default function TrendLineOverlay({
               borderRadius: 4,
               padding: '5px 8px',
               fontFamily: 'var(--font-mono)',
-              fontSize: 10,
+              fontSize: 13,
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
               boxShadow: `0 2px 12px rgba(0,0,0,0.6), 0 0 8px ${l.color}22`,

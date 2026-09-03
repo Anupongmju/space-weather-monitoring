@@ -134,7 +134,7 @@ export default function News() {
                 <div style={{ padding: '30px', boxSizing: 'border-box' }}>
                   {/* Meta tag */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>
                       <span>By {news.author || 'Admin'}</span>
                       <span style={{ width: '4px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '50%' }}></span>
                       <span>{formatDate(news.published_at)}</span>
@@ -164,7 +164,7 @@ export default function News() {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
                     <span style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
+                      fontSize: '14px',
                       color: '#3498DB',
                       letterSpacing: '1px',
                       textTransform: 'uppercase',
