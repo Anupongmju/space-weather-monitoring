@@ -173,8 +173,8 @@ const FAQS_DATA: FaqItem[] = [
   {
     qTH: 'เวลาบนกราฟใช้เขตเวลาไหน?',
     qEN: 'Which timezone do the graphs display?',
-    aTH: 'ระบบพยากรณ์และสภาพอวกาศส่วนใหญ่จะใช้เวลามาตรฐานสากล (UTC) เป็นหลักในการทำงาน อย่างไรก็ตาม แดชบอร์ดนี้ได้ทำการแปลงเวลาบนแกนกราฟบางส่วนให้อยู่ในรูปเวลาท้องถิ่นประเทศไทย (Bangkok Local Time, GMT+7) เพื่อให้ผู้ใช้อ่านเทียบเวลาได้สะดวกขึ้น',
-    aEN: 'Space weather observations universally rely on Coordinated Universal Time (UTC). However, our graphs adapt values to your local device timezone (such as Bangkok Time GMT+7) for ease of tracking.'
+    aTH: 'ระบบพยากรณ์และสภาพอวกาศทั้งหมดแสดงผลตามเวลามาตรฐานสากล Coordinated Universal Time (UTC) เพื่อให้ตรงกับข้อมูลดิบจาก NOAA SWPC, NMDB และภารกิจสำรวจอวกาศสากลโดยไม่มีการเลื่อนเวลา',
+    aEN: 'All space weather observations and graphs strictly display in Coordinated Universal Time (UTC), exactly matching raw telemetry and datasets from NOAA SWPC, NMDB, and international missions without offset.'
   },
   {
     qTH: 'เราจะทราบได้อย่างไรว่ากำลังเกิดภัยจากพายุอวกาศขนาดใหญ่?',

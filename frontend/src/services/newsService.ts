@@ -1,4 +1,5 @@
 import API_BASE from '../config'
+import { safeJson } from '../utils/safeFetch'
 
 const BASE = `${API_BASE}/news`
 
@@ -12,7 +13,7 @@ export interface NewsArticle {
 
 export const getNews = async (): Promise<NewsArticle[]> => {
   const res = await fetch(BASE)
-  return res.json()
+  return safeJson(res, [])
 }
 
 export const getNewsById = async (id: string | number): Promise<NewsArticle> => {

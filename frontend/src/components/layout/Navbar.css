@@ -1,0 +1,161 @@
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px;
+  font-family: var(--font-mono);
+  background: var(--navbar-bg, rgba(5, 14, 30, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  height: 60px;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+[data-theme="light"] .navbar {
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.navbar-logo {
+  font-size: 16px;
+  font-weight: 700;
+  padding-left: 0;
+  margin-right: 20px;
+  gap: 10px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  letter-spacing: 0.12em;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.navbar-link {
+  text-decoration: none;
+  font-size: 14.5px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  transition: color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.navbar-right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.navbar-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  border-top: 2px solid var(--primary, #38BDF8);
+  border-radius: 0 0 10px 10px;
+  padding: 18px 0 14px;
+  min-width: 1060px;
+  max-width: calc(100vw - 32px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.navbar-dropdown-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+}
+
+/* ── Breakpoint for 125% scale on 1080p (CSS width <= 1536px) ── */
+@media (max-width: 1536px) {
+  .navbar {
+    padding: 0 16px;
+  }
+  .navbar-logo {
+    font-size: 14px;
+    margin-right: 12px;
+    gap: 8px;
+  }
+  .navbar-link {
+    font-size: 12.5px;
+    padding: 6px 7px;
+    letter-spacing: 0.06em;
+  }
+  .navbar-right {
+    gap: 8px;
+    font-size: 12.5px;
+  }
+  .navbar-dropdown-panel {
+    min-width: unset;
+    width: min(1060px, calc(100vw - 24px));
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .navbar-dropdown-grid {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+  }
+}
+
+/* ── Breakpoint for smaller screens / laptops <= 1300px ── */
+@media (max-width: 1300px) {
+  .navbar {
+    padding: 0 10px;
+  }
+  .navbar-logo {
+    font-size: 13px;
+    margin-right: 6px;
+    gap: 6px;
+  }
+  .navbar-link {
+    font-size: 11.5px;
+    padding: 5px 5px;
+    letter-spacing: 0.04em;
+  }
+  .navbar-right {
+    gap: 6px;
+    font-size: 11.5px;
+  }
+  .navbar-utc-label {
+    display: none;
+  }
+  .navbar-dropdown-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+/* ── Horizontal scroll fallback for screens <= 1120px ── */
+@media (max-width: 1120px) {
+  .navbar-left {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .navbar-left::-webkit-scrollbar {
+    display: none;
+  }
+}

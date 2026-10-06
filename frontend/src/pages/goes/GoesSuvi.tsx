@@ -3,7 +3,7 @@ import { Maximize2, Play, Pause, X, RefreshCw, Film, Image as ImageIcon } from '
 import StatusBadge from '../../components/ui/StatusBadge';
 import Card from '../../components/ui/Card';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { loadSuviLoop } from '../../services/goesService';
+import { loadSuviLoop, loadLascoLoop } from '../../services/goesService';
 import SuviFullscreenModal from '../../components/goes/SuviFullscreenModal';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -168,26 +168,71 @@ const SUVI_WAVELENGTHS: SuviWavelength[] = [
   }
 ];
 
+interface LascoWavelength {
+  code: string;
+  name: string;
+  color: string;
+  colorName: string;
+  desc: string;
+  url: string;
+  posterUrl: string;
+  gifUrl: string;
+  temp: string;
+  fov: string;
+}
+
+const LASCO_MODES: LascoWavelength[] = [
+  {
+    code: 'c2',
+    name: 'LASCO C2',
+    color: '#ef4444',
+    colorName: 'Red Coronagraph',
+    desc: 'ตรวจจับการปะทุมวลโคโรนา (CME) และโครงสร้างพลาสมาในชั้นโคโรนาชั้นใน ระยะ 2 ถึง 6 เท่าของรัศมีดวงอาทิตย์',
+    url: 'https://services.swpc.noaa.gov/images/animations/lasco-c2/latest.jpg',
+    posterUrl: 'https://soho.nascom.nasa.gov/data/realtime/c2/1024/latest.jpg',
+    gifUrl: 'https://soho.nascom.nasa.gov/data/LATEST/current_c2.gif',
+    temp: 'โคโรนาชั้นใน (2–6 R☉)',
+    fov: '2 – 6 R☉'
+  },
+  {
+    code: 'c3',
+    name: 'LASCO C3',
+    color: '#3b82f6',
+    colorName: 'Blue Coronagraph',
+    desc: 'ติดตามการเคลื่อนที่ของมวลโคโรนาปะทุ (CME) และลมสุริยะในอวกาศชั้นนอก ระยะ 3.7 ถึง 32 เท่าของรัศมีดวงอาทิตย์',
+    url: 'https://services.swpc.noaa.gov/images/animations/lasco-c3/latest.jpg',
+    posterUrl: 'https://soho.nascom.nasa.gov/data/realtime/c3/1024/latest.jpg',
+    gifUrl: 'https://soho.nascom.nasa.gov/data/LATEST/current_c3.gif',
+    temp: 'โคโรนาชั้นนอก (3.7–32 R☉)',
+    fov: '3.7 – 32 R☉'
+  }
+];
+
 export default function GoesSuvi() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const [source, setSource] = useState<'sdo' | 'suvi'>('sdo'); // Default to NASA SDO
+  const [source, setSource] = useState<'sdo' | 'suvi' | 'lasco'>('sdo'); // Default to NASA SDO
   const [activeSdoWl, setActiveSdoWl] = useState<SdoWavelength>(SDO_WAVELENGTHS[2]); // Default 171Å
   const [activeSuviWl, setActiveSuviWl] = useState<SuviWavelength>(SUVI_WAVELENGTHS[2]); // Default 171Å
+  const [activeLascoMode, setActiveLascoMode] = useState<LascoWavelength>(LASCO_MODES[0]); // Default LASCO C2
+  const [lascoPlayMode, setLascoPlayMode] = useState<'loop' | 'frames'>('loop'); // 'loop' (วิดีโอวนลูปเหมือน Dashboard) หรือ 'frames' (วิเคราะห์ทีละเฟรม)
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [refreshing, setRefreshing] = useState(false);
 
-  // SUVI Frame loop states
-  const [suviFrames, setSuviFrames] = useState<string[]>([]);
-  const [currentSuviFrame, setCurrentSuviFrame] = useState(0);
-  const [loadingSuvi, setLoadingSuvi] = useState(false);
-  const [playingSuvi, setPlayingSuvi] = useState(true);
+  // Unified Frame loop states (shared for SUVI & LASCO)
+  const [loopFrames, setLoopFrames] = useState<string[]>([]);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [loadingLoop, setLoadingLoop] = useState(false);
+  const [playingLoop, setPlayingLoop] = useState(true);
   const [fps, setFps] = useState(6);
   const [loopLimit, setLoopLimit] = useState(20);
   const playInterval = useRef<any>(null);
 
   // Lightbox Modal States
-  const [lightboxContent, setLightboxContent] = useState<{ type: 'video' | 'photo'; wl: SdoWavelength | SuviWavelength } | null>(null);
+  const [lightboxContent, setLightboxContent] = useState<{
+    type: 'video' | 'photo';
+    wl: SdoWavelength | SuviWavelength | LascoWavelength;
+  } | null>(null);
   const [isFsModalOpen, setIsFsModalOpen] = useState(false);
 
   const handleOpenFullscreen = () => {
@@ -197,63 +242,76 @@ export default function GoesSuvi() {
     }
   };
 
-  const activeWl = source === 'sdo' ? activeSdoWl : activeSuviWl;
+  const activeWl = source === 'sdo' ? activeSdoWl : source === 'suvi' ? activeSuviWl : activeLascoMode;
 
-  // Load SUVI frame loop when in suvi mode
+  // Load frame loop when in SUVI or LASCO (frames mode)
   useEffect(() => {
-    if (source !== 'suvi') return;
+    if (source === 'sdo' || (source === 'lasco' && lascoPlayMode === 'loop')) {
+      setLoopFrames([]);
+      return;
+    }
     let active = true;
-    setLoadingSuvi(true);
+    setLoadingLoop(true);
 
-    loadSuviLoop(activeSuviWl.code, loopLimit)
+    const loader = source === 'suvi'
+      ? loadSuviLoop(activeSuviWl.code, loopLimit)
+      : loadLascoLoop(activeLascoMode.code, loopLimit);
+
+    loader
       .then(res => {
         if (!active) return;
         if (res && res.urls && res.urls.length > 0) {
-          setSuviFrames(res.urls);
-          setCurrentSuviFrame(res.urls.length - 1);
+          setLoopFrames(res.urls);
+          setCurrentFrame(res.urls.length - 1);
+        } else {
+          setLoopFrames([]);
         }
-        setLoadingSuvi(false);
+        setLoadingLoop(false);
       })
       .catch(() => {
-        if (active) setLoadingSuvi(false);
+        if (active) setLoadingLoop(false);
       });
 
     return () => {
       active = false;
     };
-  }, [activeSuviWl.code, loopLimit, source]);
+  }, [source, activeSuviWl.code, activeLascoMode.code, loopLimit, lascoPlayMode]);
 
-  // SUVI Loop frame animation player
+  // Frame animation player loop
   useEffect(() => {
-    if (source !== 'suvi' || suviFrames.length === 0 || !playingSuvi) {
+    if (source === 'sdo' || loopFrames.length === 0 || !playingLoop) {
       if (playInterval.current) clearInterval(playInterval.current);
       return;
     }
 
     playInterval.current = setInterval(() => {
-      setCurrentSuviFrame(prev => (prev + 1) % suviFrames.length);
+      setCurrentFrame(prev => (prev + 1) % loopFrames.length);
     }, 1000 / fps);
 
     return () => {
       if (playInterval.current) clearInterval(playInterval.current);
     };
-  }, [suviFrames, playingSuvi, fps, source]);
+  }, [loopFrames, playingLoop, fps, source]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     setCacheBuster(Date.now());
-    if (source === 'suvi') {
-      loadSuviLoop(activeSuviWl.code, loopLimit)
+    if (source === 'suvi' || (source === 'lasco' && lascoPlayMode === 'frames')) {
+      const loader = source === 'suvi'
+        ? loadSuviLoop(activeSuviWl.code, loopLimit)
+        : loadLascoLoop(activeLascoMode.code, loopLimit);
+
+      loader
         .then(res => {
           if (res && res.urls && res.urls.length > 0) {
-            setSuviFrames(res.urls);
-            setCurrentSuviFrame(res.urls.length - 1);
+            setLoopFrames(res.urls);
+            setCurrentFrame(res.urls.length - 1);
           }
           setRefreshing(false);
         })
         .catch(() => setRefreshing(false));
     } else {
-      // SDO simply reloads the video element src via caching buster
+      // SDO or LASCO GIF simply reloads via cache buster
       setTimeout(() => {
         setRefreshing(false);
       }, 800);
@@ -279,7 +337,7 @@ export default function GoesSuvi() {
             margin: 0,
             letterSpacing: -0.5
           }}>
-            {source === 'sdo' ? 'NASA / SDO IMAGERY' : 'GOES / SUVI IMAGERY'}
+            {source === 'sdo' ? 'NASA / SDO IMAGERY' : source === 'suvi' ? 'GOES / SUVI IMAGERY' : 'SOHO / LASCO CORONAGRAPH'}
           </h1>
           <p style={{
             color: isLight ? '#475569' : '#CBD5E1',
@@ -289,7 +347,9 @@ export default function GoesSuvi() {
           }}>
             {source === 'sdo'
               ? 'Solar Dynamics Observatory · High Definition Real-time Solar Corona Videos'
-              : 'Solar Ultraviolet Imager · Extreme Ultraviolet Solar Corona Observations'}
+              : source === 'suvi'
+                ? 'Solar Ultraviolet Imager · Extreme Ultraviolet Solar Corona Observations'
+                : 'Large Angle and Spectrometric Coronagraph · Real-time Solar Corona & CME Observations'}
           </p>
         </div>
 
@@ -333,6 +393,22 @@ export default function GoesSuvi() {
               }}
             >
               GOES SUVI
+            </button>
+            <button
+              onClick={() => setSource('lasco')}
+              style={{
+                padding: '6px 14px',
+                background: source === 'lasco' ? (isLight ? '#FFFFFF' : 'rgba(56, 189, 248, 0.25)') : 'transparent',
+                border: 'none',
+                borderBottom: source === 'lasco' ? `2px solid ${activeWl.color}` : '2px solid transparent',
+                color: source === 'lasco' ? (isLight ? '#0C1E35' : '#F8FAFC') : (isLight ? '#64748B' : '#94A3B8'),
+                fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: source === 'lasco' ? 700 : 500,
+                cursor: 'pointer', borderRadius: 4,
+                boxShadow: isLight && source === 'lasco' ? '0 1px 4px rgba(0,0,0,0.05)' : undefined,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              SOHO LASCO
             </button>
           </div>
 
@@ -425,50 +501,109 @@ export default function GoesSuvi() {
               textTransform: 'uppercase',
               fontWeight: 'bold'
             }}>
-              THE SUN ({source === 'sdo' ? 'SDO / EUV & HMI' : 'GOES-R SUVI'})
+              {source === 'sdo' ? 'THE SUN (SDO / EUV & HMI)' : source === 'suvi' ? 'THE SUN (GOES-R SUVI)' : 'CORONAGRAPH & CME (SOHO / LASCO)'}
             </span>
 
-            {/* Scrollable wavelength tabs */}
+            {/* Scrollable wavelength/channel tabs + LASCO Mode Switch */}
             <div style={{
               display: 'flex',
-              gap: 6,
-              overflowX: 'auto',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8,
               paddingBottom: 4
             }}>
-              {(source === 'sdo' ? SDO_WAVELENGTHS : SUVI_WAVELENGTHS).map((wl) => {
-                const isActive = activeWl.code === wl.code;
-                return (
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
+                {(source === 'sdo' ? SDO_WAVELENGTHS : source === 'suvi' ? SUVI_WAVELENGTHS : LASCO_MODES).map((wl) => {
+                  const isActive = activeWl.code === wl.code;
+                  return (
+                    <button
+                      key={wl.code}
+                      onClick={() => {
+                        if (source === 'sdo') setActiveSdoWl(wl as SdoWavelength);
+                        else if (source === 'suvi') setActiveSuviWl(wl as SuviWavelength);
+                        else setActiveLascoMode(wl as LascoWavelength);
+                      }}
+                      style={{
+                        background: isActive ? wl.color : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.02)'),
+                        color: isActive ? '#000' : (isLight ? '#334155' : 'rgba(255,255,255,0.6)'),
+                        border: `1px solid ${isActive ? wl.color : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)')}`,
+                        borderRadius: 4,
+                        padding: '6px 14px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 13,
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        whiteSpace: 'nowrap',
+                        boxShadow: isActive ? `0 0 12px ${wl.color}66` : (isLight ? '0 1px 3px rgba(0,0,0,0.04)' : 'none')
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.18)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+                      }}
+                    >
+                      {wl.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {source === 'lasco' && (
+                <div style={{
+                  display: 'flex',
+                  background: isLight ? '#E2E8F0' : 'rgba(0,0,0,0.4)',
+                  padding: 3,
+                  borderRadius: 6,
+                  border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.1)',
+                  gap: 3
+                }}>
                   <button
-                    key={wl.code}
-                    onClick={() => {
-                      if (source === 'sdo') setActiveSdoWl(wl as SdoWavelength);
-                      else setActiveSuviWl(wl as SuviWavelength);
-                    }}
+                    onClick={() => setLascoPlayMode('loop')}
+                    title="เล่นภาพเคลื่อนไหววนลูปต่อเนื่องเหมือนหน้า Dashboard"
                     style={{
-                      background: isActive ? wl.color : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.02)'),
-                      color: isActive ? '#000' : (isLight ? '#334155' : 'rgba(255,255,255,0.6)'),
-                      border: `1px solid ${isActive ? wl.color : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)')}`,
+                      padding: '4px 10px',
                       borderRadius: 4,
-                      padding: '6px 14px',
+                      border: 'none',
+                      background: lascoPlayMode === 'loop' ? '#0284C7' : 'transparent',
+                      color: lascoPlayMode === 'loop' ? '#FFFFFF' : (isLight ? '#64748B' : '#94A3B8'),
                       fontFamily: 'var(--font-mono)',
-                      fontSize: 13,
-                      fontWeight: 'bold',
+                      fontSize: 11,
+                      fontWeight: 700,
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      whiteSpace: 'nowrap',
-                      boxShadow: isActive ? `0 0 12px ${wl.color}66` : (isLight ? '0 1px 3px rgba(0,0,0,0.04)' : 'none')
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.18)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.borderColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
                     }}
                   >
-                    {wl.name}
+                    <Film size={12} />
+                    <span>Loop</span>
                   </button>
-                );
-              })}
+                  <button
+                    onClick={() => setLascoPlayMode('frames')}
+                    title="เลื่อนดูทีละเฟรมพร้อมตัวควบคุมความเร็ว"
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 4,
+                      border: 'none',
+                      background: lascoPlayMode === 'frames' ? '#0284C7' : 'transparent',
+                      color: lascoPlayMode === 'frames' ? '#FFFFFF' : (isLight ? '#64748B' : '#94A3B8'),
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <ImageIcon size={12} />
+                    <span>Frame</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -512,13 +647,25 @@ export default function GoesSuvi() {
                     objectFit: 'contain'
                   }}
                 />
+              ) : source === 'lasco' && lascoPlayMode === 'loop' ? (
+                // LASCO Smooth Live Animated GIF Loop (Exact same as Dashboard widget)
+                <img
+                  key={`${activeLascoMode.code}-${cacheBuster}`}
+                  src={`${activeLascoMode.gifUrl}?t=${cacheBuster}`}
+                  alt={`LASCO ${activeLascoMode.name} Live Loop`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                />
               ) : (
-                // SUVI PNG Frames Loop Player: instant preview latest image while buffering
-                loadingSuvi && suviFrames.length === 0 ? (
+                // SUVI or LASCO Frames Loop Player: instant preview latest image while buffering
+                loadingLoop && loopFrames.length === 0 ? (
                   <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <img
-                      src={`${activeSuviWl.url}?t=${cacheBuster}`}
-                      alt="Latest SUVI"
+                      src={`${activeWl.url}?t=${cacheBuster}`}
+                      alt={`Latest ${source === 'suvi' ? 'SUVI' : 'LASCO'}`}
                       style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                     />
                     <div style={{
@@ -529,13 +676,13 @@ export default function GoesSuvi() {
                     }}>
                       <LoadingSpinner />
                       <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#38BDF8', fontWeight: 600 }}>
-                        BUFFERING SUVI LOOP...
+                        BUFFERING {source === 'suvi' ? 'SUVI' : 'LASCO'} LOOP...
                       </span>
                     </div>
                   </div>
-                ) : suviFrames.length > 0 ? (
+                ) : loopFrames.length > 0 ? (
                   <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                    {suviFrames.map((url, idx) => (
+                    {loopFrames.map((url, idx) => (
                       <img
                         key={url}
                         src={url}
@@ -545,8 +692,8 @@ export default function GoesSuvi() {
                           top: 0, left: 0,
                           width: '100%', height: '100%',
                           objectFit: 'contain',
-                          opacity: idx === currentSuviFrame ? 1 : 0,
-                          pointerEvents: idx === currentSuviFrame ? 'auto' : 'none',
+                          opacity: idx === currentFrame ? 1 : 0,
+                          pointerEvents: idx === currentFrame ? 'auto' : 'none',
                           transition: 'none'
                         }}
                       />
@@ -554,7 +701,7 @@ export default function GoesSuvi() {
                   </div>
                 ) : (
                   <img
-                    src={`${activeSuviWl.url}?t=${cacheBuster}`}
+                    src={`${activeWl.url}?t=${cacheBuster}`}
                     alt="Latest Frame"
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
@@ -572,7 +719,9 @@ export default function GoesSuvi() {
               }}>
                 {source === 'sdo'
                   ? `NASA SDO / AIA · ${activeSdoWl.name} · REAL-TIME VIDEO`
-                  : `GOES-R SUVI · ${activeSuviWl.name} · LOOP PLAYBACK`}
+                  : source === 'suvi'
+                    ? `GOES-R SUVI · ${activeSuviWl.name} · LOOP PLAYBACK`
+                    : `SOHO / LASCO · ${activeLascoMode.name} · ${lascoPlayMode === 'loop' ? 'LIVE CONTINUOUS LOOP' : 'STEP FRAMES'}`}
               </div>
 
               {/* Fullscreen Button overlay */}
@@ -597,8 +746,8 @@ export default function GoesSuvi() {
               </button>
             </div>
 
-            {/* SUVI Loop Controls (hidden when playing SDO mp4) */}
-            {source === 'suvi' && suviFrames.length > 0 && (
+            {/* Loop Controls (hidden when playing SDO mp4 or LASCO continuous loop) */}
+            {(source === 'suvi' || (source === 'lasco' && lascoPlayMode === 'frames')) && loopFrames.length > 0 && (
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 background: isLight ? '#F1F5F9' : '#0D0D14',
@@ -607,7 +756,7 @@ export default function GoesSuvi() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
-                    onClick={() => setPlayingSuvi(!playingSuvi)}
+                    onClick={() => setPlayingLoop(!playingLoop)}
                     style={{
                       background: isLight ? '#FFFFFF' : 'rgba(255,255,255,0.04)',
                       border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.08)',
@@ -616,10 +765,10 @@ export default function GoesSuvi() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
                     }}
                   >
-                    {playingSuvi ? <Pause size={12} /> : <Play size={12} />}
+                    {playingLoop ? <Pause size={12} /> : <Play size={12} />}
                   </button>
                   <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#475569' : '#606075' }}>
-                    Frame {currentSuviFrame + 1} / {suviFrames.length}
+                    Frame {currentFrame + 1} / {loopFrames.length}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -647,7 +796,7 @@ export default function GoesSuvi() {
               </div>
             )}
 
-            {/* Wavelength Description Card */}
+            {/* Wavelength / Coronagraph Description Card */}
             <div style={{
               background: isLight ? '#F8FAFC' : 'rgba(255,255,255,0.02)',
               border: isLight ? '1px solid rgba(26, 109, 181, 0.12)' : '1px solid rgba(255,255,255,0.04)',
@@ -655,7 +804,9 @@ export default function GoesSuvi() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 13, fontWeight: 'bold', color: activeWl.color }}>{activeWl.name} - {activeWl.colorName}</span>
-                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#64748B' : '#606075' }}>อุณหภูมิคัดแยก: {activeWl.temp}</span>
+                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isLight ? '#64748B' : '#606075' }}>
+                  {source === 'lasco' ? `ระยะขอบเขต: ${(activeWl as LascoWavelength).fov}` : `อุณหภูมิคัดแยก: ${activeWl.temp}`}
+                </span>
               </div>
               <p style={{ color: isLight ? '#334155' : '#888898', fontSize: 13, margin: 0, lineHeight: 1.6 }}>{activeWl.desc}</p>
             </div>
@@ -666,8 +817,9 @@ export default function GoesSuvi() {
         <div style={{ flex: '2 1 360px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
           {/* Static Reference Card - disable redundant card-level fs button */}
+          {/* Static Reference Card - disable redundant card-level fs button */}
           <Card
-            title="📷 PHOTO REFERENCE"
+            title={source === 'lasco' ? '📷 SOHO HIGH-RES REFERENCE' : '📷 PHOTO REFERENCE'}
             allowFullscreen={false}
             style={{
               background: isLight ? '#FFFFFF' : undefined,
@@ -690,9 +842,11 @@ export default function GoesSuvi() {
               <img
                 src={source === 'sdo'
                   ? `https://sdo.gsfc.nasa.gov/assets/img/latest/latest_512_${activeSdoWl.code}.jpg`
-                  : `${activeSuviWl.url}?t=${cacheBuster}`
+                  : source === 'suvi'
+                    ? `${activeSuviWl.url}?t=${cacheBuster}`
+                    : `${(activeWl as LascoWavelength).posterUrl || activeWl.url}?t=${cacheBuster}`
                 }
-                alt="Static JPEG Reference"
+                alt="Static Reference"
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               />
 
@@ -724,7 +878,7 @@ export default function GoesSuvi() {
 
           {/* Info Card */}
           <Card
-            title={source === 'sdo' ? '☀️ NASA SDO MISSION INFO' : '🛰️ GOES SUVI MISSION INFO'}
+            title={source === 'sdo' ? '☀️ NASA SDO MISSION INFO' : source === 'suvi' ? '🛰️ GOES SUVI MISSION INFO' : '🛰️ SOHO LASCO MISSION INFO'}
             style={{
               background: isLight ? '#FFFFFF' : undefined,
               boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
@@ -734,21 +888,23 @@ export default function GoesSuvi() {
             <p style={{ color: isLight ? '#334155' : '#888898', fontSize: 13, lineHeight: 1.6, margin: '0 0 12px 0', textAlign: 'justify' }}>
               {source === 'sdo'
                 ? 'กล้องถ่ายภาพสุริยะ AIA (Atmospheric Imaging Assembly) บนดาวเทียม SDO ของ NASA จะถ่ายภาพสภาพความเคลื่อนไหวของดวงอาทิตย์ในย่านคลื่นอัลตราไวโอเลตยิ่งยวด (EUV) ทุก ๆ 12 วินาที ครอบคลุม 10 ย่านแสง ช่วยให้สามารถจำแนกสภาวะพลาสม่าตั้งแต่ชั้นนอกไปจนถึงสนามแม่เหล็กดวงอาทิตย์ได้อย่างละเอียดสูงสุด'
-                : 'เครื่องมือ SUVI (Solar Ultraviolet Imager) ติดตั้งบนดาวเทียมอุตุนิยมวิทยา GOES-R ตระกูลค้างฟ้า ทำหน้าที่สแกนดวงอาทิตย์ใน 6 ย่านคลื่นรังสีอัลตราไวโอเลต เพื่อเฝ้าระวังภัยพิบัติสภาพอวกาศ เช่น การระเบิดปะทุจ้า (Solar Flares), รูโหว่โคโรนา (Coronal Holes), และมวลโคโรนาปะทุ (CMEs) ก่อนจะส่งผลกระทบถึงระบบการสื่อสารและโครงข่ายไฟฟ้าบนโลก'}
+                : source === 'suvi'
+                  ? 'เครื่องมือ SUVI (Solar Ultraviolet Imager) ติดตั้งบนดาวเทียมอุตุนิยมวิทยา GOES-R ตระกูลค้างฟ้า ทำหน้าที่สแกนดวงอาทิตย์ใน 6 ย่านคลื่นรังสีอัลตราไวโอเลต เพื่อเฝ้าระวังภัยพิบัติสภาพอวกาศ เช่น การระเบิดปะทุจ้า (Solar Flares), รูโหว่โคโรนา (Coronal Holes), และมวลโคโรนาปะทุ (CMEs) ก่อนจะส่งผลกระทบถึงระบบการสื่อสารและโครงข่ายไฟฟ้าบนโลก'
+                  : 'กล้องโทรทรรศน์โคโรนากราฟ LASCO (Large Angle and Spectrometric Coronagraph) บนดาวเทียม SOHO ซึ่งเป็นภารกิจร่วมระหว่าง ESA และ NASA ประจำการอยู่ที่จุดสมดุลแรงโน้มถ่วง Sun-Earth L1 Lagrange Point ห่างจากโลก 1.5 ล้านกิโลเมตร ใช้แผ่นจานบดบังแสงจ้าจากผิวดวงอาทิตย์ (Occulting Disk) เพื่อตรวจจับการระเบิดพ่นมวลโคโรนา (CMEs) และลมสุริยะที่กำลังมุ่งหน้ามายังโลกแบบเรียลไทม์'}
             </p>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: isLight ? '#475569' : '#A0A0B0', fontFamily: 'var(--font-mono)' }}>
               <tbody>
                 <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>OPERATOR</td>
-                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF', fontWeight: 600 }}>{source === 'sdo' ? 'NASA / GSFC' : 'NOAA / SWPC'}</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF', fontWeight: 600 }}>{source === 'sdo' ? 'NASA / GSFC' : source === 'suvi' ? 'NOAA / SWPC' : 'ESA / NASA'}</td>
                 </tr>
                 <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>ORBIT TYPE</td>
-                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? 'Geosynchronous' : 'Geostationary'}</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? 'Geosynchronous' : source === 'suvi' ? 'Geostationary' : 'Halo Orbit (Lagrange L1)'}</td>
                 </tr>
                 <tr>
                   <td style={{ padding: '6px 0', color: isLight ? '#64748B' : '#606075', fontWeight: 600 }}>UPDATE RATE</td>
-                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? '12 Seconds (Movies hourly)' : '1 Minute'}</td>
+                  <td style={{ padding: '6px 0', color: isLight ? '#0C1E35' : '#FFF' }}>{source === 'sdo' ? '12 Seconds (Movies hourly)' : source === 'suvi' ? '1 Minute' : '~12 - 30 Minutes'}</td>
                 </tr>
               </tbody>
             </table>
@@ -793,7 +949,7 @@ export default function GoesSuvi() {
               color: lightboxContent.wl.color,
               fontSize: 18, fontWeight: 700, margin: '0 0 4px 0'
             }}>
-              {source === 'sdo' ? 'NASA SDO' : 'GOES SUVI'} — {lightboxContent.wl.name} ({lightboxContent.type === 'video' ? 'VIDEO LOOP' : 'STATIC PHOTO'})
+              {source === 'sdo' ? 'NASA SDO' : source === 'suvi' ? 'GOES SUVI' : 'SOHO LASCO'} — {lightboxContent.wl.name} ({lightboxContent.type === 'video' ? 'VIDEO LOOP' : 'STATIC PHOTO'})
             </h3>
             <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: '#606075', marginBottom: 16 }}>
               {lightboxContent.wl.colorName} · {lightboxContent.wl.temp} · {lightboxContent.wl.desc}
@@ -814,7 +970,9 @@ export default function GoesSuvi() {
                 <img
                   src={source === 'sdo'
                     ? `https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_${(lightboxContent.wl as SdoWavelength).code}.jpg`
-                    : `${(lightboxContent.wl as SuviWavelength).url}?t=${cacheBuster}`
+                    : source === 'suvi'
+                      ? `${(lightboxContent.wl as SuviWavelength).url}?t=${cacheBuster}`
+                      : `${(lightboxContent.wl as any).posterUrl || lightboxContent.wl.url}?t=${cacheBuster}`
                   }
                   alt="Full JPEG"
                   style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -830,9 +988,15 @@ export default function GoesSuvi() {
                     playsInline
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
+                ) : source === 'lasco' ? (
+                  <img
+                    src={(lightboxContent.wl as LascoWavelength).gifUrl || lightboxContent.wl.url}
+                    alt="LASCO Loop"
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  />
                 ) : (
                   <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                    {suviFrames.map((url, idx) => (
+                    {loopFrames.map((url, idx) => (
                       <img
                         key={url}
                         src={url}
@@ -842,8 +1006,8 @@ export default function GoesSuvi() {
                           top: 0, left: 0,
                           width: '100%', height: '100%',
                           objectFit: 'contain',
-                          opacity: idx === currentSuviFrame ? 1 : 0,
-                          pointerEvents: idx === currentSuviFrame ? 'auto' : 'none',
+                          opacity: idx === currentFrame ? 1 : 0,
+                          pointerEvents: idx === currentFrame ? 'auto' : 'none',
                           transition: 'none'
                         }}
                       />
@@ -864,6 +1028,7 @@ export default function GoesSuvi() {
         setSource={setSource}
         suviWavelengths={SUVI_WAVELENGTHS}
         sdoWavelengths={SDO_WAVELENGTHS}
+        lascoWavelengths={LASCO_MODES}
         initialWlCode={activeWl.code}
         cacheBuster={cacheBuster}
       />

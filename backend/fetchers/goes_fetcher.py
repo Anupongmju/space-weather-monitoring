@@ -152,7 +152,7 @@ def fetch_goes_mag():
 
 def fetch_goes_wind():
     try:
-        r = httpx.get("https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json", timeout=30)
+        r = httpx.get("https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind.json", timeout=30)
         if r.status_code == 404: return 0
         r.raise_for_status()
         data = r.json()
@@ -162,14 +162,21 @@ def fetch_goes_wind():
 
     if not data or len(data) < 2: return 0
     
+    header = [h.lower() for h in data[0]]
+    spd_idx = header.index('speed') if 'speed' in header else 1
+    dens_idx = header.index('density') if 'density' in header else 2
+    temp_idx = header.index('temperature') if 'temperature' in header else 3
+
     records = []
     for row in data[1:]:
         if len(row) < 4: continue
         try:
-            time_tag = row[0].replace('.000', 'Z')
-            density = float(row[1]) if row[1] is not None else 0.0
-            speed = float(row[2]) if row[2] is not None else 0.0
-            temp = float(row[3]) if row[3] is not None else 0.0
+            time_tag = row[0].replace('.000', '')
+            if 'Z' not in time_tag and '+' not in time_tag:
+                time_tag += 'Z'
+            density = float(row[dens_idx]) if row[dens_idx] is not None else 0.0
+            speed = float(row[spd_idx]) if row[spd_idx] is not None else 0.0
+            temp = float(row[temp_idx]) if row[temp_idx] is not None else 0.0
             records.append((time_tag, density, speed, temp, 0))
         except: continue
 

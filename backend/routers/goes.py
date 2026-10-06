@@ -5,7 +5,7 @@ import asyncio
 from database import get_conn
 from fetchers.goes_fetcher import fetch_all_goes
 from fetchers.nc_reader import read_proton_nc, nc_date_coverage
-import psycopg2.extras
+import psycopg2.extras  # type: ignore
 
 router = APIRouter(prefix="/goes", tags=["GOES"])
 
@@ -43,9 +43,10 @@ def route_fetch_wind(): return fetch_goes_wind()
 def format_date_boundary(date_str: str, is_end: bool = False) -> str:
     if not date_str:
         return ""
-    date_str = date_str.strip().replace('T', ' ')
-    if len(date_str) == 10:
-        return f"{date_str} 23:59:59" if is_end else f"{date_str} 00:00:00"
+    date_str = date_str.strip()
+    if len(date_str) >= 10:
+        d = date_str[:10]
+        return f"{d}T23:59:59Z" if is_end else f"{d}T00:00:00Z"
     return date_str
 
 def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
@@ -54,8 +55,7 @@ def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Opti
         e = format_date_boundary(end_date, is_end=True)
         return query(
             f"""SELECT * FROM {table_name} 
-               WHERE time_tag >= %s 
-                 AND time_tag <= %s
+               WHERE time_tag >= %s AND time_tag <= %s
                ORDER BY time_tag ASC""",
             (s, e)
         )
@@ -160,6 +160,36 @@ def get_suvi_loop(wavelength: str, limit: int = 25):
         urls = [f"https://services.swpc.noaa.gov{item['url']}" for item in data[-limit:]]
         result = {"urls": urls}
         _suvi_cache[cache_key] = (now, result)
+        return result
+    except Exception as e:
+        return {"urls": [], "error": str(e)}
+
+_lasco_cache = {}
+
+@router.get("/lasco-loop/{coronagraph}")
+def get_lasco_loop(coronagraph: str, limit: int = 25):
+    import time
+    now = time.time()
+    c_clean = coronagraph.lower().replace("lasco-", "").replace("lasco", "").strip()
+    if c_clean not in ["c2", "c3"]:
+        c_clean = "c2"
+
+    cache_key = f"{c_clean}_{limit}"
+    if cache_key in _lasco_cache:
+        cached_time, cached_data = _lasco_cache[cache_key]
+        if now - cached_time < 120:
+            return cached_data
+
+    import httpx
+    url = f"https://services.swpc.noaa.gov/products/animations/lasco-{c_clean}.json"
+    try:
+        r = httpx.get(url, timeout=8.0)
+        if r.status_code != 200:
+            return {"urls": [], "error": f"NOAA returned status code {r.status_code}"}
+        data = r.json()
+        urls = [f"https://services.swpc.noaa.gov{item['url']}" for item in data[-limit:]]
+        result = {"urls": urls}
+        _lasco_cache[cache_key] = (now, result)
         return result
     except Exception as e:
         return {"urls": [], "error": str(e)}

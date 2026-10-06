@@ -1,14 +1,12 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import {
   Activity,
   Clock,
   RefreshCw,
   Zap,
-  Globe,
   Radio,
-  Shield,
   Calendar,
   Compass,
   Layers,
@@ -19,7 +17,10 @@ import {
   TrendingUp,
   Wind,
   ChevronRight,
+  ChevronDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowDownUp,
   Eye,
   Maximize2,
   Minimize2,
@@ -28,146 +29,22 @@ import {
 import SciFiFullscreenOverlay from '../../components/ui/SciFiFullscreenOverlay'
 import { loadMarsRad, loadMarsSummary, fetchMarsData, MarsRadRecord, MarsSummary } from '../../services/marsService'
 import { loadCrater } from '../../services/radiationService'
-import { loadNeutron } from '../../services/cosmicService'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import Card from '../../components/ui/Card'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useLineDrawing } from '../../hooks/useLineDrawing'
 import TrendLineOverlay, { buildMarkLines } from '../../components/ui/TrendLineOverlay'
 import MarsOrbitBackground from '../../components/space/MarsOrbitBackground'
+import MarsMavenSection from '../../components/mars/MarsMavenSection'
+import { useTheme } from '../../context/ThemeContext'
+import { formatUTCTime } from '../../utils/formatters'
+import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 
-type TimeRange = 360 | 1440 | 4320 | 10080 | 43200
-const TIME_LABELS: Record<number, string> = { 360: '6H', 1440: '1D', 4320: '3D', 10080: '7D', 43200: '30D' }
-
-const getTodayStr = () => new Date().toISOString().split('T')[0]
-const getPastDateStr = (daysAgo: number) => {
-  const d = new Date()
-  d.setDate(d.getDate() - daysAgo)
-  return d.toISOString().split('T')[0]
-}
-
-const getDateStrFromIso = (iso?: string) => {
-  if (!iso) return getTodayStr()
-  return iso.split('T')[0]
-}
-
-const getPastDateStrFromDate = (baseIso?: string, daysAgo: number = 3) => {
-  if (!baseIso) return getPastDateStr(daysAgo)
-  const d = new Date(baseIso.includes('T') ? baseIso : `${baseIso}T00:00:00Z`)
-  if (isNaN(d.getTime())) return getPastDateStr(daysAgo)
-  d.setDate(d.getDate() - daysAgo)
-  return d.toISOString().split('T')[0]
-}
-
-function DateInputDDMMYYYY({
-  value,
-  onChange,
-  accentColor = '#EF4444',
-}: {
-  value: string
-  onChange: (val: string) => void
-  accentColor?: string
-}) {
-  const isoToDdMmYyyy = (iso: string) => {
-    if (!iso) return ''
-    const parts = iso.split('-')
-    if (parts.length !== 3) return iso
-    return `${parts[2]}/${parts[1]}/${parts[0]}`
-  }
-
-  const [text, setText] = useState(() => isoToDdMmYyyy(value))
-  const dateInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setText(isoToDdMmYyyy(value))
-  }, [value])
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value
-    setText(val)
-
-    const cleaned = val.replace(/\D/g, '')
-    if (cleaned.length === 8) {
-      const day = cleaned.slice(0, 2)
-      const month = cleaned.slice(2, 4)
-      const year = cleaned.slice(4, 8)
-      const iso = `${year}-${month}-${day}`
-      onChange(iso)
-    }
-  }
-
-  const handleNativeDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const iso = e.target.value
-    if (iso) {
-      onChange(iso)
-    }
-  }
-
-  return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', width: '100%' }}>
-      <input
-        type="text"
-        placeholder="DD/MM/YYYY"
-        maxLength={10}
-        value={text}
-        onChange={handleTextChange}
-        style={{
-          width: '100%',
-          padding: '4px 8px',
-          background: 'rgba(5, 10, 20, 0.8)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 2,
-          color: '#FFF',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 14,
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => {
-          if (dateInputRef.current) {
-            const el = dateInputRef.current as any
-            if (typeof el.showPicker === 'function') {
-              el.showPicker()
-            } else {
-              el.focus()
-            }
-          }
-        }}
-        style={{
-          position: 'absolute',
-          right: 6,
-          background: 'transparent',
-          border: 'none',
-          color: accentColor,
-          cursor: 'pointer',
-          padding: '0 2px',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        <Calendar size={12} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={value}
-        onChange={handleNativeDateChange}
-        style={{
-          position: 'absolute',
-          opacity: 0,
-          pointerEvents: 'none',
-          width: 0,
-          height: 0,
-          bottom: 0,
-          left: 0,
-        }}
-      />
-    </div>
-  )
-}
+type MarsMissionTab = 'surface' | 'orbit'
 
 // Available Graph Display Categories
 type GraphCategory = 'all_detectors' | 'dosimetry' | 'counters' | 'flux_pressure'
@@ -175,10 +52,43 @@ type GraphCategory = 'all_detectors' | 'dosimetry' | 'counters' | 'flux_pressure
 export default function MarsDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
+  const tabQuery = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState<MarsMissionTab>(() => {
+    if (tabQuery === 'orbit') return 'orbit'
+    return 'surface'
+  })
+
+  useEffect(() => {
+    if (tabQuery === 'orbit') {
+      setActiveTab('orbit')
+    } else if (tabQuery === 'surface') {
+      setActiveTab('surface')
+    }
+  }, [tabQuery])
+
+  const handleTabChange = (tab: MarsMissionTab) => {
+    setActiveTab(tab)
+    setSearchParams({ tab }, { replace: true })
+  }
+
   const chartRef = useRef<any>(null)
   const chartWrapperRef = useRef<HTMLDivElement>(null)
   const marsGraphContainerRef = useRef<HTMLDivElement>(null)
+  const orbitRef = useRef<HTMLDivElement>(null)
+  const dataSectionRef = useRef<HTMLDivElement>(null)
   const [isMarsFs, setIsMarsFs] = useState(false)
+
+  const scrollToDataSection = useCallback(() => {
+    dataSectionRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+  const scrollToOrbit = useCallback(() => {
+    orbitRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -203,8 +113,8 @@ export default function MarsDashboard() {
     }
   }
 
-  // Selected Graph Mode (null = Initial Mars view, string = Graph opened)
-  const [selectedGraph, setSelectedGraph] = useState<GraphCategory | null>(null)
+  // Selected Graph Mode (defaults to 'dosimetry')
+  const [selectedGraph, setSelectedGraph] = useState<GraphCategory>('dosimetry')
 
   // Detector Visible Toggles
   const [visibleDetectors, setVisibleDetectors] = useState({
@@ -221,17 +131,13 @@ export default function MarsDashboard() {
     setVisibleDetectors(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  // Time & Fetching states
-  const [limit, setLimit] = useState<TimeRange>(1440)
+  // Time & Fetching states (default to 3 days = 4320 mins to match initial 3D date range)
+  const [limit, setLimit] = useState<TimeRange>(4320)
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  // Custom date range
-  const isInitialDateSetRef = useRef(false)
-  const [isCustomDate, setIsCustomDate] = useState(false)
-  const [startDateInput, setStartDateInput] = useState(getPastDateStr(3))
-  const [endDateInput, setEndDateInput] = useState(getTodayStr())
+  // Custom date range (managed via DateRangeToolbar)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
 
   // Data states
@@ -262,8 +168,8 @@ export default function MarsDashboard() {
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true)
     try {
-      const sDate = isCustomDate && appliedRange ? appliedRange.startDate : undefined
-      const eDate = isCustomDate && appliedRange ? appliedRange.endDate : undefined
+      const sDate = appliedRange ? appliedRange.startDate : undefined
+      const eDate = appliedRange ? appliedRange.endDate : undefined
 
       const [marsRes, summaryRes] = await Promise.all([
         loadMarsRad(limit, sDate, eDate),
@@ -274,15 +180,6 @@ export default function MarsDashboard() {
       setRadData(validList)
       setSummary(summaryRes)
       setLastUpdated(new Date())
-
-      // Auto-set the Date Picker inputs to the actual latest date in data
-      const latestTag = summaryRes?.latest_time_tag || (validList.length > 0 ? validList[validList.length - 1].time_tag : undefined)
-      if (latestTag && !isInitialDateSetRef.current) {
-        const latestD = getDateStrFromIso(latestTag)
-        setEndDateInput(latestD)
-        setStartDateInput(getPastDateStrFromDate(latestD, 3))
-        isInitialDateSetRef.current = true
-      }
     } catch (err) {
       console.error('Failed to load Mars RAD data:', err)
     } finally {
@@ -323,308 +220,370 @@ export default function MarsDashboard() {
   useEffect(() => {
     resetPan()
     loadData(true)
-  }, [limit, appliedRange, isCustomDate])
+  }, [limit, appliedRange])
 
   useAutoFetch(async () => {
     await loadData(false)
   }, 60000, !appliedRange)
 
-  // Chart styles
-  const axisLabelStyle = { color: '#F8FAFC', fontSize: 14, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
-  const splitLineStyle = { show: true, lineStyle: { color: 'rgba(255,255,255,0.07)', type: 'dashed' as const } }
+  const exportColumns = useMemo<ExportColumn[]>(() => [
+    { key: 'time_tag', label: 'Time Tag (UTC)', width: 22 },
+    { key: 'sol', label: 'Sol', width: 8 },
+    { key: 'dose_rate_silicon', label: 'Dose Si (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_rate_plastic', label: 'Dose Pl (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_a1', label: 'Dose A1 (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_a2', label: 'Dose A2 (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_b', label: 'Dose B (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_c', label: 'Dose C (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_d', label: 'Dose D (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_e', label: 'Dose E (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'dose_f', label: 'Dose F (µGy/h)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'flux_charged', label: 'Flux Charged (p/cm²s)', width: 22, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+    { key: 'flux_neutral', label: 'Flux Neutral', width: 16, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+    { key: 'pressure_mbar', label: 'Pressure (mbar)', width: 16, format: (v) => v != null ? Number(v).toFixed(2) : 'N/A' },
+    { key: 'l1_cnt_fast', label: 'L1 Fast (cps)', width: 14, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+    { key: 'l1_cnt_slow', label: 'L1 Slow (cps)', width: 14, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+  ], [])
+
+  const exportMetadata = useMemo(() => ({
+    station: 'MSL Curiosity / RAD (Gale Crater, Mars)',
+    viewTitle: `Mars Science Laboratory RAD Telemetry [${selectedGraph.toUpperCase()}]`,
+    description: 'Radiation Assessment Detector (MSL RAD) surface dosimetry, silicon/plastic detectors, particle flux, and atmospheric pressure at Gale Crater.',
+    timeRangeText: appliedRange ? `${appliedRange.startDate} to ${appliedRange.endDate}` : `${limit / 1440}D (${radData.length > 0 ? `${radData[0].time_tag} to ${radData[radData.length - 1].time_tag}` : 'N/A'})`,
+    totalRecords: radData.length
+  }), [selectedGraph, appliedRange, limit, radData])
+
+  const isMultiDay = limit > 1440 || !!appliedRange
+  const { minTs, maxTs } = getTimeDomain(radData)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
 
   const xAxisBase = (gi: number, showLabel = true) => ({
     gridIndex: gi,
     type: 'time' as const,
-    splitLine: splitLineStyle,
-    axisLabel: showLabel ? axisLabelStyle : { show: false },
-    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+    splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' as const } },
+    axisLabel: showLabel ? createTimeAxisLabel(isLight, isMultiDay) : { show: false },
+    axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
   })
 
-  const yAxisBase = (gi: number) => ({
+  const yAxisBase = (gi: number, name = '', nameColor?: string) => ({
     gridIndex: gi,
     type: 'value' as const,
-    name: '',
-    splitLine: splitLineStyle,
-    axisLabel: axisLabelStyle,
-    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+    name,
+    nameLocation: 'middle' as const,
+    nameGap: 56,
+    nameTextStyle: {
+      color: nameColor || (isLight ? '#DC2626' : '#EF4444'),
+      fontSize: 14,
+      fontWeight: 700,
+      fontFamily: 'sans-serif'
+    },
+    splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' as const } },
+    axisLabel: { color: isLight ? '#475569' : '#E2E8F0', fontSize: 13, fontFamily: 'monospace, sans-serif' },
+    axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
     scale: true,
   })
 
-  const tooltipBase = {
+  const tooltipBase = useMemo(() => ({
     trigger: 'axis' as const,
-    backgroundColor: '#0F172A',
-    borderColor: 'rgba(239, 68, 68, 0.6)',
+    backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+    borderColor: isLight ? '#FCA5A5' : 'rgba(239,68,68,0.6)',
     borderWidth: 1.5,
-    padding: 14,
-    textStyle: { color: '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 14 },
-    extraCssText: 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-    axisPointer: { type: 'line' as const, lineStyle: { color: '#EF4444', type: 'dashed' as const, width: 1.5 } },
+    padding: 12,
+    textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13.5 },
+    extraCssText: isLight
+      ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;'
+      : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
+    axisPointer: { type: 'line' as const, lineStyle: { color: isLight ? '#DC2626' : '#EF4444', type: 'dashed' as const, width: 1.5 } },
     formatter: (params: any) => {
       if (!params || params.length === 0) return ''
-      const rawTime = params[0].axisValueLabel || params[0].value[0]
-      let timeStr = rawTime
-      if (typeof rawTime === 'number') {
-        timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-      }
+      const rawTime = params[0].value ? (Array.isArray(params[0].value) ? params[0].value[0] : params[0].value) : (params[0].axisValue || '')
+      const timeStr = formatUTCTime(rawTime, true)
 
-      let html = `<div style="font-family: var(--font-mono); font-size: 14px; min-width: 270px;">`
-      html += `<div style="color: #EF4444; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
+      let html = `<div style="font-family: var(--font-mono); font-size: 13.5px; min-width: 260px;">`
+      html += `<div style="color: ${isLight ? '#DC2626' : '#EF4444'}; border-bottom: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.15)'}; padding-bottom: 6px; margin-bottom: 8px; font-weight: 700;">⏱ ${timeStr}</div>`
 
       params.forEach((p: any) => {
         if (!p) return
         const name = p.seriesName
         const val = Array.isArray(p.value) ? p.value[1] : p.value
         if (val === undefined || val === null) return
-        let valDisplay = typeof val === 'number' ? (val < 0.1 || val > 1000 ? val.toExponential(2) : val.toFixed(3)) : val
+        let valDisplay = typeof val === 'number' ? (val < 0.05 || val > 1000 ? val.toExponential(2) : val.toFixed(3)) : val
         html += `<div style="display: flex; justify-content: space-between; gap: 14px; padding: 2px 0;">`
         html += `<span style="color: ${p.color};">● ${name}:</span>`
-        html += `<span style="font-weight: 700; color: #FFF; font-family: monospace;">${valDisplay}</span>`
+        html += `<span style="font-weight: 700; color: ${isLight ? '#0F172A' : '#FFF'}; font-family: monospace;">${valDisplay}</span>`
         html += `</div>`
       })
       html += `</div>`
       return html
     }
-  }
+  }), [isLight])
 
   // ── DYNAMIC ECHARTS BUILDER ──
   const chartOption = useMemo(() => {
-    if (!selectedGraph) return {}
+    const activeCat = selectedGraph || 'dosimetry'
     const v = visibleDetectors
 
-    if (selectedGraph === 'all_detectors') {
+    if (activeCat === 'all_detectors') {
       const s1: any[] = []
-      if (v.dose_a1) s1.push({ name: 'Detector A1 (Top Si)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#38BDF8' }, itemStyle: { color: '#38BDF8' }, markLine: buildMarkLines(lines, 0), data: radData.map(d => [d.time_tag, d.dose_a1 ?? d.dose_rate_silicon]) })
-      if (v.dose_a2) s1.push({ name: 'Detector A2 (Bottom Si)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' }, data: radData.map(d => [d.time_tag, d.dose_a2 ?? (d.dose_rate_silicon ? d.dose_rate_silicon * 0.98 : null)]) })
-      if (v.dose_b)  s1.push({ name: 'Detector B (Middle Si)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' }, data: radData.map(d => [d.time_tag, d.dose_b ?? d.dose_rate_silicon]) })
-      if (v.dose_d)  s1.push({ name: 'Detector D (Lower Si)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#4ADE80' }, itemStyle: { color: '#4ADE80' }, data: radData.map(d => [d.time_tag, d.dose_d ?? (d.dose_rate_silicon ? d.dose_rate_silicon * 0.96 : null)]) })
+      if (v.dose_a1) s1.push({ name: 'Detector A1 (Top Si)', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#38BDF8' }, itemStyle: { color: '#38BDF8' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 0)), data: radData.map(d => [d.time_tag, d.dose_a1 ?? d.dose_rate_silicon]) })
+      if (v.dose_a2) s1.push({ name: 'Detector A2 (Bottom Si)', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' }, data: radData.map(d => [d.time_tag, d.dose_a2 ?? (d.dose_rate_silicon ? d.dose_rate_silicon * 0.98 : null)]) })
+      if (v.dose_b)  s1.push({ name: 'Detector B (Middle Si)', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' }, data: radData.map(d => [d.time_tag, d.dose_b ?? d.dose_rate_silicon]) })
+      if (v.dose_d)  s1.push({ name: 'Detector D (Lower Si)', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.8, color: '#4ADE80' }, itemStyle: { color: '#4ADE80' }, data: radData.map(d => [d.time_tag, d.dose_d ?? (d.dose_rate_silicon ? d.dose_rate_silicon * 0.96 : null)]) })
 
       const s2: any[] = []
-      if (v.dose_e) s2.push({ name: 'Detector E (Plastic Tissue Eq)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2.2, color: '#EF4444' }, itemStyle: { color: '#EF4444' }, markLine: buildMarkLines(lines, 1), data: radData.map(d => [d.time_tag, d.dose_e ?? d.dose_rate_plastic]) })
-      if (v.dose_c) s2.push({ name: 'Detector C (Cesium Iodide CsI)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 1.8, color: '#A855F7' }, itemStyle: { color: '#A855F7' }, data: radData.map(d => [d.time_tag, d.dose_c ?? (d.dose_rate_plastic ? d.dose_rate_plastic * 1.08 : null)]) })
-      if (v.dose_f) s2.push({ name: 'Detector F (Anticoincidence Shield)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 1.8, color: '#F43F5E' }, itemStyle: { color: '#F43F5E' }, data: radData.map(d => [d.time_tag, d.dose_f ?? 3.4]) })
+      if (v.dose_e) s2.push({ name: 'Detector E (Plastic Tissue Eq)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2.2, color: '#EF4444' }, itemStyle: { color: '#EF4444' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 1)), data: radData.map(d => [d.time_tag, d.dose_e ?? d.dose_rate_plastic]) })
+      if (v.dose_c) s2.push({ name: 'Detector C (Cesium Iodide CsI)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 1.8, color: '#A855F7' }, itemStyle: { color: '#A855F7' }, data: radData.map(d => [d.time_tag, d.dose_c ?? (d.dose_rate_plastic ? d.dose_rate_plastic * 1.08 : null)]) })
+      if (v.dose_f) s2.push({ name: 'Detector F (Anticoincidence Shield)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 1.8, color: '#F43F5E' }, itemStyle: { color: '#F43F5E' }, data: radData.map(d => [d.time_tag, d.dose_f ?? 3.4]) })
 
       const s3: any[] = [
-        { name: 'Total Plastic Dose (Tissue Eq)', type: 'line', xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 2.2, color: '#EF4444' }, itemStyle: { color: '#EF4444' }, markLine: buildMarkLines(lines, 2), data: radData.map(d => [d.time_tag, d.dose_rate_plastic]) },
-        { name: 'Total Silicon Absorber Dose', type: 'line', xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 2.0, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' }, data: radData.map(d => [d.time_tag, d.dose_rate_silicon]) },
+        { name: 'Total Plastic Dose (Tissue Eq)', type: 'line', smooth: 0.15, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 2.2, color: '#EF4444' }, itemStyle: { color: '#EF4444' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 2)), data: radData.map(d => [d.time_tag, d.dose_rate_plastic]) },
+        { name: 'Total Silicon Absorber Dose', type: 'line', smooth: 0.15, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 2.0, color: isLight ? '#D97706' : '#FBBF24' }, itemStyle: { color: isLight ? '#D97706' : '#FBBF24' }, data: radData.map(d => [d.time_tag, d.dose_rate_silicon]) },
       ]
 
       return {
+        useUTC: true,
         backgroundColor: 'transparent',
         animation: false,
-        legend: { show: false },
-        title: [
-          { text: '● Silicon Solid-State Detectors (A1, A2, B, D) — [µGy/hr]', left: 65, top: 12, textStyle: { color: '#FBBF24', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Scintillators & Anticoincidence (Plastic E, CsI C, Shield F) — [µGy/hr]', left: 65, top: 278, textStyle: { color: '#EF4444', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Total Absorbed Dosimetry (Tissue Eq vs Silicon Absorber) — [µGy/hr]', left: 65, top: 544, textStyle: { color: '#38BDF8', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-        ],
+        legend: {
+          show: true,
+          top: 0,
+          textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 12.5, fontFamily: 'var(--font-mono)' }
+        },
         tooltip: tooltipBase,
-        axisPointer: { snap: true },
-        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1, 2], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1, 2], filterMode: 'none' as const, zoomOnMouseWheel: !drawingMode, moveOnMouseMove: !drawingMode }],
         grid: [
-          { top: 40,  left: 65, right: 40, height: '26%' },
-          { top: '38%', left: 65, right: 40, height: '26%' },
-          { top: '69%', left: 65, right: 40, height: '26%' },
+          { top: 35, left: 85, right: 25, height: '26%' },
+          { top: '38%', left: 85, right: 25, height: '26%' },
+          { top: '69%', left: 85, right: 25, height: '26%' },
         ],
-        xAxis: [xAxisBase(0, true), xAxisBase(1, true), xAxisBase(2, true)],
-        yAxis: [yAxisBase(0), yAxisBase(1), yAxisBase(2)],
+        xAxis: [xAxisBase(0, false), xAxisBase(1, false), xAxisBase(2, true)],
+        yAxis: [
+          yAxisBase(0, 'Si Absorber (µGy/hr)', isLight ? '#0284C7' : '#38BDF8'),
+          yAxisBase(1, 'Scintillators (µGy/hr)', isLight ? '#DC2626' : '#EF4444'),
+          yAxisBase(2, 'Total Dose (µGy/hr)', isLight ? '#D97706' : '#FBBF24'),
+        ],
         series: [...s1, ...s2, ...s3]
       }
-    } else if (selectedGraph === 'counters') {
+    } else if (activeCat === 'counters') {
       return {
+        useUTC: true,
         backgroundColor: 'transparent',
         animation: false,
-        legend: { show: false },
-        title: [
-          { text: '● Level 1 Fast & Slow Trigger Rates — [counts/sec]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Level 2 Coincidence Channels (AB Directional & ADE Stopping Protons) — [counts/sec]', left: 65, top: '51%', textStyle: { color: '#38BDF8', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-        ],
+        legend: {
+          show: true,
+          top: 0,
+          textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 12.5, fontFamily: 'var(--font-mono)' }
+        },
         tooltip: tooltipBase,
-        axisPointer: { snap: true },
-        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: !drawingMode, moveOnMouseMove: !drawingMode }],
         grid: [
-          { top: 45,  left: 65, right: 40, height: '42%' },
-          { top: '55%', left: 65, right: 40, height: '40%' },
+          { top: 35, left: 85, right: 25, height: '40%' },
+          { top: '53%', left: 85, right: 25, height: '40%' },
         ],
-        xAxis: [xAxisBase(0, true), xAxisBase(1, true)],
-        yAxis: [yAxisBase(0), yAxisBase(1)],
+        xAxis: [xAxisBase(0, false), xAxisBase(1, true)],
+        yAxis: [
+          yAxisBase(0, 'L1 Rate (cps)', isLight ? '#C2410C' : '#F97316'),
+          yAxisBase(1, 'L2 Rate (cps)', isLight ? '#0284C7' : '#38BDF8'),
+        ],
         series: [
-          { name: 'L1 Fast Triggers', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#F97316' }, itemStyle: { color: '#F97316' }, markLine: buildMarkLines(lines, 0), data: radData.map(d => [d.time_tag, d.l1_cnt_fast ?? 1420]) },
-          { name: 'L1 Slow Triggers', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' }, data: radData.map(d => [d.time_tag, d.l1_cnt_slow ?? 850]) },
-          { name: 'Coincidence AB (Directional)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2, color: '#38BDF8' }, itemStyle: { color: '#38BDF8' }, markLine: buildMarkLines(lines, 1), data: radData.map(d => [d.time_tag, d.l2_coinc_ab ?? 312]) },
-          { name: 'Coincidence ADE (Stopping Protons)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2, color: '#A855F7' }, itemStyle: { color: '#A855F7' }, data: radData.map(d => [d.time_tag, d.l2_coinc_ade ?? 94]) },
+          { name: 'Fast Trigger L1', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#F97316' }, itemStyle: { color: '#F97316' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 0)), data: radData.map(d => [d.time_tag, d.l1_cnt_fast ?? 1420]) },
+          { name: 'Slow Trigger L1', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: isLight ? '#D97706' : '#FBBF24' }, itemStyle: { color: isLight ? '#D97706' : '#FBBF24' }, data: radData.map(d => [d.time_tag, d.l1_cnt_slow ?? 850]) },
+          { name: 'Coincidence AB (Directional)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2, color: '#10B981' }, itemStyle: { color: '#10B981' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 1)), data: radData.map(d => [d.time_tag, d.l2_coinc_ab ?? 312]) },
+          { name: 'Coincidence ADE (Stopping Protons)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2, color: '#A855F7' }, itemStyle: { color: '#A855F7' }, data: radData.map(d => [d.time_tag, d.l2_coinc_ade ?? 94]) },
         ]
       }
-    } else if (selectedGraph === 'flux_pressure') {
+    } else if (activeCat === 'flux_pressure') {
       return {
+        useUTC: true,
         backgroundColor: 'transparent',
         animation: false,
-        legend: { show: false },
-        title: [
-          { text: '● Charged vs Neutral Particle Radiation Flux — [particles/(cm² s sr)]', left: 65, top: 14, textStyle: { color: '#F97316', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-          { text: '● Gale Crater Surface Atmospheric Pressure (Diurnal Wave) — [mbar]', left: 65, top: '51%', textStyle: { color: '#4ADE80', fontSize: 15, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-        ],
+        legend: {
+          show: true,
+          top: 0,
+          textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 12.5, fontFamily: 'var(--font-mono)' }
+        },
         tooltip: tooltipBase,
-        axisPointer: { snap: true },
-        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0, 1], filterMode: 'none' as const, zoomOnMouseWheel: !drawingMode, moveOnMouseMove: !drawingMode }],
         grid: [
-          { top: 45,  left: 65, right: 40, height: '42%' },
-          { top: '55%', left: 65, right: 40, height: '40%' },
+          { top: 35, left: 85, right: 25, height: '40%' },
+          { top: '53%', left: 85, right: 25, height: '40%' },
         ],
-        xAxis: [xAxisBase(0, true), xAxisBase(1, true)],
-        yAxis: [yAxisBase(0), yAxisBase(1)],
+        xAxis: [xAxisBase(0, false), xAxisBase(1, true)],
+        yAxis: [
+          yAxisBase(0, 'Flux (p/cm² s sr)', isLight ? '#C2410C' : '#F97316'),
+          yAxisBase(1, 'Pressure (mbar)', isLight ? '#059669' : '#10B981'),
+        ],
         series: [
-          { name: 'Charged Particle Flux', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#F97316' }, itemStyle: { color: '#F97316' }, markLine: buildMarkLines(lines, 0), data: radData.map(d => [d.time_tag, d.flux_charged]) },
-          { name: 'Neutral Albedo Flux', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' }, data: radData.map(d => [d.time_tag, d.flux_neutral]) },
-          { name: 'Surface Pressure (mbar)', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2.2, color: '#4ADE80' }, itemStyle: { color: '#4ADE80' }, markLine: buildMarkLines(lines, 1), data: radData.map(d => [d.time_tag, d.pressure_mbar ?? 8.15]) },
+          { name: 'Charged Particle Flux', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#F97316' }, itemStyle: { color: '#F97316' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 0)), data: radData.map(d => [d.time_tag, d.flux_charged]) },
+          { name: 'Neutral Albedo Flux', type: 'line', smooth: 0.15, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: '#06B6D4' }, itemStyle: { color: '#06B6D4' }, data: radData.map(d => [d.time_tag, d.flux_neutral]) },
+          { name: 'Surface Pressure (mbar)', type: 'line', smooth: 0.15, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2.2, color: '#10B981' }, itemStyle: { color: '#10B981' }, markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 1)), data: radData.map(d => [d.time_tag, d.pressure_mbar ?? 8.15]) },
         ]
       }
     } else {
+      // Default: Surface Absorbed Dosimetry
+      const tissueColor = '#EF4444'
+      const siColor = isLight ? '#D97706' : '#FBBF24'
+
       return {
+        useUTC: true,
         backgroundColor: 'transparent',
         animation: false,
-        legend: { show: false },
-        title: [
-          { text: '● Mars Surface Calibrated Radiation Dosimetry (RAD Level 3 RDR) — [µGy/hr]', left: 65, top: 16, textStyle: { color: '#EF4444', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700 } },
-        ],
+        legend: {
+          show: true,
+          top: 0,
+          textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
+        },
         tooltip: tooltipBase,
-        axisPointer: { snap: true },
-        dataZoom: [{ type: 'inside' as const, xAxisIndex: [0], filterMode: 'none' as const, zoomOnMouseWheel: true, moveOnMouseMove: true }],
-        grid: [{ top: 55, left: 65, right: 40, bottom: 40 }],
-        xAxis: [xAxisBase(0, true)],
-        yAxis: [yAxisBase(0)],
+        grid: { top: 35, right: 25, bottom: 45, left: 85 },
+        dataZoom: [
+          {
+            type: 'inside' as const,
+            xAxisIndex: 0,
+            filterMode: 'none' as const,
+            zoomOnMouseWheel: !drawingMode,
+            moveOnMouseMove: !drawingMode,
+          }
+        ],
+        xAxis: xAxisBase(0, true),
+        yAxis: yAxisBase(0, 'Dose Rate (µGy/hr)', isLight ? '#DC2626' : '#EF4444'),
         series: [
-          { name: 'Tissue Eq Plastic (E)', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2.5, color: '#EF4444' }, itemStyle: { color: '#EF4444' }, markLine: buildMarkLines(lines, 0), data: radData.map(d => [d.time_tag, d.dose_rate_plastic]) },
-          { name: 'Silicon Absorber Dose', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2.0, color: '#FBBF24' }, itemStyle: { color: '#FBBF24' }, data: radData.map(d => [d.time_tag, d.dose_rate_silicon]) },
+          {
+            name: 'Tissue Eq Plastic (Detector E)',
+            type: 'line',
+            smooth: 0.15,
+            showSymbol: false,
+            lineStyle: { width: 2.2, color: tissueColor },
+            itemStyle: { color: tissueColor },
+            markLine: combineMarkLines(midnightDividers, buildMarkLines(lines, 0)),
+            data: radData.map(d => [d.time_tag, d.dose_rate_plastic])
+          },
+          {
+            name: 'Silicon Absorber Dose',
+            type: 'line',
+            smooth: 0.15,
+            showSymbol: false,
+            lineStyle: { width: 2.0, color: siColor },
+            itemStyle: { color: siColor },
+            data: radData.map(d => [d.time_tag, d.dose_rate_silicon])
+          }
         ]
       }
     }
-  }, [selectedGraph, visibleDetectors, radData, lines])
+  }, [selectedGraph, visibleDetectors, radData, lines, isLight, drawingMode, tooltipBase])
+
 
   return (
-    <div style={{
-      position: 'relative',
-      minHeight: '100vh',
-      width: '100%',
-      background: '#03060C',
-      color: '#F8FAFC',
-      padding: '24px 32px 40px',
-      boxSizing: 'border-box',
-      overflowX: 'hidden'
-    }}>
+    <div style={{ width: '100vw', overflowY: 'auto', overflowX: 'hidden', background: isLight ? '#EEF4FB' : '#03060C' }}>
       <style>{`
         @keyframes marsFadeInHeader {
-          0% { opacity: 0; transform: translateY(-10px); }
-          100% { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateY(-12px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes marsFadeInBody {
-          0% { opacity: 0; transform: translateY(16px); }
-          100% { opacity: 1; transform: translateY(0); }
+        @keyframes chevronBounce {
+          0%, 100% { transform: translateX(-50%) translateY(0); }
+          50%      { transform: translateX(-50%) translateY(7px); }
         }
-        .mars-anim-header {
-          animation: marsFadeInHeader 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
-        }
-        .mars-anim-body {
-          animation: marsFadeInBody 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
-        }
+        .mars-anim-header { animation: marsFadeInHeader 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+        .chevron-bounce { animation: chevronBounce 2.4s ease-in-out infinite; }
+        .chevron-bounce:hover { animation-play-state: paused; }
       `}</style>
 
-      {/* ── BACKGROUND: Mars smoothly zooms from dashboard position and shifts when graph is opened ── */}
-      <MarsOrbitBackground
-        position={selectedGraph ? 'top-left' : 'center-left'}
-        initialPosition={(location.state as any)?.startPos || 'dashboard'}
-      />
+      {/* ═══════════════════════ SECTION 1 — 100VH MARS ORBIT HERO ═══════════════════════ */}
+      <div ref={orbitRef} style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
 
-      {/* Gentle dark gradient overlay */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: selectedGraph
-          ? 'linear-gradient(180deg, rgba(3,6,12,0.45) 0%, rgba(3,6,12,0.65) 60%, rgba(3,6,12,0.85) 100%)'
-          : 'linear-gradient(180deg, rgba(3,6,12,0.2) 0%, rgba(3,6,12,0.45) 60%, #03060C 100%)',
-        transition: 'background 0.6s ease',
-        pointerEvents: 'none'
-      }} />
+        {/* 3D Planetary Orbit View */}
+        <MarsOrbitBackground
+          position="hero"
+          initialPosition={(location.state as any)?.startPos || 'dashboard'}
+        />
 
-      {/* Main Container */}
-      <div style={{ position: 'relative', zIndex: 10, maxWidth: 1800, margin: '0 auto' }}>
-
-        {/* ── TOP HEADER BAR ── */}
+        {/* ── TOP HEADER OVERLAY (HUD) ── */}
         <div className="mars-anim-header" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
-          flexWrap: 'wrap', gap: 16
+          position: 'relative', zIndex: 10, pointerEvents: 'none',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          padding: '24px 36px', flexWrap: 'wrap', gap: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* LEFT: Return button + Mission Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, pointerEvents: 'auto' }}>
             <button
               onClick={() => navigate('/')}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#94A3B8',
-                padding: '7px 12px',
-                borderRadius: 3,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 14,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                transition: 'all 0.2s',
+                background: 'rgba(5,10,24,0.75)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#CBD5E1',
+                padding: '8px 14px', borderRadius: 3, cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', fontSize: 14,
+                display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'all 0.2s',
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.color = '#FFF'
-                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)'
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(56,189,248,0.8)'
+                e.currentTarget.style.background = 'rgba(56,189,248,0.2)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = '#94A3B8'
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                e.currentTarget.style.color = '#CBD5E1'
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
+                e.currentTarget.style.background = 'rgba(5,10,24,0.75)'
               }}
-              title="Return to Solar System Overview"
             >
-              <ArrowLeft size={13} />
-              <span>DASHBOARD</span>
+              <ArrowLeft size={14} /><span>DASHBOARD</span>
             </button>
 
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', boxShadow: '0 0 10px #EF4444' }} />
-                <span style={{ fontSize: 13, letterSpacing: 3, color: '#FCA5A5', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                  MARS SCIENCE LABORATORY · RAD INSTRUMENT (GALE CRATER)
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', boxShadow: '0 0 12px #EF4444' }} />
+                <span style={{ fontSize: 13, letterSpacing: 3, color: isLight ? '#DC2626' : '#FCA5A5', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                  MARS SPACE WEATHER · CURIOSITY SURFACE RAD (MSL)
                 </span>
               </div>
               <h1 style={{
-                fontSize: 'clamp(22px, 2.5vw, 32px)',
-                fontWeight: 800, letterSpacing: '-0.02em',
-                color: '#FFFFFF', margin: 0, fontFamily: 'var(--font-sans)',
+                fontSize: 'clamp(20px,2.2vw,28px)',
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+                color: '#FFFFFF',
+                margin: 0,
+                fontFamily: 'var(--font-sans)',
+                textShadow: '0 2px 10px rgba(0,0,0,0.8)'
               }}>
-                MARS RADIATION <span style={{ color: '#EF4444' }}>OBSERVATION & TELEMETRY</span>
+                MARS SURFACE <span style={{ color: '#EF4444' }}>RADIATION HUB</span>
               </h1>
             </div>
           </div>
 
-          {/* Badges & Sync */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {/* RIGHT: Mission Badges + Sync PDS */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', pointerEvents: 'auto' }}>
             <div style={{
-              background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(239, 68, 68, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
+              background: 'rgba(5,10,24,0.88)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(239,68,68,0.4)',
+              padding: '6px 14px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 14,
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
             }}>
               <span style={{ color: '#94A3B8' }}>MISSION: </span>
               <strong style={{ color: '#EF4444' }}>SOL {summary?.current_sol ?? 4986}</strong>
             </div>
 
             <div style={{
-              background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
+              background: 'rgba(5,10,24,0.88)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(56,189,248,0.4)',
+              padding: '6px 14px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 14,
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
             }}>
               <span style={{ color: '#94A3B8' }}>LOCAL TIME: </span>
               <strong style={{ color: '#38BDF8' }}>{martianLmst || 'GALE CRATER'}</strong>
             </div>
 
             <div style={{
-              background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(34, 197, 94, 0.3)',
-              padding: '6px 14px', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 14
+              background: 'rgba(5,10,24,0.88)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(34,197,94,0.4)',
+              padding: '6px 14px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 14,
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
             }}>
               <span style={{ color: '#94A3B8' }}>STATUS: </span>
               <strong style={{ color: '#22C55E' }}>{summary?.status ?? 'NORMAL'}</strong>
@@ -634,11 +593,17 @@ export default function MarsDashboard() {
               onClick={handleRefresh}
               disabled={fetching}
               style={{
-                background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444',
-                color: '#F8FAFC', padding: '7px 14px', borderRadius: 2,
+                background: 'rgba(239,68,68,0.2)',
+                border: '1px solid rgba(239,68,68,0.7)',
+                color: '#F8FAFC',
+                padding: '7px 14px', borderRadius: 3,
                 cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
-                display: 'flex', alignItems: 'center', gap: 6
+                display: 'flex', alignItems: 'center', gap: 6,
+                boxShadow: '0 4px 15px rgba(239,68,68,0.25)',
+                transition: 'all 0.2s'
               }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.35)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
             >
               <RefreshCw size={13} className={fetching ? 'animate-spin' : ''} />
               {fetching ? 'SYNCING...' : 'SYNC PDS'}
@@ -646,609 +611,439 @@ export default function MarsDashboard() {
           </div>
         </div>
 
-        {/* ── TWO-COLUMN WORKSPACE: LEFT MAIN DISPLAY / RIGHT SELECTOR ── */}
-        <div className="mars-anim-body" style={{
-          display: 'grid',
-          gridTemplateColumns: selectedGraph ? 'minmax(0, 1fr) 340px' : 'minmax(0, 1fr) 420px',
-          gap: 28,
-          alignItems: 'start',
-          transition: 'all 0.5s ease'
+
+        {/* ── BOTTOM FADE: orbit stars fade DOWN into pure background ── */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: 60, pointerEvents: 'none', zIndex: 5,
+          background: isLight
+            ? 'linear-gradient(to bottom, transparent 0%, #EEF4FB 100%)'
+            : 'linear-gradient(to bottom, transparent 0%, #03060C 100%)',
+        }} />
+
+        {/* ── SCROLL DOWN BOUNCING BUTTON ── */}
+        <button
+          onClick={scrollToDataSection}
+          className="chevron-bounce"
+          style={{
+            position: 'absolute', bottom: 20, left: '50%', zIndex: 25,
+            background: 'rgba(5,14,30,0.92)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(239,68,68,0.6)',
+            color: '#FCA5A5',
+            padding: '9px 24px', borderRadius: 24,
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 800,
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 9,
+            boxShadow: '0 4px 24px rgba(239,68,68,0.25)',
+            transition: 'all 0.25s ease',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = '#EF4444'
+            e.currentTarget.style.background = 'rgba(239,68,68,0.25)'
+            e.currentTarget.style.color = '#FFF'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.6)'
+            e.currentTarget.style.background = 'rgba(5,14,30,0.92)'
+            e.currentTarget.style.color = '#FCA5A5'
+          }}
+        >
+          <span>SCROLL TO MARS TELEMETRY & DATA</span>
+          <ChevronDown size={14} />
+        </button>
+      </div>
+
+      {/* ═══════════════════════ SECTION 2 — TELEMETRY & ANALYTICS DECK ═══════════════════════ */}
+      <div
+        ref={dataSectionRef}
+        style={{
+          position: 'relative',
+          minHeight: '100vh',
+          background: isLight ? '#EEF4FB' : '#03060C',
+          padding: '40px 36px 80px',
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Top return toolbar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 24, paddingBottom: 16,
+          borderBottom: isLight ? '1px solid rgba(52,152,219,0.25)' : '1px solid rgba(52,152,219,0.2)',
+          flexWrap: 'wrap', gap: 16
         }}>
-
-          {/* ── LEFT AREA: SHOW PLANET HERO (IF NO GRAPH) OR ECHARTS GRAPH (IF SELECTED) ── */}
-          <div style={{ minWidth: 0 }}>
-
-            {!selectedGraph ? (
-              /* ── INITIAL STATE: SHOWCASE PLANET OVERVIEW ── */
-              <div style={{
-                height: 760,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                padding: '24px 0',
-                boxSizing: 'border-box'
-              }}>
-                <div>
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    padding: '6px 16px', borderRadius: 999,
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    marginBottom: 20
-                  }}>
-                    <Radio size={14} color="#EF4444" />
-                    <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: '#FCA5A5', fontWeight: 700, letterSpacing: 2 }}>
-                      LIVE ASTRONOMICAL TELEMETRY ACTIVE
-                    </span>
-                  </div>
-
-                  <h2 style={{
-                    fontSize: 'clamp(28px, 4vw, 54px)',
-                    fontWeight: 800,
-                    lineHeight: 1.1,
-                    margin: '0 0 16px',
-                    fontFamily: 'var(--font-sans)',
-                    color: '#FFFFFF',
-                    textShadow: '0 4px 30px rgba(0,0,0,0.8)'
-                  }}>
-                    Curiosity Surface <br />
-                    <span style={{ color: '#EF4444' }}>Radiation Laboratory</span>
-                  </h2>
-
-                  <p style={{
-                    maxWidth: 580,
-                    fontSize: 14,
-                    lineHeight: 1.7,
-                    color: 'rgba(255,255,255,0.7)',
-                    fontFamily: 'var(--font-sans)',
-                    margin: 0
-                  }}>
-                    เครื่องวัดรังสี <strong>RAD (Radiation Assessment Detector)</strong> บนยาน Curiosity ประจำการอยู่ที่ Gale Crater ตรวจวัดรังสีคอสมิก (GCR), อนุภาคพลังงานสูงจากดวงอาทิตย์ (SEP), และ Albedo Neutrons ที่สะท้อนจากพื้นผิวดาวอังคาร.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              /* ── GRAPH VIEW: WHEN USER CLICKS A GRAPH TO VIEW ── */
-              <div
-                ref={marsGraphContainerRef}
-                style={{
-                  animation: 'fadein 0.4s ease forwards',
-                  ...(isMarsFs ? {
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100vw',
-                    height: '100vh',
-                    background: '#020617',
-                    zIndex: 99999,
-                    overflow: 'hidden',
-                  } : {})
-                }}
-              >
-                {isMarsFs ? (
-                  <SciFiFullscreenOverlay
-                    isFullscreen={true}
-                    onClose={toggleMarsFs}
-                    title="CURIOSITY MARS RAD DOSIMETRY"
-                    subtitle={
-                      selectedGraph === 'all_detectors' ? 'MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)' :
-                      selectedGraph === 'dosimetry' ? 'SURFACE ABSORBED DOSIMETRY (TISSUE VS SILICON)' :
-                      selectedGraph === 'counters' ? 'TRIGGER RATES & COINCIDENCES (L1 & L2 CHANNELS)' :
-                      'GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE'
-                    }
-                    accentColor="#EF4444"
-                  >
-                    <div
-                      ref={chartWrapperRef}
-                      style={{ position: 'relative', width: '100%', height: '100%' }}
-                    >
-                      {loading ? (
-                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
-                        </div>
-                      ) : (
-                        <>
-                          <ReactECharts
-                            key={selectedGraph}
-                            ref={chartRef}
-                            option={chartOption}
-                            notMerge={true}
-                            lazyUpdate={true}
-                            style={{ height: '100%', width: '100%' }}
-                            onEvents={{ dataZoom: onDataZoom }}
-                          />
-                          <TrendLineOverlay
-                            chartRef={chartRef}
-                            wrapperRef={chartWrapperRef}
-                            gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
-                            gridUnits={
-                              selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] :
-                              selectedGraph === 'counters' ? ['cps', 'cps'] :
-                              ['p/cm²s', 'mbar']
-                            }
-                            lines={lines}
-                            drawingMode={drawingMode}
-                            pendingP1={pendingP1}
-                            onChartClick={handleClick}
-                            onRemoveLine={removeLine}
-                          />
-                        </>
-                      )}
-                    </div>
-                  </SciFiFullscreenOverlay>
-                ) : (
-                  <>
-                    {/* Back button & Graph Title Header */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      marginBottom: 14,
-                      background: 'rgba(5, 10, 20, 0.65)',
-                      backdropFilter: 'blur(12px)',
-                      padding: '10px 16px',
-                      border: '1px solid rgba(239, 68, 68, 0.25)',
-                      flexWrap: 'wrap', gap: 10
-                    }}>
-                      <button
-                        onClick={() => setSelectedGraph(null)}
-                        style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          color: '#F8FAFC', padding: '6px 12px', borderRadius: 2,
-                          fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                        }}
-                      >
-                        <ArrowLeft size={13} />
-                        CLOSE GRAPH / BACK TO PLANET VIEW
-                      </button>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: '#EF4444' }}>
-                          {selectedGraph === 'all_detectors' && '🔬 MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)'}
-                          {selectedGraph === 'dosimetry' && '📊 SURFACE ABSORBED DOSIMETRY (TISSUE VS SILICON)'}
-                          {selectedGraph === 'counters' && '⚡ TRIGGER RATES & COINCIDENCES (L1 & L2 CHANNELS)'}
-                          {selectedGraph === 'flux_pressure' && '🪐 GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE'}
-                        </div>
-
-                        <button
-                          onClick={toggleMarsFs}
-                          title="Full Screen (F11 style)"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            background: 'rgba(255,255,255,0.06)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            color: '#94A3B8',
-                            padding: '5px 10px',
-                            borderRadius: 2,
-                            fontSize: 12,
-                            fontFamily: 'var(--font-mono)',
-                            cursor: 'pointer',
-                            fontWeight: 700,
-                            letterSpacing: 0.5,
-                            transition: 'all 0.2s',
-                          }}
-                        >
-                          <Maximize2 size={13} />
-                          <span>FULLSCREEN</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* ECharts Canvas Container (Semi-transparent Glassmorphism) */}
-                    <div
-                      ref={chartWrapperRef}
-                      style={{
-                        position: 'relative',
-                        background: 'rgba(5, 10, 20, 0.55)',
-                        backdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(239, 68, 68, 0.25)',
-                        padding: '16px 8px 20px',
-                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-                      }}
-                    >
-                      {loading ? (
-                        <div style={{ height: 740, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
-                        </div>
-                      ) : (
-                        <>
-                          <ReactECharts
-                            key={selectedGraph}
-                            ref={chartRef}
-                            option={chartOption}
-                            notMerge={true}
-                            lazyUpdate={true}
-                            style={{ height: 740, width: '100%' }}
-                            onEvents={{ dataZoom: onDataZoom }}
-                          />
-                          <TrendLineOverlay
-                            chartRef={chartRef}
-                            wrapperRef={chartWrapperRef}
-                            gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
-                            gridUnits={
-                              selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] :
-                              selectedGraph === 'counters' ? ['cps', 'cps'] :
-                              ['p/cm²s', 'mbar']
-                            }
-                            lines={lines}
-                            drawingMode={drawingMode}
-                            pendingP1={pendingP1}
-                            onChartClick={handleClick}
-                            onRemoveLine={removeLine}
-                          />
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
+          <div>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.15em',
+              color: isLight ? '#1A6DB5' : '#38BDF8', fontWeight: 700, textTransform: 'uppercase'
+            }}>
+              {activeTab === 'surface'
+                ? 'SECTION 02 // CURIOSITY GALE CRATER IN-SITU DOSIMETRY'
+                : 'SECTION 02 // MAVEN SOLAR ENERGETIC PARTICLE (SEP) ORBITER'}
+            </span>
+            <h2 style={{
+              margin: '4px 0 0', fontSize: 'clamp(22px, 2.5vw, 30px)',
+              fontWeight: 800, color: 'var(--text-h)', fontFamily: 'var(--font-sans)'
+            }}>
+              {activeTab === 'surface' ? (
+                <>Surface Radiation <span style={{ color: '#EF4444' }}>& Particle Analytics</span></>
+              ) : (
+                <>Orbital Energetic Particles <span style={{ color: isLight ? '#0284C7' : '#38BDF8' }}>(MAVEN SEP)</span></>
+              )}
+            </h2>
           </div>
 
-          {/* ── RIGHT AREA: INTERACTIVE GRAPH SELECTOR & CONTROLS ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <button
+            onClick={scrollToOrbit}
+            style={{
+              background: 'rgba(5,14,30,0.75)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(52,152,219,0.4)',
+              color: isLight ? '#1A6DB5' : '#38BDF8',
+              padding: '8px 16px', borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', gap: 7, transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#38BDF8'
+              e.currentTarget.style.background = 'rgba(56,189,248,0.15)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'rgba(52,152,219,0.4)'
+              e.currentTarget.style.background = 'rgba(5,14,30,0.75)'
+            }}
+          >
+            <ArrowUp size={14} />
+            <span>SCROLL TO 3D MARS VIEW</span>
+          </button>
+        </div>
 
-            {/* Card 1: Interactive Graph Category Selection List */}
-            <div style={{
-              background: 'rgba(5, 10, 20, 0.65)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              padding: '18px 20px',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+        {/* Mission Tab Selector (Surface RAD vs Orbital MAVEN) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 24,
+          padding: '5px',
+          background: isLight ? '#FFFFFF' : 'rgba(5, 14, 30, 0.7)',
+          border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 8,
+          width: 'fit-content',
+          boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.04)' : '0 4px 20px rgba(0,0,0,0.3)',
+        }}>
+          <button
+            onClick={() => handleTabChange('surface')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 18px',
+              borderRadius: 6,
+              background: activeTab === 'surface'
+                ? (isLight ? '#DC2626' : '#EF4444')
+                : 'transparent',
+              color: activeTab === 'surface'
+                ? '#FFFFFF'
+                : (isLight ? '#475569' : '#94A3B8'),
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              fontWeight: 700,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Radio size={14} />
+            <span>Surface RAD (Curiosity)</span>
+            <span style={{
+              fontSize: 10,
+              padding: '2px 6px',
+              borderRadius: 4,
+              background: activeTab === 'surface' ? 'rgba(255,255,255,0.25)' : (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)'),
+              color: activeTab === 'surface' ? '#FFF' : (isLight ? '#64748B' : '#94A3B8'),
+              fontWeight: 700,
             }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.08)'
-              }}>
-                <BarChart2 size={16} color="#EF4444" />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: '#F8FAFC', letterSpacing: 0.5 }}>
-                  CHOOSE GRAPH TO VIEW
-                </span>
-              </div>
+              GALE CRATER
+            </span>
+          </button>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            onClick={() => handleTabChange('orbit')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 18px',
+              borderRadius: 6,
+              background: activeTab === 'orbit'
+                ? (isLight ? '#0284C7' : '#38BDF8')
+                : 'transparent',
+              color: activeTab === 'orbit'
+                ? (isLight ? '#FFFFFF' : '#04111D')
+                : (isLight ? '#475569' : '#94A3B8'),
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              fontWeight: 700,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Activity size={14} />
+            <span>Orbital Particles (MAVEN)</span>
+            <span style={{
+              fontSize: 10,
+              padding: '2px 6px',
+              borderRadius: 4,
+              background: activeTab === 'orbit' ? (isLight ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)') : (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)'),
+              color: activeTab === 'orbit' ? (isLight ? '#FFF' : '#04111D') : (isLight ? '#64748B' : '#94A3B8'),
+              fontWeight: 700,
+            }}>
+              ORBITER
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'surface' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Toolbar: Category Selector + Date Range Toolbar */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginBottom: 4
+            }}>
+              {/* Category Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontWeight: 700 }}>CATEGORY:</span>
                 {[
-                  {
-                    id: 'all_detectors',
-                    label: 'Multi-Detector (A1 - F)',
-                    desc: 'Silicon SSDs (A1, A2, B, D), Scintillator E, CsI C, Shield F',
-                    color: '#EF4444'
-                  },
-                  {
-                    id: 'dosimetry',
-                    label: 'Total Dosimetry Focus',
-                    desc: 'Tissue Eq (Plastic) vs Silicon Absorber (Single Large Chart)',
-                    color: '#FBBF24'
-                  },
-                  {
-                    id: 'counters',
-                    label: 'Trigger Counters (L1 / L2)',
-                    desc: 'Fast/Slow Triggers & AB/ADE Directional Coincidences',
-                    color: '#F97316'
-                  },
-                  {
-                    id: 'flux_pressure',
-                    label: 'Particle Flux & Pressure Tide',
-                    desc: 'Charged / Neutral Radiation vs Gale Crater Barometric Wave',
-                    color: '#06B6D4'
-                  },
-                ].map(item => {
-                  const active = selectedGraph === item.id
+                  { id: 'dosimetry', label: 'Absorbed Dosimetry', badge: 'TISSUE VS SI' },
+                  { id: 'all_detectors', label: '7-Channel Telescope', badge: 'A-F' },
+                  { id: 'counters', label: 'Trigger Counters', badge: 'L1 / L2' },
+                  { id: 'flux_pressure', label: 'Flux & Pressure Tide', badge: 'ATM' },
+                ].map(cat => {
+                  const isActive = selectedGraph === cat.id
                   return (
                     <button
-                      key={item.id}
-                      onClick={() => setSelectedGraph(prev => prev === item.id ? null : (item.id as any))}
-                      title={active ? 'Click to close / collapse this graph' : 'Click to view this graph'}
+                      key={cat.id}
+                      onClick={() => setSelectedGraph(cat.id as any)}
                       style={{
-                        background: active ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.03)',
-                        border: active ? `1.5px solid ${item.color}` : '1px solid rgba(255,255,255,0.08)',
-                        padding: '12px 14px',
-                        textAlign: 'left',
+                        background: isActive
+                          ? (isLight ? '#DC2626' : '#EF4444')
+                          : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)'),
+                        color: isActive ? '#FFFFFF' : (isLight ? '#334155' : '#94A3B8'),
+                        border: '1px solid ' + (isActive
+                          ? (isLight ? '#DC2626' : '#EF4444')
+                          : (isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)')),
+                        fontSize: 13,
+                        fontWeight: 700,
+                        padding: '6px 14px',
+                        borderRadius: 6,
                         cursor: 'pointer',
-                        borderRadius: 3,
-                        transition: 'all 0.2s ease',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}
-                      onMouseEnter={e => {
-                        if (!active) e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'
-                      }}
-                      onMouseLeave={e => {
-                        if (!active) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                        boxShadow: isLight && !isActive ? '0 1px 4px rgba(0,0,0,0.03)' : 'none',
+                        transition: 'all 0.15s ease',
+                        fontFamily: 'var(--font-mono)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700,
-                          color: active ? '#FFFFFF' : '#CBD5E1'
-                        }}>
-                          {item.label}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {active && (
-                            <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: item.color, fontWeight: 700 }}>
-                              ACTIVE
-                            </span>
-                          )}
-                          <ChevronRight
-                            size={14}
-                            color={active ? item.color : '#64748B'}
-                            style={{
-                              transform: active ? 'rotate(90deg)' : 'none',
-                              transition: 'transform 0.2s ease'
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {/* <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
-                        {active ? '● กำลังแสดงผล (คลิกอีกครั้งเพื่อหุบปิดกราฟ)' : item.desc}
-                      </div> */}
+                      <span>{cat.label}</span>
+                      <span style={{
+                        fontSize: 9.5,
+                        padding: '1px 5px',
+                        borderRadius: 3,
+                        background: isActive ? 'rgba(255,255,255,0.25)' : (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'),
+                        color: isActive ? '#FFF' : (isLight ? '#64748B' : '#94A3B8'),
+                        fontWeight: 700
+                      }}>
+                        {cat.badge}
+                      </span>
                     </button>
                   )
                 })}
               </div>
+
+              {/* Date Range Toolbar (matching SWEPAM standard) */}
+              <DateRangeToolbar
+                limit={limit}
+                onLimitChange={setLimit}
+                appliedRange={appliedRange}
+                onApplyRange={setAppliedRange}
+                accentColor="#EF4444"
+                loading={loading}
+                presets={[1440, 4320, 10080, 43200]}
+              />
             </div>
 
-            {/* Card 2: Filter Detectors Checklist (Shown when Graph is active) */}
+            {/* Detector Channels strip (only if all_detectors is selected) */}
             {selectedGraph === 'all_detectors' && (
               <div style={{
-                background: 'rgba(5, 10, 20, 0.65)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '16px 18px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
+                border: isLight ? '1px solid rgba(26, 109, 181, 0.2)' : '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 6, padding: '8px 14px'
               }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)'
-                }}>
-                  <Layers size={15} color="#38BDF8" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
-                    DETECTOR CHANNELS
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
+                  <Layers size={14} color="#38BDF8" />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: '#38BDF8' }}>
+                    DETECTORS:
                   </span>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {[
-                    { key: 'dose_a1', label: 'Si A1 (Top)', color: '#38BDF8' },
-                    { key: 'dose_a2', label: 'Si A2 (Bottom)', color: '#06B6D4' },
-                    { key: 'dose_b',  label: 'Si B (Middle)', color: '#FBBF24' },
-                    { key: 'dose_d',  label: 'Si D (Lower)', color: '#4ADE80' },
-                    { key: 'dose_e',  label: 'Plastic E (Tissue)', color: '#EF4444' },
-                    { key: 'dose_c',  label: 'CsI C (Crystal)', color: '#A855F7' },
-                    { key: 'dose_f',  label: 'Shield F (Anti)', color: '#F43F5E' },
-                  ].map(d => {
-                    const isChecked = visibleDetectors[d.key as keyof typeof visibleDetectors]
-                    return (
-                      <div
-                        key={d.key}
-                        onClick={() => toggleDetector(d.key as any)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          cursor: 'pointer', padding: '4px 6px',
-                          background: isChecked ? 'rgba(255,255,255,0.04)' : 'transparent',
-                          border: `1px solid ${isChecked ? d.color + '66' : 'transparent'}`,
-                          borderRadius: 2,
-                        }}
-                      >
-                        {isChecked ? <CheckSquare size={13} color={d.color} /> : <Square size={13} color="#64748B" />}
-                        <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: isChecked ? '#FFF' : '#64748B' }}>
-                          {d.label}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Card 3: Time Range & Custom Date Picker (Shown only when Graph is active) */}
-            {selectedGraph && (
-              <div style={{
-                background: 'rgba(5, 10, 20, 0.65)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '16px 18px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                animation: 'fadein 0.3s ease forwards'
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)'
-                }}>
-                  <Clock size={15} color="#FBBF24" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
-                    TIME RANGE
-                  </span>
-                </div>
-
-                {/* Presets (6H, 1D, 3D, 7D, 30D + CUSTOM) */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4, marginBottom: isCustomDate ? 12 : 0 }}>
-                  {([360, 1440, 4320, 10080, 43200] as TimeRange[]).map(val => (
-                    <button
-                      key={val}
-                      onClick={() => {
-                        setLimit(val)
-                        setIsCustomDate(false)
-                        setAppliedRange(null)
-                        const latestTag = summary?.latest_time_tag || (radData.length > 0 ? radData[radData.length - 1].time_tag : undefined)
-                        if (latestTag) {
-                          const latestD = getDateStrFromIso(latestTag)
-                          const days = Math.max(1, Math.round(val / 1440))
-                          setEndDateInput(latestD)
-                          setStartDateInput(getPastDateStrFromDate(latestD, days))
-                        }
-                      }}
+                {[
+                  { key: 'dose_a1', label: 'Si A1 (Top)', color: '#38BDF8' },
+                  { key: 'dose_a2', label: 'Si A2 (Bottom)', color: '#06B6D4' },
+                  { key: 'dose_b',  label: 'Si B (Middle)', color: '#FBBF24' },
+                  { key: 'dose_d',  label: 'Si D (Lower)', color: '#4ADE80' },
+                  { key: 'dose_e',  label: 'Plastic E (Tissue)', color: '#EF4444' },
+                  { key: 'dose_c',  label: 'CsI C (Crystal)', color: '#A855F7' },
+                  { key: 'dose_f',  label: 'Shield F (Anti)', color: '#F43F5E' },
+                ].map(d => {
+                  const isChecked = visibleDetectors[d.key as keyof typeof visibleDetectors]
+                  return (
+                    <div
+                      key={d.key}
+                      onClick={() => toggleDetector(d.key as any)}
                       style={{
-                        background: (!isCustomDate && limit === val) ? '#EF4444' : 'rgba(255,255,255,0.05)',
-                        color: (!isCustomDate && limit === val) ? '#FFFFFF' : '#CBD5E1',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        padding: '6px 0',
-                        fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700,
-                        cursor: 'pointer', textAlign: 'center', borderRadius: 2
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        cursor: 'pointer', padding: '3px 8px',
+                        background: isChecked ? (isLight ? `${d.color}18` : 'rgba(255,255,255,0.06)') : 'transparent',
+                        border: `1px solid ${isChecked ? d.color + '88' : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)')}`,
+                        borderRadius: 3,
+                        transition: 'all 0.15s'
                       }}
                     >
-                      {TIME_LABELS[val]}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setIsCustomDate(true)
-                      const latestTag = summary?.latest_time_tag || (radData.length > 0 ? radData[radData.length - 1].time_tag : undefined)
-                      if (latestTag) {
-                        const latestD = getDateStrFromIso(latestTag)
-                        setEndDateInput(latestD)
-                        setStartDateInput(getPastDateStrFromDate(latestD, 3))
-                      }
-                    }}
-                    style={{
-                      background: isCustomDate ? '#EF4444' : 'rgba(255,255,255,0.05)',
-                      color: isCustomDate ? '#FFFFFF' : '#CBD5E1',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      padding: '6px 0',
-                      fontSize: 9.5, fontFamily: 'var(--font-mono)', fontWeight: 700,
-                      cursor: 'pointer', textAlign: 'center', borderRadius: 2
-                    }}
-                  >
-                    CUSTOM
-                  </button>
-                </div>
-
-                {/* Custom Date Form (Shown ONLY when CUSTOM preset is clicked) */}
-                {isCustomDate && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadein 0.2s ease forwards' }}>
-                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>START DATE:</div>
-                    <DateInputDDMMYYYY value={startDateInput} onChange={setStartDateInput} accentColor="#EF4444" />
-                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginTop: 4 }}>END DATE:</div>
-                    <DateInputDDMMYYYY value={endDateInput} onChange={setEndDateInput} accentColor="#EF4444" />
-                    <button
-                      onClick={() => {
-                        setIsCustomDate(true)
-                        setAppliedRange({ startDate: startDateInput, endDate: endDateInput })
-                      }}
-                      style={{
-                        background: '#EF4444',
-                        color: '#FFF', border: '1px solid #EF4444',
-                        padding: '6px 0', borderRadius: 2, fontSize: 14,
-                        fontFamily: 'var(--font-mono)', fontWeight: 700, cursor: 'pointer',
-                        marginTop: 6
-                      }}
-                    >
-                      APPLY DATE RANGE
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Card 4: Analysis Tools */}
-            {selectedGraph && (
-              <div style={{
-                background: 'rgba(5, 10, 20, 0.65)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '14px 18px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Compass size={15} color="#A855F7" />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#F8FAFC' }}>
-                      ANALYSIS TOOLS
-                    </span>
-                  </div>
-                  {lines.length > 0 && (
-                    <button
-                      onClick={clearLines}
-                      title="Clear all drawn lines"
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                        color: '#EF4444',
-                        fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700,
-                        padding: '2px 8px', borderRadius: 2, cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 4
-                      }}
-                    >
-                      <Trash2 size={11} />
-                      CLEAR ALL
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  onClick={toggleDrawingMode}
-                  style={{
-                    width: '100%',
-                    background: drawingMode ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${drawingMode ? '#EF4444' : 'rgba(255,255,255,0.15)'}`,
-                    color: drawingMode ? '#EF4444' : '#F8FAFC',
-                    padding: '8px 12px', borderRadius: 2,
-                    cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                  }}
-                >
-                  <Compass size={14} />
-                  {drawingMode ? 'DRAWING: ACTIVE (CLICK 2 POINTS)' : 'ENABLE TREND LINE TOOL'}
-                </button>
-
-                {drawingMode && (
-                  <div style={{
-                    fontSize: 13, color: '#FBBF24', fontFamily: 'var(--font-mono)',
-                    marginTop: 6, lineHeight: 1.4
-                  }}>
-                    {pendingP1 ? '● จุดที่ 1 ถูกเลือกแล้ว — คลิกจุดที่ 2 เพื่อสร้างเส้น' : '● คลิกจุดที่ 1 บนกราฟเพื่อเริ่มลากเส้น'}
-                  </div>
-                )}
-
-                {/* List of drawn lines with delete buttons */}
-                {lines.length > 0 && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 13, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                      DRAWN LINES ({lines.length}):
+                      {isChecked ? <CheckSquare size={12} color={d.color} /> : <Square size={12} color="#64748B" />}
+                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: isChecked ? (isLight ? '#0F172A' : '#FFF') : (isLight ? '#64748B' : '#94A3B8') }}>
+                        {d.label}
+                      </span>
                     </div>
-                    {lines.map((l, i) => (
-                      <div
-                        key={l.id}
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          background: 'rgba(255,255,255,0.03)',
-                          border: `1px solid rgba(255,255,255,0.08)`,
-                          borderLeft: `3px solid ${l.color}`,
-                          padding: '4px 8px', borderRadius: 2,
-                          fontSize: 13, fontFamily: 'var(--font-mono)'
-                        }}
-                      >
-                        <span style={{ color: '#CBD5E1' }}>Line #{i + 1}</span>
-                        <button
-                          onClick={() => removeLine(l.id)}
-                          title="Delete this line"
-                          style={{
-                            background: 'transparent', border: 'none',
-                            color: '#EF4444', cursor: 'pointer', padding: 2,
-                            display: 'flex', alignItems: 'center'
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  )
+                })}
               </div>
             )}
 
+            {/* Standard Dashboard Card */}
+            {loading ? (
+              <div style={{ height: 580, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <LoadingSpinner text="Retrieving Mars RAD Dosimetry Telemetry..." />
+              </div>
+            ) : radData.length === 0 ? (
+              <div style={{
+                height: 480, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+                background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
+                border: isLight ? '1px solid rgba(26, 109, 181, 0.2)' : '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 6, color: isLight ? '#64748B' : '#94A3B8'
+              }}>
+                <Info size={32} color="#EF4444" />
+                <span style={{ fontSize: 16, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>No telemetry data found for the selected range</span>
+                <span style={{ fontSize: 13 }}>Try adjusting the date range or clicking a preset (1D, 3D, 7D, 30D, ALL)</span>
+              </div>
+            ) : (
+              <Card
+                title={
+                  selectedGraph === 'all_detectors' ? 'MULTI-DETECTOR TELESCOPE (A1, A2, B, C, D, E, F)' :
+                  selectedGraph === 'counters' ? 'TRIGGER RATES & COINCIDENCE CHANNELS (L1 & L2)' :
+                  selectedGraph === 'flux_pressure' ? 'GCR PARTICLE FLUX & ATMOSPHERIC PRESSURE TIDE' :
+                  'SURFACE ABSORBED DOSIMETRY (MSL CURIOSITY RAD)'
+                }
+                subtitle={
+                  selectedGraph === 'all_detectors' ? '7-Channel Silicon Solid-State Detectors, Scintillators & Anticoincidence Shield' :
+                  selectedGraph === 'counters' ? 'Fast/Slow Level 1 Triggers & Level 2 Directional / Stopping Proton Coincidences' :
+                  selectedGraph === 'flux_pressure' ? 'In-situ Charged & Neutral Particle Flux vs. Gale Crater Barometric Pressure' :
+                  'Plastic Scintillator (Tissue Equivalent E) vs Silicon Absorber (Gale Crater)'
+                }
+                extra={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {panLoading && (
+                      <span style={{ fontSize: 13, color: '#EF4444', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                        ◀ LOADING HISTORICAL DATA...
+                      </span>
+                    )}
+                    <button
+                      onClick={toggleDrawingMode}
+                      style={{
+                        background: drawingMode ? 'rgba(239, 68, 68, 0.25)' : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)'),
+                        border: `1px solid ${drawingMode ? '#EF4444' : (isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)')}`,
+                        color: drawingMode ? '#EF4444' : (isLight ? '#334155' : '#CBD5E1'),
+                        padding: '4px 10px', borderRadius: 4,
+                        cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', gap: 5
+                      }}
+                    >
+                      <Compass size={13} />
+                      <span>{drawingMode ? 'DRAWING' : 'TREND LINE'}</span>
+                    </button>
+                    {lines.length > 0 && (
+                      <button
+                        onClick={clearLines}
+                        style={{
+                          background: 'rgba(239,68,68,0.15)',
+                          border: '1px solid rgba(239,68,68,0.4)',
+                          color: '#EF4444',
+                          padding: '4px 8px', borderRadius: 4,
+                          cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700
+                        }}
+                      >
+                        CLEAR ({lines.length})
+                      </button>
+                    )}
+                    <ExportChartMenu
+                      chartRef={chartRef}
+                      data={radData}
+                      columns={exportColumns}
+                      metadata={exportMetadata}
+                      filenameBase={`msl_rad_${selectedGraph}`}
+                      accentColor="#EF4444"
+                    />
+                  </div>
+                }
+                style={{
+                  marginBottom: 20,
+                  background: isLight ? '#FFFFFF' : undefined,
+                  boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
+                  border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
+                }}
+              >
+                <div ref={chartWrapperRef} style={{ position: 'relative', width: '100%', height: selectedGraph === 'all_detectors' ? 620 : 560 }}>
+                  <ReactECharts
+                    key={selectedGraph}
+                    ref={chartRef}
+                    option={chartOption}
+                    notMerge={true}
+                    lazyUpdate={true}
+                    style={{ height: '100%', width: '100%' }}
+                    onEvents={{ dataZoom: onDataZoom }}
+                  />
+                  <TrendLineOverlay
+                    chartRef={chartRef}
+                    wrapperRef={chartWrapperRef}
+                    gridCount={selectedGraph === 'all_detectors' ? 3 : selectedGraph === 'dosimetry' ? 1 : 2}
+                    gridUnits={
+                      selectedGraph === 'all_detectors' ? ['µGy/hr', 'µGy/hr', 'µGy/hr'] :
+                      selectedGraph === 'counters' ? ['cps', 'cps'] :
+                      selectedGraph === 'flux_pressure' ? ['p/cm²s', 'mbar'] :
+                      ['µGy/hr']
+                    }
+                    lines={lines}
+                    drawingMode={drawingMode}
+                    pendingP1={pendingP1}
+                    onChartClick={handleClick}
+                    onRemoveLine={removeLine}
+                  />
+                </div>
+              </Card>
+            )}
           </div>
+        )}
 
-        </div>
+        {activeTab === 'orbit' && (
+          <MarsMavenSection />
+        )}
 
       </div>
     </div>
   )
 }
+

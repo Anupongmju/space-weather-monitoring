@@ -7,3 +7,5 @@ cdflib
 netCDF4
 imageio
 imageio-ffmpeg
+pandas
+types-psycopg2

@@ -37,7 +37,7 @@ function fmtDuration(ms: number) {
 }
 
 function fmtValue(v: number, unit: string) {
-  if (unit === 'pfu') return v.toExponential(2)
+  if (unit === 'pfu' || unit === 'W/m²') return v.toExponential(2)
   if (unit === 'K')   return Math.round(v).toLocaleString()
   return v.toFixed(2)
 }

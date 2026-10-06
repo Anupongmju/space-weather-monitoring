@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 export interface DrawnLine {
   id: string
@@ -21,7 +21,7 @@ const LINE_COLORS = [
 let colorIdx = 0
 function nextColor() { return LINE_COLORS[(colorIdx++) % LINE_COLORS.length] }
 
-export function useLineDrawing() {
+export function useLineDrawing(_chartRef?: any) {
   const [lines, setLines] = useState<DrawnLine[]>([])
   const [drawingMode, setDrawingMode] = useState(false)
   const [pendingP1, setPendingP1] = useState<{ time: number; value: number; gridIndex: number } | null>(null)
@@ -64,7 +64,9 @@ export function useLineDrawing() {
 
   return {
     lines,
+    setLines,
     drawingMode,
+    setDrawingMode,
     pendingP1,
     toggleDrawingMode,
     handleClick,

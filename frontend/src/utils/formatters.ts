@@ -58,3 +58,30 @@ export const formatPowerOf10 = (value: number): string => {
   }
   return `${prefix}${m}×10${toSuperscript(p)}`
 }
+
+/**
+ * Robustly formats any timestamp into standard UTC representation (YYYY-MM-DD HH:mm:ss UTC).
+ * Handles timestamps with or without 'Z' / 'T' safely so local timezone offset is never applied.
+ */
+export const formatUTCTime = (val: string | number | Date | null | undefined, includeSeconds = true): string => {
+  if (val === null || val === undefined || val === '') return ''
+  let d: Date
+  if (val instanceof Date) {
+    d = val
+  } else if (typeof val === 'number') {
+    d = new Date(val)
+  } else {
+    let str = String(val).trim()
+    if (/^\d{10,13}$/.test(str)) {
+      d = new Date(Number(str))
+    } else {
+      if (!str.includes('Z') && !str.includes('+') && !str.match(/[+-]\d{2}:?\d{2}$/)) {
+        str = str.replace(' ', 'T') + 'Z'
+      }
+      d = new Date(str)
+    }
+  }
+  if (isNaN(d.getTime())) return String(val)
+  return d.toISOString().replace('T', ' ').slice(0, includeSeconds ? 19 : 16) + ' UTC'
+}
+

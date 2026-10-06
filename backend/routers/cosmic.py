@@ -39,8 +39,8 @@ def get_neutron(station: str = "OULU", limit: int = 1440, start_date: Optional[s
         sql = """
             SELECT * FROM cosmic_neutron 
             WHERE station=%s 
-              AND time_tag::TIMESTAMP >= %s::TIMESTAMP 
-              AND time_tag::TIMESTAMP <= %s::TIMESTAMP
+              AND time_tag >= %s 
+              AND time_tag <= %s
             ORDER BY time_tag ASC
         """
         return query(sql, (station, s, e))
@@ -54,9 +54,19 @@ def get_neutron(station: str = "OULU", limit: int = 1440, start_date: Optional[s
         return query(sql, (station,))
 
     sql = """
-        SELECT * FROM cosmic_neutron 
-        WHERE station=%s 
-          AND time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM cosmic_neutron WHERE station=%s) - (%s || ' minutes')::INTERVAL
+        WITH cutoff AS (
+            SELECT to_char(MAX(time_tag)::timestamp - (%s || ' minutes')::interval, 'YYYY-MM-DD HH24:MI:SS') as t
+            FROM cosmic_neutron WHERE station = %s
+        )
+        SELECT cosmic_neutron.* FROM cosmic_neutron, cutoff
+        WHERE station = %s 
+          AND time_tag >= cutoff.t
         ORDER BY time_tag ASC
     """
-    return query(sql, (station, station, limit))
+    return query(sql, (limit, station, station))
+
+@router.get("/gle77/timeline")
+def get_gle77_timeline(window: int = 10):
+    from routers.gle77_processor import load_and_process_gle77
+    valid_window = window if window in (10, 20, 30) else 10
+    return load_and_process_gle77(valid_window)

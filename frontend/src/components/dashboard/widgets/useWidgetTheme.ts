@@ -9,6 +9,7 @@ export function useWidgetTheme() {
     theme,
     containerStyle: {
       height: '240px',
+      minWidth: 0,
       display: 'flex',
       flexDirection: 'column' as const,
       background: isLight ? '#FFFFFF' : 'rgba(0,0,0,0.5)',

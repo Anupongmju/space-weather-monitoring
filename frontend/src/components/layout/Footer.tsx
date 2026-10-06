@@ -17,9 +17,9 @@ export default function Footer() {
       borderTop: isLight ? '2px solid var(--primary, #1A6DB5)' : '2px solid #3498DB',
       color: isLight ? '#475569' : '#E2E8F0',
       fontFamily: 'var(--font-mono)',
-      padding: '40px 40px 20px',
+      padding: '20px 24px 12px',
       marginTop: 'auto',
-      fontSize: '15px',
+      fontSize: '12px',
       backdropFilter: 'blur(10px)',
       WebkitBackdropFilter: 'blur(10px)',
       boxShadow: isLight ? '0 -4px 20px rgba(0,0,0,0.03)' : 'none',
@@ -29,26 +29,26 @@ export default function Footer() {
         maxWidth: '1200px',
         margin: '0 auto',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '40px',
-        marginBottom: '40px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '24px',
+        marginBottom: '16px'
       }}>
         {/* Column 1 */}
         <div>
-          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
             About Space Weather Hub
           </h3>
-          <p style={{ lineHeight: '1.6', color: mutedTextColor, textAlign: 'justify' }}>
+          <p style={{ lineHeight: '1.5', color: mutedTextColor, textAlign: 'justify', margin: 0, fontSize: '11.5px' }}>
             Space Weather Hub is a comprehensive dashboard providing near real-time data about Astronomy, Space Weather, aurora, and related subjects. Our mission is to promote scientific awareness of space environment events onto the worldwide web.
           </p>
         </div>
 
         {/* Column 2 */}
         <div>
-          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
             Our Data Sources
           </h3>
-          <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: mutedTextColor, lineHeight: '1.8' }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: '18px', color: mutedTextColor, lineHeight: '1.6', margin: 0, fontSize: '11.5px' }}>
             <li>
               <a
                 href="https://www.swpc.noaa.gov/"
@@ -96,10 +96,10 @@ export default function Footer() {
 
         {/* Column 3 */}
         <div>
-          <h3 style={{ color: headingColor, fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <h3 style={{ color: headingColor, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
             About
           </h3>
-          <p style={{ lineHeight: '1.6', color: mutedTextColor, marginBottom: '16px' }}>
+          <p style={{ lineHeight: '1.5', color: mutedTextColor, marginBottom: '10px', fontSize: '11.5px' }}>
             SpaceWeatherHub is a near-live platform where you can follow space weather from the Sun to Earth and know exactly when you can see aurora.
           </p>
           <Link
@@ -109,9 +109,9 @@ export default function Footer() {
               background: isLight ? 'rgba(26, 109, 181, 0.06)' : 'transparent',
               border: isLight ? '1px solid rgba(26, 109, 181, 0.25)' : '1px solid rgba(255,255,255,0.2)',
               color: isLight ? '#1A6DB5' : 'rgba(255,255,255,0.8)',
-              padding: '6px 16px',
+              padding: '3px 12px',
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: '11px',
               borderRadius: '4px',
               transition: 'all 0.2s',
               fontFamily: 'var(--font-mono)',
@@ -135,20 +135,20 @@ export default function Footer() {
       {/* Copyright & Disclaimer */}
       <div style={{
         textAlign: 'center',
-        paddingTop: '20px',
+        paddingTop: '10px',
         borderTop: isLight ? '1px solid rgba(0, 0, 0, 0.06)' : '1px solid rgba(255, 255, 255, 0.06)',
         color: isLight ? '#94A3B8' : 'rgba(255,255,255,0.4)',
-        fontSize: '13px',
+        fontSize: '11px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px'
+        gap: '4px'
       }}>
         <div>
-          <span style={{ color: headingColor }}>Copyright © 2024-2026 Space Weather Hub</span> © All rights reserved - Developed by your team
+          <span style={{ color: headingColor }}>Copyright © 2024-2026 Space Weather Hub</span> · All rights reserved
         </div>
         <div>
           <Link
-            to="#"
+            to="/about"
             style={{ color: isLight ? '#1A6DB5' : '#3b82f6', textDecoration: 'none' }} 
             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
             onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
@@ -157,7 +157,7 @@ export default function Footer() {
           </Link>
           <span style={{ margin: '0 8px' }}>-</span>
           <Link
-            to="#"
+            to="/about"
             style={{ color: isLight ? '#1A6DB5' : '#3b82f6', textDecoration: 'none' }}
             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
             onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}

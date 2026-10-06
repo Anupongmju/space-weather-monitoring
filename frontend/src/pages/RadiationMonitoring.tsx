@@ -22,10 +22,14 @@ import { useChartPan } from '../hooks/useChartPan'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import InstrumentInfoGuide from '../components/ui/InstrumentInfoGuide'
 import StatusBadge from '../components/ui/StatusBadge'
+import ExportChartMenu from '../components/ui/ExportChartMenu'
+import { ExportColumn } from '../utils/exportHelpers'
 import { useLineDrawing } from '../hooks/useLineDrawing'
 import TrendLineOverlay, { buildMarkLines } from '../components/ui/TrendLineOverlay'
-import { formatPowerOf10 } from '../utils/formatters'
+import { formatPowerOf10, formatUTCTime } from '../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines } from '../utils/chartHelpers'
 import { useTheme } from '../context/ThemeContext'
+import DateRangeToolbar, { TimeRange, TIME_LABELS } from '../components/ui/DateRangeToolbar'
 
 const GOES_PROTON_COLORS: Record<string, string> = {
   '>=1 MeV': '#60A5FA',   // Bright Blue
@@ -36,127 +40,6 @@ const GOES_PROTON_COLORS: Record<string, string> = {
   '>=60 MeV': '#A855F7',  // Bright Purple
   '>=100 MeV': '#EF4444', // Bright Red
   '>=500 MeV': '#EC4899', // Bright Pink
-}
-
-type TimeRange = 360 | 1440 | 4320 | 10080
-const TIME_LABELS: Record<number, string> = { 360: '6H', 1440: '1D', 4320: '3D', 10080: '7D' }
-
-const getTodayStr = () => new Date().toISOString().split('T')[0]
-const getPastDateStr = (daysAgo: number) => {
-  const d = new Date()
-  d.setDate(d.getDate() - daysAgo)
-  return d.toISOString().split('T')[0]
-}
-
-function DateInputDDMMYYYY({
-  value,
-  onChange,
-  accentColor = '#38BDF8',
-  isLight = false,
-}: {
-  value: string
-  onChange: (val: string) => void
-  accentColor?: string
-  isLight?: boolean
-}) {
-  const isoToDdMmYyyy = (iso: string) => {
-    if (!iso) return ''
-    const parts = iso.split('-')
-    if (parts.length !== 3) return iso
-    return `${parts[2]}/${parts[1]}/${parts[0]}`
-  }
-
-  const [text, setText] = useState(() => isoToDdMmYyyy(value))
-  const dateInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setText(isoToDdMmYyyy(value))
-  }, [value])
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value
-    setText(val)
-
-    const cleaned = val.replace(/\D/g, '')
-    if (cleaned.length === 8) {
-      const day = cleaned.slice(0, 2)
-      const month = cleaned.slice(2, 4)
-      const year = cleaned.slice(4, 8)
-      const iso = `${year}-${month}-${day}`
-      onChange(iso)
-    }
-  }
-
-  const handleNativeDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const iso = e.target.value
-    if (iso) {
-      onChange(iso)
-    }
-  }
-
-  return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <input
-        type="text"
-        placeholder="DD/MM/YYYY"
-        maxLength={10}
-        value={text}
-        onChange={handleTextChange}
-        style={{
-          width: 95,
-          padding: '3px 6px',
-          background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.8)',
-          border: `1px solid ${accentColor}66`,
-          color: isLight ? '#0F172A' : '#F8FAFC',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 15,
-          fontWeight: 600,
-          textAlign: 'center',
-          borderRadius: 2,
-          outline: 'none',
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => {
-          const el = dateInputRef.current as any;
-          if (el) {
-            if (typeof el.showPicker === 'function') {
-              el.showPicker();
-            } else {
-              el.focus();
-            }
-          }
-        }}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          color: accentColor,
-          cursor: 'pointer',
-          padding: '0 4px',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        <Calendar size={12} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={value}
-        onChange={handleNativeDateChange}
-        style={{
-          position: 'absolute',
-          opacity: 0,
-          pointerEvents: 'none',
-          width: 0,
-          height: 0,
-          bottom: 0,
-          left: 0,
-        }}
-      />
-    </div>
-  )
 }
 
 export default function RadiationMonitoring() {
@@ -197,10 +80,7 @@ export default function RadiationMonitoring() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [activeGuideTab, setActiveGuideTab] = useState('usage')
 
-  // Date range picker states
-  const [isCustomDate, setIsCustomDate] = useState(false)
-  const [startDateInput, setStartDateInput] = useState(getPastDateStr(3))
-  const [endDateInput, setEndDateInput] = useState(getTodayStr())
+  // Date range state
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
 
   // Trend line drawing
@@ -228,6 +108,11 @@ export default function RadiationMonitoring() {
     const map: Record<string, any> = {}
     d.forEach(r => {
       if (!r || !r.time_tag) return
+      const rawEnergy = (r.energy || '').trim()
+      // Filter out keV channels (differential) so GOES Proton is purely Integral (int)
+      if (rawEnergy.toLowerCase().includes('kev')) {
+        return
+      }
       if (!map[r.time_tag]) map[r.time_tag] = { time_tag: r.time_tag }
       const key = normEnergy(r.energy)
       const flux = floatVal(r.flux)
@@ -246,19 +131,19 @@ export default function RadiationMonitoring() {
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true)
     try {
-      const sDate = isCustomDate && appliedRange ? appliedRange.startDate : undefined
-      const eDate = isCustomDate && appliedRange ? appliedRange.endDate : undefined
+      const sDate = appliedRange ? appliedRange.startDate : undefined
+      const eDate = appliedRange ? appliedRange.endDate : undefined
 
       const [stereo, solar1, epam, sis, crater, gProton, gElectron, sopo, oulu] = await Promise.all([
-        loadStereo(limit, sDate, eDate),
-        loadSolar1(limit, sDate, eDate),
-        loadAceEpam(limit, sDate, eDate),
-        loadAceSis(limit, sDate, eDate),
-        loadCrater(limit, sDate, eDate),
-        loadProton(limit, sDate, eDate),
-        loadElectron(limit, sDate, eDate),
-        loadNeutron('SOPO', limit, sDate, eDate),
-        loadNeutron('OULU', limit, sDate, eDate),
+        loadStereo(limit, sDate, eDate).catch(e => { console.warn('Stereo load failed:', e); return [] }),
+        loadSolar1(limit, sDate, eDate).catch(e => { console.warn('Solar1 load failed:', e); return [] }),
+        loadAceEpam(limit, sDate, eDate).catch(e => { console.warn('AceEpam load failed:', e); return [] }),
+        loadAceSis(limit, sDate, eDate).catch(e => { console.warn('AceSis load failed:', e); return [] }),
+        loadCrater(limit, sDate, eDate).catch(e => { console.warn('Crater load failed:', e); return [] }),
+        loadProton(limit, sDate, eDate).catch(e => { console.warn('Proton load failed:', e); return [] }),
+        loadElectron(limit, sDate, eDate).catch(e => { console.warn('Electron load failed:', e); return [] }),
+        loadNeutron('SOPO', limit, sDate, eDate).catch(e => { console.warn('Neutron SOPO load failed:', e); return [] }),
+        loadNeutron('OULU', limit, sDate, eDate).catch(e => { console.warn('Neutron OULU load failed:', e); return [] }),
       ])
 
       setStereoData(Array.isArray(stereo) ? stereo : [])
@@ -294,15 +179,15 @@ export default function RadiationMonitoring() {
     setData: activeMainTab === 'cosmic' ? setCraterData : setStereoData,
     loadHistorical: async (start, end) => {
       const [st, s1, ep, si, cr, gp, ge, sp, ou] = await Promise.all([
-        loadStereo(0, start, end),
-        loadSolar1(0, start, end),
-        loadAceEpam(0, start, end),
-        loadAceSis(0, start, end),
-        loadCrater(0, start, end),
-        loadProton(0, start, end),
-        loadElectron(0, start, end),
-        loadNeutron('SOPO', 0, start, end),
-        loadNeutron('OULU', 0, start, end),
+        loadStereo(0, start, end).catch(e => { console.warn('Stereo hist failed:', e); return [] }),
+        loadSolar1(0, start, end).catch(e => { console.warn('Solar1 hist failed:', e); return [] }),
+        loadAceEpam(0, start, end).catch(e => { console.warn('AceEpam hist failed:', e); return [] }),
+        loadAceSis(0, start, end).catch(e => { console.warn('AceSis hist failed:', e); return [] }),
+        loadCrater(0, start, end).catch(e => { console.warn('Crater hist failed:', e); return [] }),
+        loadProton(0, start, end).catch(e => { console.warn('Proton hist failed:', e); return [] }),
+        loadElectron(0, start, end).catch(e => { console.warn('Electron hist failed:', e); return [] }),
+        loadNeutron('SOPO', 0, start, end).catch(e => { console.warn('Neutron SOPO hist failed:', e); return [] }),
+        loadNeutron('OULU', 0, start, end).catch(e => { console.warn('Neutron OULU hist failed:', e); return [] }),
       ])
 
       const merge = (prev: any[], older: any[], key = 'time_tag') => {
@@ -332,11 +217,148 @@ export default function RadiationMonitoring() {
   useEffect(() => {
     resetPan()
     loadData(true)
-  }, [limit, appliedRange, isCustomDate, activeMainTab])
+  }, [limit, appliedRange, activeMainTab])
 
   useAutoFetch(async () => {
     await loadData(false)
   }, 60000, !appliedRange)
+
+  const exportColumns = useMemo<ExportColumn[]>(() => {
+    if (activeMainTab === 'protons') {
+      return [
+        { key: 'time_tag', label: 'Time (UTC)', width: 22 },
+        { key: 'goes_p1', label: 'GOES >=1MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'goes_p5', label: 'GOES >=5MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'goes_p10', label: 'GOES >=10MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'goes_p30', label: 'GOES >=30MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'goes_p50', label: 'GOES >=50MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'goes_p100', label: 'GOES >=100MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_p1', label: 'SOLAR1 47-68keV (pfu)', width: 20, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_p4', label: 'SOLAR1 180-342keV (pfu)', width: 20, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_p8', label: 'SOLAR1 1.8-5.2MeV (pfu)', width: 20, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'ace_sis_p10', label: 'ACE SIS >10MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'ace_sis_p30', label: 'ACE SIS >30MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'stereo_pro_b02', label: 'STEREO 84-92keV (pfu)', width: 20, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+      ]
+    } else if (activeMainTab === 'electrons') {
+      return [
+        { key: 'time_tag', label: 'Time (UTC)', width: 22 },
+        { key: 'goes_e2', label: 'GOES >=2MeV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_e1', label: 'SOLAR1 e1 27-41keV (pfu)', width: 22, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_e2', label: 'SOLAR1 e2 40-66keV (pfu)', width: 22, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_e3', label: 'SOLAR1 e3 64-161keV (pfu)', width: 22, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'solar1_e4', label: 'SOLAR1 e4 150-316keV (pfu)', width: 22, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'ace_e38_53', label: 'ACE 38-53keV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'ace_e175_315', label: 'ACE 175-315keV (pfu)', width: 18, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+        { key: 'stereo_ele_b01', label: 'STEREO 55-65keV (pfu)', width: 20, format: (v) => v != null ? Number(v).toExponential(3) : 'N/A' },
+      ]
+    } else {
+      return [
+        { key: 'time_tag', label: 'Time (UTC)', width: 22 },
+        { key: 'crater_d12', label: 'CRaTER D1&2 (cGy/day)', width: 20, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+        { key: 'crater_d34', label: 'CRaTER D3&4 (cGy/day)', width: 20, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+        { key: 'crater_d56', label: 'CRaTER D5&6 (cGy/day)', width: 20, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+        { key: 'sopo_count', label: 'South Pole (cts/sec)', width: 20, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+        { key: 'oulu_count', label: 'Oulu NM (cts/sec)', width: 18, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+      ]
+    }
+  }, [activeMainTab])
+
+  const exportData = useMemo(() => {
+    const map = new Map<string, any>()
+    const getRow = (t: string) => {
+      let r = map.get(t)
+      if (!r) {
+        r = { time_tag: t }
+        map.set(t, r)
+      }
+      return r
+    }
+
+    if (activeMainTab === 'protons') {
+      goesProtonData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.goes_p1 = d['>=1 MeV']
+        r.goes_p5 = d['>=5 MeV']
+        r.goes_p10 = d['>=10 MeV']
+        r.goes_p30 = d['>=30 MeV']
+        r.goes_p50 = d['>=50 MeV']
+        r.goes_p100 = d['>=100 MeV']
+      })
+      solar1Data.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.solar1_p1 = d.p1
+        r.solar1_p4 = d.p4
+        r.solar1_p8 = d.p8
+      })
+      aceSisData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.ace_sis_p10 = d.p10
+        r.ace_sis_p30 = d.p30
+      })
+      stereoData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.stereo_pro_b02 = d.pro_b02
+      })
+    } else if (activeMainTab === 'electrons') {
+      goesElectronData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.goes_e2 = d['>=2 MeV'] ?? d['>=2.0 MeV'] ?? d['>=2MeV']
+      })
+      solar1Data.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.solar1_e1 = d.e1
+        r.solar1_e2 = d.e2
+        r.solar1_e3 = d.e3
+        r.solar1_e4 = d.e4
+      })
+      aceEpamData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.ace_e38_53 = d.e38_53
+        r.ace_e175_315 = d.e175_315
+      })
+      stereoData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.stereo_ele_b01 = d.ele_b01
+      })
+    } else {
+      craterData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.crater_d12 = d.d12
+        r.crater_d34 = d.d34
+        r.crater_d56 = d.d56
+      })
+      sopoData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.sopo_count = d.count_rate
+      })
+      ouluData.forEach(d => {
+        if (!d.time_tag) return
+        const r = getRow(d.time_tag)
+        r.oulu_count = d.count_rate
+      })
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }, [activeMainTab, goesProtonData, solar1Data, aceSisData, stereoData, goesElectronData, aceEpamData, craterData, sopoData, ouluData])
+
+  const exportMetadata = useMemo(() => ({
+    station: `HELIOSPHERIC RADIATION // ${activeMainTab.toUpperCase()}`,
+    viewTitle: `Heliospheric Radiation Suite (${activeMainTab.toUpperCase()})`,
+    description: `Synchronized Multi-tier Telemetry: GOES, STEREO-A, SOLAR-1, ACE, LRO CRaTER, NMDB.`,
+    timeRangeText: appliedRange ? `${appliedRange.startDate} to ${appliedRange.endDate}` : `${TIME_LABELS[limit]} (Recent)`,
+    totalRecords: exportData.length
+  }), [activeMainTab, appliedRange, limit, exportData.length])
 
   // Shared styles
   const axisLabelStyle = { color: isLight ? '#475569' : '#CBD5E1', fontSize: 14.5, fontFamily: 'monospace, sans-serif', fontWeight: 600 }
@@ -346,12 +368,26 @@ export default function RadiationMonitoring() {
     gridIndex: gi,
     type: 'time' as const,
     splitLine: splitLineStyle,
-    axisLabel: showLabel ? axisLabelStyle : { show: false },
+    axisLabel: showLabel ? createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange) : { show: false },
     axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
   })
 
-  const yAxisBase = (gi: number, type: 'value' | 'log' = 'value') => ({
+  const getTierDividers = (range: { min?: number; max?: number }) => {
+    const midnights = getMidnightTimestamps(range.min, range.max)
+    return getMidnightDividerMarkLines(midnights, isLight)
+  }
+
+  const yAxisBase = (gi: number, name = '', type: 'value' | 'log' = 'value') => ({
     gridIndex: gi,
+    name,
+    nameLocation: 'middle' as const,
+    nameGap: 52,
+    nameTextStyle: {
+      color: isLight ? '#0F172A' : '#CBD5E1',
+      fontSize: 12,
+      fontWeight: 700,
+      fontFamily: 'sans-serif'
+    },
     type,
     splitLine: splitLineStyle,
     axisLabel: {
@@ -369,8 +405,8 @@ export default function RadiationMonitoring() {
     return !isNaN(n) && n >= minThreshold ? n : null
   }
 
-  // Calculate independent tier window range
-  const getIndependentTierRange = (data: any[], windowMinutes: number, timeKey = 'time_tag', paddingRatio = 0.25) => {
+  // Calculate independent time domains
+  const getIndependentTierRange = (data: any[], windowMinutes: number, paddingRatio = 0.2, timeKey = 'time_tag') => {
     if (!data || data.length === 0) return { min: undefined, max: undefined }
     const validTimes = data.map(d => new Date(d[timeKey]).getTime()).filter(t => !isNaN(t))
     if (validTimes.length === 0) return { min: undefined, max: undefined }
@@ -394,14 +430,16 @@ export default function RadiationMonitoring() {
     const set = new Set<string>()
     goesProtonData.forEach(d => {
       Object.keys(d).forEach(k => {
-        if (k !== 'time_tag' && d[k] != null) set.add(k)
+        if (k !== 'time_tag' && d[k] != null && !k.toLowerCase().includes('kev')) {
+          set.add(k)
+        }
       })
     })
-    const list = Array.from(set).sort((a, b) => {
-      const numA = parseFloat(a.replace(/[^0-9.]/g, '')) || 0
-      const numB = parseFloat(b.replace(/[^0-9.]/g, '')) || 0
-      return numA - numB
-    })
+    const parseToMeV = (e: string) => {
+      const match = e.match(/[\d.]+/)
+      return match ? parseFloat(match[0]) : 0
+    }
+    const list = Array.from(set).sort((a, b) => parseToMeV(a) - parseToMeV(b))
     return list.length > 0 ? list : ['>=1 MeV', '>=5 MeV', '>=10 MeV', '>=30 MeV', '>=50 MeV', '>=60 MeV', '>=100 MeV', '>=500 MeV']
   }, [goesProtonData])
 
@@ -418,11 +456,8 @@ export default function RadiationMonitoring() {
     axisPointer: { type: 'line' as const, lineStyle: { color: headerColor, type: 'dashed' as const, width: 1.5 } },
     formatter: (params: any) => {
       if (!params || params.length === 0) return ''
-      const rawTime = params[0].axisValueLabel || params[0].value[0]
-      let timeStr = rawTime
-      if (typeof rawTime === 'number') {
-        timeStr = new Date(rawTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-      }
+      const rawTime = params[0].value ? params[0].value[0] : (params[0].axisValue || '')
+      const timeStr = formatUTCTime(rawTime, true)
 
       let html = `<div style="font-family: var(--font-mono); font-size: 14.5px; min-width: 260px;">`
       html += `<div style="color: ${headerColor}; border-bottom: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.15)'}; padding-bottom: 6px; margin-bottom: 8px; font-weight: 700; font-size: 14.5px;">⏱ ${timeStr}</div>`
@@ -446,6 +481,7 @@ export default function RadiationMonitoring() {
 
   // ── TAB 1: SPACE PROTONS OPTION (5 TIERS: STEREO, Solar-1, ACE EPAM, ACE SIS, GOES-18) ──
   const protonsOption = useMemo(() => ({
+    useUTC: true,
     backgroundColor: 'transparent',
     animation: false,
     title: [
@@ -481,11 +517,11 @@ export default function RadiationMonitoring() {
       { ...xAxisBase(4, true), min: goesRange.min, max: goesRange.max },
     ],
     yAxis: [
-      yAxisBase(0, 'log'),
-      yAxisBase(1, 'log'),
-      yAxisBase(2, 'log'),
-      yAxisBase(3, 'log'),
-      yAxisBase(4, 'log'),
+      yAxisBase(0, 'STEREO-A Pro (pfu)', 'log'),
+      yAxisBase(1, 'Solar-1 STIS (pfu)', 'log'),
+      yAxisBase(2, 'ACE EPAM (pfu)', 'log'),
+      yAxisBase(3, 'ACE SIS (pfu)', 'log'),
+      yAxisBase(4, 'GOES-18 (pfu)', 'log'),
     ],
     series: [
       // STEREO Proton
@@ -599,6 +635,7 @@ export default function RadiationMonitoring() {
 
   // ── TAB 2: SPACE ELECTRONS OPTION (4 TIERS: STEREO, Solar-1, ACE EPAM, GOES-18) ──
   const electronsOption = useMemo(() => ({
+    useUTC: true,
     backgroundColor: 'transparent',
     animation: false,
     title: [
@@ -631,10 +668,10 @@ export default function RadiationMonitoring() {
       { ...xAxisBase(3, true), min: goesRange.min, max: goesRange.max },
     ],
     yAxis: [
-      yAxisBase(0, 'log'),
-      yAxisBase(1, 'log'),
-      yAxisBase(2, 'log'),
-      yAxisBase(3, 'log'),
+      yAxisBase(0, 'STEREO-A Ele (pfu)', 'log'),
+      yAxisBase(1, 'Solar-1 STIS (pfu)', 'log'),
+      yAxisBase(2, 'ACE EPAM (pfu)', 'log'),
+      yAxisBase(3, 'GOES-18 (pfu)', 'log'),
     ],
     series: [
       // STEREO Electron
@@ -700,6 +737,7 @@ export default function RadiationMonitoring() {
 
   // ── TAB 3: COSMIC & LUNAR RADIATION OPTION (3 TIERS) ──
   const cosmicOption = useMemo(() => ({
+    useUTC: true,
     backgroundColor: 'transparent',
     animation: false,
     title: [
@@ -729,9 +767,9 @@ export default function RadiationMonitoring() {
       { ...xAxisBase(2, true), min: nmdbRange.min, max: nmdbRange.max },
     ],
     yAxis: [
-      yAxisBase(0),
-      yAxisBase(1),
-      yAxisBase(2),
+      yAxisBase(0, 'CRaTER Paired (cGy/day)'),
+      yAxisBase(1, 'CRaTER Single (cGy/day)'),
+      yAxisBase(2, 'NMDB Neutron (cts/sec)'),
     ],
     series: [
       // CRaTER Paired
@@ -961,128 +999,45 @@ export default function RadiationMonitoring() {
 
           {/* Time Preset Pills & Date Picker */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: isLight ? '#F1F5F9' : 'rgba(15, 23, 42, 0.75)',
-              padding: '3px 6px',
-              border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 6
-            }}>
-              {([360, 1440, 4320, 10080] as TimeRange[]).map(v => (
-                <button
-                  key={v}
-                  onClick={() => { setIsCustomDate(false); setAppliedRange(null); setLimit(v); }}
-                  style={{
-                    padding: '4px 10px',
-                    background: (!isCustomDate && limit === v)
-                      ? (isLight ? '#FFFFFF' : 'rgba(56, 189, 248, 0.25)')
-                      : 'transparent',
-                    border: 'none',
-                    borderBottom: (!isCustomDate && limit === v)
-                      ? `2px solid ${isLight ? '#0284C7' : '#38BDF8'}`
-                      : '2px solid transparent',
-                    color: (!isCustomDate && limit === v)
-                      ? (isLight ? '#0C1E35' : '#F8FAFC')
-                      : (isLight ? '#64748B' : '#94A3B8'),
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 14.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    borderRadius: 4,
-                    boxShadow: isLight && (!isCustomDate && limit === v) ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {TIME_LABELS[v]}
-                </button>
-              ))}
-              <button
-                onClick={() => setIsCustomDate(prev => !prev)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
-                  background: isCustomDate
-                    ? (isLight ? '#FFFFFF' : 'rgba(56, 189, 248, 0.25)')
-                    : 'transparent',
-                  border: 'none',
-                  borderBottom: isCustomDate ? `2px solid ${isLight ? '#0284C7' : '#38BDF8'}` : '2px solid transparent',
-                  color: isCustomDate ? (isLight ? '#0C1E35' : '#F8FAFC') : (isLight ? '#64748B' : '#94A3B8'),
-                  fontFamily: 'var(--font-mono)', fontSize: 14.5, fontWeight: 700, cursor: 'pointer',
-                  borderRadius: 4,
-                  boxShadow: isLight && isCustomDate ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <Calendar size={14} /> CUSTOM
-              </button>
-            </div>
-
-            {isCustomDate && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.85)',
-                padding: '4px 12px',
-                border: isLight ? '1px solid rgba(2, 132, 199, 0.3)' : '1px solid rgba(56, 189, 248, 0.4)',
-                borderRadius: 6,
-                boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.05)' : undefined
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 14, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>FROM:</span>
-                  <DateInputDDMMYYYY value={startDateInput} onChange={setStartDateInput} accentColor={isLight ? '#0284C7' : '#38BDF8'} isLight={isLight} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 14, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TO:</span>
-                  <DateInputDDMMYYYY value={endDateInput} onChange={setEndDateInput} accentColor={isLight ? '#0284C7' : '#38BDF8'} isLight={isLight} />
-                </div>
-                <button
-                  onClick={() => startDateInput && endDateInput && setAppliedRange({ startDate: startDateInput, endDate: endDateInput })}
-                  style={{
-                    padding: '5px 12px',
-                    background: 'linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)',
-                    color: '#FFF', border: 'none', borderRadius: 4,
-                    fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer'
-                  }}
-                >
-                  APPLY
-                </button>
-                <button
-                  onClick={toggleRadFs}
-                  title={isRadFs ? 'Exit Full Screen (ESC)' : 'Full Screen (F11 style)'}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px',
-                    background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
-                    border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
-                    color: isLight ? '#334155' : '#94A3B8', fontSize: 13.5, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', borderRadius: 4
-                  }}
-                >
-                  <Maximize2 size={14} />
-                  <span>FULLSCREEN</span>
-                </button>
-              </div>
-            )}
-            {!isCustomDate && (
-              <button
-                onClick={toggleRadFs}
-                title={isRadFs ? 'Exit Full Screen (ESC)' : 'Full Screen (F11 style)'}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-                  background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
-                  border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
-                  color: isLight ? '#334155' : '#94A3B8', fontSize: 13.5, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', borderRadius: 4,
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = isLight ? '#0284C7' : '#38BDF8'
-                  e.currentTarget.style.color = isLight ? '#0284C7' : '#38BDF8'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = isLight ? '#CBD5E1' : 'rgba(255, 255, 255, 0.15)'
-                  e.currentTarget.style.color = isLight ? '#334155' : '#94A3B8'
-                }}
-              >
-                <Maximize2 size={14} />
-                <span>FULLSCREEN</span>
-              </button>
-            )}
+            <DateRangeToolbar
+              limit={limit}
+              onLimitChange={setLimit}
+              appliedRange={appliedRange}
+              onApplyRange={setAppliedRange}
+              accentColor={isLight ? '#0284C7' : '#38BDF8'}
+              loading={loading || fetching}
+              presets={[1440, 4320, 10080]}
+            />
+            <button
+              onClick={toggleRadFs}
+              title={isRadFs ? 'Exit Full Screen (ESC)' : 'Full Screen (F11 style)'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+                background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
+                border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
+                color: isLight ? '#334155' : '#94A3B8', fontSize: 13.5, fontWeight: 700, fontFamily: 'var(--font-mono)', cursor: 'pointer', borderRadius: 4,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = isLight ? '#0284C7' : '#38BDF8'
+                e.currentTarget.style.color = isLight ? '#0284C7' : '#38BDF8'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = isLight ? '#CBD5E1' : 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.color = isLight ? '#334155' : '#94A3B8'
+              }}
+            >
+              <Maximize2 size={14} />
+              <span>FULLSCREEN</span>
+            </button>
+            <ExportChartMenu
+              chartRef={chartRef}
+              data={exportData}
+              columns={exportColumns}
+              metadata={exportMetadata}
+              filenameBase={`radiation_${activeMainTab}_${limit}m`}
+              accentColor={activeMainTab === 'protons' ? '#F59E0B' : (activeMainTab === 'electrons' ? '#38BDF8' : '#F43F5E')}
+            />
           </div>
         </div>
 
@@ -1257,7 +1212,7 @@ export default function RadiationMonitoring() {
           {lastUpdated && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
               <Clock size={13} />
-              Synced: {lastUpdated.toLocaleTimeString()}
+              Synced: {formatUTCTime(lastUpdated)}
             </div>
           )}
         </div>

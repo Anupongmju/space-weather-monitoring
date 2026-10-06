@@ -9,7 +9,7 @@ import httpx
 BASE_DIR = "https://spdf.gsfc.nasa.gov/pub/data/ace/swepam/level_2_cdaweb/swe_h0/"
 
 try:
-    import cdflib
+    import cdflib  # type: ignore
 except Exception:
     cdflib = None
 

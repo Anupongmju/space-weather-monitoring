@@ -2,19 +2,24 @@ import { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
 import { loadXray } from '../../../services/goesService';
+import { formatPowerOf10 } from '../../../utils/formatters';
 import { useWidgetTheme } from './useWidgetTheme';
 
 export default function XrayWidget() {
   const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
-  const { isLight, containerStyle, axisLabelColor, splitLine, tooltip, valueColor } = useWidgetTheme();
+  const { isLight, containerStyle, axisLabelColor, splitLine, tooltip, emptyTextColor } = useWidgetTheme();
   
   useEffect(() => {
     loadXray(4320).then(setData);
   }, []);
 
+  const longColor = isLight ? '#0284C7' : '#38BDF8';
+  const shortColor = isLight ? '#059669' : '#22C55E';
+
   const option = {
-    grid: { top: 10, right: 10, bottom: 20, left: 40 },
+    useUTC: true,
+    grid: { top: 12, right: 10, bottom: 20, left: 45 },
     xAxis: { type: 'time', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
     yAxis: {
       type: 'log',
@@ -22,39 +27,53 @@ export default function XrayWidget() {
       axisLabel: {
         color: axisLabelColor,
         fontSize: 12,
-        formatter: (v: number) => {
-          if (v <= 0) return '0';
-          const log = Math.round(Math.log10(v));
-          const superscripts: Record<string, string> = {
-            '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
-          };
-          const expStr = log.toString().split('').map(c => superscripts[c] || c).join('');
-          return `10${expStr}`;
-        }
+        formatter: formatPowerOf10
       }
     },
     series: [
       {
-        name: '1-8 Å',
+        name: '1-8 Å (Long)',
         type: 'line',
         showSymbol: false,
-        itemStyle: { color: isLight ? '#1A6DB5' : '#3498DB' },
-        lineStyle: { width: 1.5 },
+        itemStyle: { color: longColor },
+        lineStyle: { width: 1.5, color: longColor },
         data: data.map((d: any) => [d.time_tag, d.flux_long])
+      },
+      {
+        name: '0.5-4 Å (Short)',
+        type: 'line',
+        showSymbol: false,
+        itemStyle: { color: shortColor },
+        lineStyle: { width: 1.5, color: shortColor },
+        data: data.map((d: any) => [d.time_tag, d.flux_short])
       }
     ],
-    tooltip
+    tooltip: {
+      ...tooltip,
+      formatter: (params: any[]) => {
+        if (!params || !params.length) return '';
+        const date = params[0].axisValueLabel || params[0].data?.[0];
+        let html = `<div style="font-size:12px;color:${isLight ? '#475569' : '#94A3B8'};margin-bottom:6px;">${date}</div>`;
+        params.forEach(p => {
+          const val = p.data && p.data[1] != null && !isNaN(p.data[1]) ? Number(p.data[1]).toExponential(2) : '—';
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px;">
+            <span style="color:${isLight ? '#334155' : '#CBD5E1'}">${p.marker} ${p.seriesName}</span>
+            <span style="font-weight:bold;color:${p.color}">${val}</span>
+          </div>`;
+        });
+        return html;
+      }
+    }
   };
 
   const latest = data.length > 0 ? data[data.length - 1] : null;
 
   return (
     <div style={containerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div 
           onClick={() => navigate('/goes/xray')}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
           title="Click to view GOES X-Ray details"
         >
           <span style={{ fontSize: 13, color: isLight ? '#2E5B8A' : 'var(--text-secondary, #94A3B8)', fontFamily: 'var(--font-mono)', letterSpacing: 1, fontWeight: isLight ? 600 : 400 }}>
@@ -64,14 +83,31 @@ export default function XrayWidget() {
             DETAIL ↗
           </span>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: valueColor }}>
-          {latest ? `${latest.flux_long.toExponential(2)}` : '—'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: longColor, display: 'inline-block' }} />
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: isLight ? '#64748B' : '#94A3B8' }}>L:</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: longColor }}>
+              {latest && latest.flux_long ? latest.flux_long.toExponential(1) : '—'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: shortColor, display: 'inline-block' }} />
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: isLight ? '#64748B' : '#94A3B8' }}>S:</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: shortColor }}>
+              {latest && latest.flux_short ? latest.flux_short.toExponential(1) : '—'}
+            </span>
+          </div>
         </div>
       </div>
       <div style={{ flex: 1, marginTop: 16 }}>
         {data.length > 0 ? (
-          <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
-        ) : null}
+          <ReactECharts option={option} notMerge={true} style={{ height: '100%', width: '100%' }} />
+        ) : (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: emptyTextColor, fontSize: 14, fontFamily: 'var(--font-mono)' }}>
+            NO X-RAY DATA AVAILABLE
+          </div>
+        )}
       </div>
     </div>
   );

@@ -66,3 +66,51 @@ h1, h2 {
 }
 
 p { margin: 0; }
+
+/* Telemetry Grid: displays cards strictly in pairs (2 columns) on desktop/tablet, 1 column on mobile */
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .telemetry-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Neutron Monitor 2-column Layout: 30% : 70% */
+.neutron-split-layout {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 20px;
+  align-items: flex-start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.neutron-left-col {
+  width: 30% !important;
+  min-width: 280px !important;
+  max-width: 360px !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box;
+}
+
+.neutron-right-col {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .neutron-split-layout {
+    flex-direction: column !important;
+  }
+  .neutron-left-col {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+

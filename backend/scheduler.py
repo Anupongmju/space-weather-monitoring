@@ -45,12 +45,14 @@ def fetch_realtime():
         from fetchers.stereo_fetcher import fetch_stereo_particles
         from fetchers.solar1_fetcher import fetch_solar1_rtsw
         from fetchers.crater_fetcher import fetch_crater_doserates
+        from fetchers.kp_fetcher import fetch_kp_index
         fetch_all_ace()
         fetch_all_goes()
         fetch_all_cosmic()
         fetch_stereo_particles()
         fetch_solar1_rtsw()
         fetch_crater_doserates()
+        fetch_kp_index()
         print(f"[Scheduler] Realtime data updated: {datetime.now(timezone.utc)}")
     except Exception as e:
         print(f"[Scheduler] Realtime Error: {e}")
@@ -60,8 +62,11 @@ def start_scheduler():
     # ── Thread 1: ACE/GOES/Cosmic ทุก 5 นาที + ping ────────────────────────
     def realtime_job():
         while True:
-            fetch_realtime()
-            ping_self()
+            try:
+                fetch_realtime()
+                ping_self()
+            except Exception as e:
+                print(f"[Scheduler] Critical Realtime Job Error: {e}")
             time.sleep(5 * 60)  # ทุก 5 นาที
 
     # ── Thread 2: MAW & ENLIL ทุก 1 ชั่วโมง / 6 ชั่วโมง ─────────────
@@ -69,23 +74,24 @@ def start_scheduler():
         enlil_counter = 0
         while True:
             try:
-                from fetchers.maw_fetcher import fetch_maw_range
-                result = fetch_maw_range(days=3)
-                print(f"[Scheduler] MAW auto-fetch (3 days): {len(result)} days processed")
-            except Exception as e:
-                print(f"[Scheduler] MAW Error: {e}")
-
-            if enlil_counter % 6 == 0:
                 try:
-                    from fetchers.enlil_fetcher import fetch_latest_enlil_video
-                    enlil_res = fetch_latest_enlil_video()
-                    print(f"[Scheduler] ENLIL video fetch: {enlil_res.get('status')}")
+                    from fetchers.maw_fetcher import fetch_maw_range
+                    result = fetch_maw_range(days=3)
+                    print(f"[Scheduler] MAW auto-fetch (3 days): {len(result)} days processed")
                 except Exception as e:
-                    print(f"[Scheduler] ENLIL Error: {e}")
-            enlil_counter += 1
+                    print(f"[Scheduler] MAW Error: {e}")
 
-            # Disabled cleanup to preserve historical data indefinitely.
-            # cleanup_old_data()
+                if enlil_counter % 6 == 0:
+                    try:
+                        from fetchers.enlil_fetcher import fetch_latest_enlil_video
+                        enlil_res = fetch_latest_enlil_video()
+                        print(f"[Scheduler] ENLIL video fetch: {enlil_res.get('status')}")
+                    except Exception as e:
+                        print(f"[Scheduler] ENLIL Error: {e}")
+                enlil_counter += 1
+            except Exception as e:
+                print(f"[Scheduler] Critical MAW Job Error: {e}")
+
             time.sleep(3600)
 
     # รัน 2 threads พร้อมกัน

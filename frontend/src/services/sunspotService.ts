@@ -21,15 +21,35 @@ export interface SunspotLatestResponse {
   min_12m?: number;
 }
 
+export interface LoadMonthlySunspotParams {
+  limit?: number;
+  startYear?: number;
+  endYear?: number;
+}
+
 export const loadMonthlySunspot = (
-  limit?: number,
+  limitOrParams?: number | LoadMonthlySunspotParams,
   startYear?: number,
   endYear?: number
 ): Promise<SunspotRecord[]> => {
+  let lim: number | undefined;
+  let start: number | undefined;
+  let end: number | undefined;
+
+  if (typeof limitOrParams === 'number') {
+    lim = limitOrParams;
+    start = startYear;
+    end = endYear;
+  } else if (limitOrParams && typeof limitOrParams === 'object') {
+    lim = limitOrParams.limit;
+    start = limitOrParams.startYear;
+    end = limitOrParams.endYear;
+  }
+
   const params = new URLSearchParams();
-  if (limit) params.append('limit', limit.toString());
-  if (startYear) params.append('start_year', startYear.toString());
-  if (endYear) params.append('end_year', endYear.toString());
+  if (lim !== undefined) params.append('limit', lim.toString());
+  if (start !== undefined) params.append('start_year', start.toString());
+  if (end !== undefined) params.append('end_year', end.toString());
 
   const queryString = params.toString();
   const url = `${BASE}/monthly${queryString ? `?${queryString}` : ''}`;

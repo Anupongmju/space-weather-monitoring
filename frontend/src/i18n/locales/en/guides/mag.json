@@ -1,0 +1,38 @@
+{
+  "title": "ACE Magnetometer (MAG)",
+  "usage": {
+    "title": "Interplanetary Magnetic Field (IMF) Components",
+    "desc": "The MAG (Magnetometer) instrument measures the intensity and vector orientation of the Interplanetary Magnetic Field (IMF) in GSM coordinates:",
+    "bt": "Total intensity of the magnetic field (nT). Higher values signify severe field disturbance.",
+    "bx": "Vector component along the Sun-Earth line (sunward/antisunward).",
+    "by": "Vector component perpendicular to the Earth-Sun line in the ecliptic plane.",
+    "bz": "Vector component perpendicular to the ecliptic plane. Crucial index for space weather storms."
+  },
+  "impacts": {
+    "title": "Bz Alignment & Terrestrial Impacts",
+    "desc": "The north-south orientation of the magnetic field (Bz) dictates whether solar wind energy penetrates Earth's magnetosphere:",
+    "north_title": "Positive Bz (+ / Northward)",
+    "north_desc": "IMF aligns with Earth's geomagnetic field. Solar particles are deflected safely away.",
+    "south_title": "Negative Bz (- / Southward)",
+    "south_desc": "IMF opposes Earth's field, triggering Magnetic Reconnection that injects energy into the magnetosphere, causing geomagnetic storms and auroras."
+  },
+  "details": {
+    "title": "MAG Technical Specifications",
+    "spacecraft_label": "Spacecraft",
+    "spacecraft_val": "ACE (Advanced Composition Explorer) — NASA",
+    "orbit_label": "Orbital Location",
+    "orbit_val": "L1 Lagrangian Point (~1.5 million km upstream of Earth)",
+    "sensor_label": "Sensor Type",
+    "sensor_val": "Dual Triaxial Fluxgate Magnetometers on dual deployable booms",
+    "range_label": "Dynamic Range",
+    "range_val": "±4 nT to ±65,536 nT (Resolution up to 0.004 nT)"
+  },
+  "credits": {
+    "title": "Data Source & Credits",
+    "desc": "Electromagnetic telemetry and IMF component vectors are supported publicly by:",
+    "swpc": "Space Weather Prediction Center (SWPC): Real-time Magnetic Field API provider",
+    "nasa": "NASA ACE Project Office: Spacecraft and instrument operations",
+    "bartol": "Bartol Research Institute: University of Delaware co-developer of MAG",
+    "api_ref": "API Reference: Sourced via NOAA SWPC JSON Services, updated every 1 minute"
+  }
+}

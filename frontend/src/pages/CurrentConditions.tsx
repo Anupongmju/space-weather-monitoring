@@ -1,76 +1,103 @@
 import { useNavigate } from 'react-router-dom'
-import { Satellite, Globe, Radio, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
-const CATEGORIES = [
+interface Instrument {
+  name: string
+  tag: string
+  desc: string
+  path: string
+}
+
+interface Section {
+  id: string
+  num: string
+  title: string
+  domain: string
+  badge: string
+  desc: string
+  color: string
+  darkColor: string
+  items: Instrument[]
+}
+
+const SECTIONS: Section[] = [
   {
-    tag: 'ACE',
+    id: 'ace',
     num: '01',
-    label: 'L1 Solar Wind Observations',
-    desc: 'Real-time solar wind data from the ACE satellite stationed at the L1 Lagrange point, ~1.5M km upstream of Earth.',
+    title: 'ACE Satellite',
+    domain: 'L1 Lagrange Point · 1.5M km Upstream',
+    badge: 'L1 SCIENCE CENTER',
+    desc: 'Solar wind, magnetic field & energetic particles at L1',
     color: '#0284C7',
     darkColor: '#38BDF8',
-    icon: Satellite,
     items: [
-      { text: 'Solar Wind Speed & Density', path: '/ace/swepam', sub: 'SWEPAM · Plasma instrument' },
-      { text: 'Interplanetary Magnetic Field', path: '/ace/mag', sub: 'MAG · Vector magnetometer' },
-      { text: 'Energetic Particles (EPAM)', path: '/ace/epam', sub: 'EPAM · Electron & proton monitor' },
-      { text: 'Solar Isotope Spectrometer', path: '/ace/sis', sub: 'SIS · Heavy ion composition' },
+      { name: 'Solar Wind Speed & Density', tag: 'SWEPAM', desc: 'Solar wind speed, density & temperature', path: '/ace/swepam' },
+      { name: 'Interplanetary Magnetic Field', tag: 'MAG', desc: 'Interplanetary magnetic field (IMF)', path: '/ace/mag' },
+      { name: 'Energetic Particles', tag: 'EPAM', desc: 'Low-energy solar particles', path: '/ace/epam' },
+      { name: 'Solar Isotope Spectrometer', tag: 'SIS', desc: 'Solar energetic particles & isotopes', path: '/ace/sis' },
     ],
   },
   {
-    tag: 'GOES',
+    id: 'goes',
     num: '02',
-    label: 'Geostationary Solar Flux',
-    desc: 'X-ray, proton and electron flux data from NOAA GOES satellites in geostationary orbit at 35,786 km altitude.',
+    title: 'GOES Satellites',
+    domain: 'Geostationary Orbit · 35,786 km',
+    badge: 'NOAA SWPC',
+    desc: 'Solar flares, radiation storms & geomagnetic field',
     color: '#059669',
     darkColor: '#34D399',
-    icon: Radio,
     items: [
-      { text: 'X-ray Flux (XRS 1–8 Å)', path: '/goes/xray', sub: 'XRS · Solar flare classification' },
-      { text: 'Proton Flux (≥10 MeV)', path: '/goes/proton', sub: 'EPS · Radiation storm indicator' },
-      { text: 'Electron Flux (≥2 MeV)', path: '/goes/electron', sub: 'EPS · Satellite charging risk' },
-      { text: 'Magnetometer (Bz)', path: '/goes/mag', sub: 'MAG · Geosynchronous field' },
-      { text: 'SUVI Solar Imagery', path: '/goes/suvi', sub: 'SUVI · Ultraviolet imager' },
+      { name: 'Solar X-ray Irradiance', tag: 'XRS', desc: 'Solar flare X-ray flux', path: '/goes/xray' },
+      { name: 'High-Energy Proton Flux', tag: 'PRT', desc: 'Solar radiation storms', path: '/goes/proton' },
+      { name: 'Relativistic Electron Flux', tag: 'ELC', desc: 'Spacecraft charging electron flux', path: '/goes/electron' },
+      { name: 'Geosynchronous Magnetometer', tag: 'MAG', desc: 'Geostationary magnetic field', path: '/goes/mag' },
+      { name: 'Solar Ultraviolet Imagery', tag: 'SUV', desc: 'Live full-disk Sun imagery', path: '/goes/suvi' },
     ],
   },
   {
-    tag: 'COSMIC',
+    id: 'ground',
     num: '03',
-    label: 'Ground-Based Neutron Monitors',
-    desc: 'Cosmic ray count rates from the NMDB global neutron monitor network, sensitive to galactic and solar energetic particle events.',
+    title: 'Ground-Based Observatories',
+    domain: 'Worldwide NMDB & SILSO',
+    badge: 'NMDB & SILSO',
+    desc: 'Ground cosmic ray monitors & sunspot tracking',
     color: '#7C3AED',
     darkColor: '#C084FC',
-    icon: Globe,
     items: [
-      { text: 'Neutron Monitor Multi-Station', path: '/cosmic/neutron', sub: 'NMDB network · Global comparison' },
-      { text: 'Mawson Station Total Counts', path: '/cosmic/maw/counts', sub: 'Mawson Antarctic Station' },
-      { text: 'Atmospheric Pressure Correction', path: '/cosmic/maw/pressure', sub: 'Barometric correction factor' },
-      { text: 'Neutron Monitor Tubes (24 Ch)', path: '/cosmic/maw/tubes', sub: '18 Standard + 6 Bare detectors' },
-      { text: 'Pressure-Count Scatter', path: '/cosmic/maw/scatter', sub: 'Linear regression analysis' },
+      { name: 'Neutron Monitor Multi-Station', tag: 'NM', desc: 'Global cosmic ray count rates', path: '/cosmic/neutron' },
+      { name: 'Global Neutron Station Map', tag: 'MAP', desc: 'Worldwide detector station map', path: '/cosmic/map' },
+      { name: 'Sunspot Number (SILSO)', tag: 'SSN', desc: 'Sunspot numbers & solar cycle', path: '/solar/sunspot' },
+      { name: 'Mawson Cosmic Ray Observatory', tag: 'MAW', desc: 'Antarctic cosmic ray & pressure diagnostics', path: '/cosmic/maw' },
     ],
   },
   {
-    tag: 'MARS & MOON',
+    id: 'moon',
     num: '04',
-    label: 'Planetary & Heliospheric Dosimetry',
-    desc: 'Surface radiation dose rate and charged/neutral particle telemetry from MSL Curiosity Rover at Gale Crater on Mars and Moon orbit.',
-    color: '#DC2626',
-    darkColor: '#F87171',
-    icon: Radio,
+    title: 'Moon Orbit',
+    domain: 'NASA SSCWeb & Magnetotail',
+    badge: 'LUNAR TRAJECTORY',
+    desc: 'Lunar orbit trajectory & radiation environment',
+    color: '#D97706',
+    darkColor: '#FBBF24',
     items: [
-      { text: 'Moon Orbit (GSE & Magnetosphere)', path: '/moon', sub: 'NASA SSCWeb 4D · 27 Event positions & Magnetotail' },
-      { text: 'Mars Radiation Dashboard', path: '/mars', sub: 'RAD · Surface dosimetry & Sol telemetry' },
-      { text: 'Heliospheric & Lunar Radiation', path: '/radiation', sub: 'CRaTER & STEREO particle environment' },
+      { name: 'Moon Orbit (GSE & Magnetosphere)', tag: 'MOON', desc: 'Lunar orbit & magnetotail crossings', path: '/moon' },
+      { name: 'Heliospheric & Lunar Radiation', tag: 'RAD', desc: 'Lunar & deep space radiation', path: '/radiation' },
     ],
   },
-]
-
-const STATS = [
-  { label: 'DATA SOURCES', value: '4', unit: 'networks', color: '#0284C7', darkColor: '#38BDF8' },
-  { label: 'INSTRUMENTS', value: '18', unit: 'channels', color: '#059669', darkColor: '#34D399' },
-  { label: 'UPDATE CADENCE', value: '60', unit: 'seconds', color: '#7C3AED', darkColor: '#C084FC' },
-  { label: 'MARS MISSION', value: 'MSL', unit: 'Curiosity RAD', color: '#DC2626', darkColor: '#F87171' },
+  {
+    id: 'mars',
+    num: '05',
+    title: 'Mars Telemetry',
+    domain: 'Gale Crater · MSL Curiosity',
+    badge: 'MARS SURFACE',
+    desc: 'Surface radiation telemetry from Curiosity rover',
+    color: '#DC2626',
+    darkColor: '#F87171',
+    items: [
+      { name: 'Mars Radiation Dashboard', tag: 'MARS', desc: 'Curiosity rover surface radiation', path: '/mars' },
+    ],
+  },
 ]
 
 export default function CurrentConditions() {
@@ -79,178 +106,252 @@ export default function CurrentConditions() {
   const isLight = theme === 'light'
 
   return (
-    <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
-      {/* Header Bar */}
+    <div style={{
+      maxWidth: 1140,
+      margin: '0 auto',
+      padding: '36px 24px 90px',
+      width: '100%',
+      boxSizing: 'border-box',
+    }}>
+      {/* Page Header */}
       <div style={{
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        marginBottom: 26, flexWrap: 'wrap', gap: 16,
-        paddingBottom: 16, borderBottom: isLight ? '1px solid rgba(2, 132, 199, 0.15)' : '1px solid rgba(255,255,255,0.08)',
+        marginBottom: 44,
+        paddingBottom: 22,
+        borderBottom: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
       }}>
-        <div>
-          <h1 style={{
-            fontFamily: "'Orbitron', var(--font-sans), monospace",
-            fontSize: 26, fontWeight: 700, color: isLight ? '#0369A1' : '#38BDF8', margin: 0, letterSpacing: -0.5,
-          }}>
-            CURRENT CONDITIONS
-          </h1>
-          <p style={{ color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, margin: '6px 0 0', fontFamily: 'var(--font-mono)' }}>
-            Products & Data — Live Instrument Telemetry · ACE · GOES · COSMIC · MARS & MOON
-          </p>
+        <div style={{
+          fontSize: 11.5,
+          fontFamily: 'var(--font-mono)',
+          color: isLight ? '#1A6DB5' : '#38BDF8',
+          letterSpacing: '1.5px',
+          textTransform: 'uppercase',
+          fontWeight: 700,
+          marginBottom: 6,
+        }}>
+          // OBSERVATIONAL TELEMETRY DIRECTORY
         </div>
+        <h1 style={{
+          fontFamily: "'Orbitron', var(--font-sans), monospace",
+          fontSize: 'clamp(22px, 2.5vw, 28px)',
+          fontWeight: 800,
+          color: isLight ? '#0C1E35' : '#FFFFFF',
+          margin: 0,
+          letterSpacing: '-0.3px',
+        }}>
+          Current Conditions
+        </h1>
+        <p style={{
+          color: isLight ? '#64748B' : '#94A3B8',
+          fontSize: 15,
+          margin: '6px 0 0',
+          fontFamily: 'var(--font-sans)',
+        }}>
+          Live space weather observation streams by platform.
+        </p>
       </div>
 
-      {/* Telemetry Stats Strip */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 16,
-        marginBottom: 28,
-      }}>
-        {STATS.map(s => {
-          const color = isLight ? s.color : s.darkColor
+      {/* Divided Sections */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 52 }}>
+        {SECTIONS.map((sec, idx) => {
+          const accentColor = isLight ? sec.color : sec.darkColor
           return (
-            <div
-              key={s.label}
+            <section
+              key={sec.id}
               style={{
-                padding: '14px 18px',
-                background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-                border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)'}`,
-                borderLeft: `4px solid ${color}`,
-                borderRadius: 6,
-                boxShadow: isLight ? '0 2px 6px rgba(0,0,0,0.03)' : undefined,
+                position: 'relative',
+                paddingBottom: idx < SECTIONS.length - 1 ? 48 : 0,
+                borderBottom: idx < SECTIONS.length - 1
+                  ? (isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)')
+                  : 'none',
               }}
             >
-              <div style={{ fontSize: 12, fontWeight: 700, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
-                {s.label}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-                <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color }}>
-                  {s.value}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 500, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                  {s.unit}
-                </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Category Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {CATEGORIES.map(cat => {
-          const Icon = cat.icon
-          const color = isLight ? cat.color : cat.darkColor
-          return (
-            <div
-              key={cat.tag}
-              style={{
-                background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-                backdropFilter: 'blur(8px)',
-                border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)'}`,
-                borderLeft: `4px solid ${color}`,
-                borderRadius: 8,
-                padding: '24px 28px',
-                boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.03)' : undefined,
-              }}
-            >
-              {/* Card Header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: `${color}18`,
-                    border: `1px solid ${color}40`, flexShrink: 0,
-                    color
-                  }}>
-                    <Icon size={20} />
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{
-                        fontFamily: "'Orbitron', var(--font-sans), monospace",
-                        fontSize: 18, fontWeight: 700, color, letterSpacing: 0.5,
-                      }}>
-                        {cat.tag}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isLight ? '#64748B' : '#94A3B8' }}>
-                        {cat.num} / 04
-                      </span>
-                    </div>
-                    <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: isLight ? '#0F172A' : '#F8FAFC', margin: '2px 0 0' }}>
-                      {cat.label}
+              {/* Section Header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+                marginBottom: 20,
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <span style={{
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 800,
+                      color: accentColor,
+                      letterSpacing: '1px',
+                    }}>
+                      // {sec.num}
+                    </span>
+                    <h2 style={{
+                      fontFamily: "'Orbitron', var(--font-sans), monospace",
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: isLight ? '#0F172A' : '#F8FAFC',
+                      margin: 0,
+                      letterSpacing: '-0.2px',
+                    }}>
+                      {sec.title}
                     </h2>
+                    <span style={{
+                      fontSize: 13,
+                      fontFamily: 'var(--font-sans)',
+                      fontWeight: 600,
+                      color: isLight ? '#64748B' : '#94A3B8',
+                      marginLeft: 4,
+                    }}>
+                      · {sec.domain}
+                    </span>
                   </div>
+
+                  <p style={{
+                    color: isLight ? '#475569' : '#94A3B8',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-sans)',
+                    margin: 0,
+                    lineHeight: 1.5,
+                  }}>
+                    {sec.desc}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{
+                    fontSize: 10.5,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    background: `${accentColor}14`,
+                    color: accentColor,
+                    border: `1px solid ${accentColor}30`,
+                    letterSpacing: '0.8px',
+                  }}>
+                    {sec.badge}
+                  </span>
+                  <span style={{
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)',
+                    color: isLight ? '#64748B' : '#64748B',
+                  }}>
+                    ({sec.items.length} {sec.items.length === 1 ? 'stream' : 'streams'})
+                  </span>
                 </div>
               </div>
 
-              <p style={{ color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, lineHeight: 1.6, margin: '0 0 18px', fontFamily: 'var(--font-mono)' }}>
-                {cat.desc}
-              </p>
-
-              {/* Divider */}
-              <div style={{ height: 1, background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', marginBottom: 14 }} />
-
-              {/* Items List */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
-                {cat.items.map(item => (
-                  <button
-                    key={item.text}
+              {/* Items Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+                gap: 10,
+              }}>
+                {sec.items.map((item) => (
+                  <div
+                    key={item.name}
                     onClick={() => navigate(item.path)}
                     style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '12px 14px',
-                      background: isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.02)',
-                      border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.06)'}`,
-                      borderLeft: '3px solid transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '13px 16px',
+                      background: isLight ? '#FFFFFF' : 'rgba(10, 16, 30, 0.45)',
+                      border: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.07)',
                       borderRadius: 6,
-                      cursor: 'pointer', textAlign: 'left', gap: 12,
-                      transition: 'all 0.15s ease',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                      gap: 14,
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.borderLeftColor = color
-                      e.currentTarget.style.background = isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.05)'
-                      e.currentTarget.style.transform = 'translateX(2px)'
+                      e.currentTarget.style.borderColor = accentColor
+                      e.currentTarget.style.background = isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.04)'
+                      e.currentTarget.style.transform = 'translateY(-1px)'
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.borderLeftColor = 'transparent'
-                      e.currentTarget.style.background = isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.02)'
+                      e.currentTarget.style.borderColor = isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.07)'
+                      e.currentTarget.style.background = isLight ? '#FFFFFF' : 'rgba(10, 16, 30, 0.45)'
                       e.currentTarget.style.transform = 'none'
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: isLight ? '#0F172A' : '#F8FAFC', lineHeight: 1.4, marginBottom: 2 }}>
-                        {item.text}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                        <span style={{
+                          fontSize: 10,
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 3,
+                          background: `${accentColor}18`,
+                          color: accentColor,
+                          letterSpacing: '0.5px',
+                          flexShrink: 0,
+                        }}>
+                          {item.tag}
+                        </span>
+                        <span style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: isLight ? '#0F172A' : '#F8FAFC',
+                          letterSpacing: '0.2px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {item.name}
+                        </span>
                       </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isLight ? '#64748B' : '#94A3B8' }}>
-                        {item.sub}
+                      <div style={{
+                        fontFamily: 'var(--font-sans)',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: isLight ? '#64748B' : '#94A3B8',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {item.desc}
                       </div>
                     </div>
-                    <ArrowRight size={14} color={color} style={{ flexShrink: 0 }} />
-                  </button>
+
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: isLight ? '#94A3B8' : '#64748B',
+                      flexShrink: 0,
+                    }}>
+                      <ArrowRight size={14} />
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
+            </section>
           )
         })}
       </div>
 
-      {/* Footer Sources */}
+      {/* Clean Footer Bar */}
       <div style={{
-        marginTop: 32, paddingTop: 16,
-        borderTop: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        flexWrap: 'wrap', gap: 16,
+        marginTop: 56,
+        paddingTop: 20,
+        borderTop: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16,
+        fontSize: 13,
+        fontFamily: 'var(--font-sans)',
+        color: isLight ? '#64748B' : '#64748B',
       }}>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: isLight ? '#475569' : '#CBD5E1', fontFamily: 'var(--font-mono)' }}>
-          <span><strong style={{ color: isLight ? '#0284C7' : '#38BDF8' }}>ACE</strong> NASA L1 Science Center</span>
-          <span><strong style={{ color: isLight ? '#059669' : '#34D399' }}>GOES</strong> NOAA SWPC</span>
-          <span><strong style={{ color: isLight ? '#7C3AED' : '#C084FC' }}>NMDB</strong> Neutron Monitor Database</span>
-          <span><strong style={{ color: isLight ? '#DC2626' : '#F87171' }}>MARS</strong> NASA MSL Curiosity RAD</span>
+        <div>
+          TELEMETRY NETWORKS: ACE (NASA) · GOES (NOAA) · NMDB GLOBAL · SILSO BELGIUM · NASA SSCWEB · MSL CURIOSITY
         </div>
-        <span style={{ fontSize: 12, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-          NARIT LOCAL DATABASE · AUTO-REFRESH 60s
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E' }} />
+          <span>NARIT SPACE WEATHER MONITORING · 60s REFRESH</span>
+        </div>
       </div>
     </div>
   )

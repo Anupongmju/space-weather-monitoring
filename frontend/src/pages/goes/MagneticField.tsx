@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveGoesMag, loadGoesMag } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -8,7 +8,11 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useTheme } from '../../context/ThemeContext'
+import { formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 
 export default function MagneticField() {
   const { theme } = useTheme()
@@ -17,7 +21,7 @@ export default function MagneticField() {
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
@@ -66,7 +70,11 @@ export default function MagneticField() {
     await load(false)
   }, 60000, !appliedRange)
 
+  const { minTs, maxTs } = getTimeDomain(data)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -76,14 +84,34 @@ export default function MagneticField() {
       padding: 14,
       textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
       extraCssText: isLight ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;' : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#059669' : '#34D399', type: 'dashed', width: 1.5 } }
+      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#059669' : '#34D399', type: 'dashed', width: 1.5 } },
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const rawTime = params[0]?.value ? params[0].value[0] : (params[0]?.axisValue || '')
+        const timeStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#059669' : '#34D399'}">
+          🕒 ${timeStr}
+        </div>`
+        params.forEach((p: any) => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? val.toFixed(2) : '—'
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;margin:3px 0;font-family:var(--font-mono);">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+              <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            </span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};">${valStr} nT</strong>
+          </div>`
+        })
+        return html
+      }
     },
     legend: {
       show: true,
       top: 0,
       textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
     },
-    grid: { top: 35, right: 20, bottom: 30, left: 85 },
+    grid: { top: 35, right: 20, bottom: 45, left: 85 },
     dataZoom: [
       {
         type: 'inside',
@@ -99,7 +127,7 @@ export default function MagneticField() {
       type: 'time',
       splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
       axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
-      axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
+      axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange)
     },
     yAxis: {
       type: 'value',
@@ -124,7 +152,8 @@ export default function MagneticField() {
         connectNulls: true,
         lineStyle: { width: 2.2, opacity: 1 },
         itemStyle: { color: isLight ? '#0284C7' : '#38BDF8' },
-        data: data.map(d => [d.time_tag, d.hp])
+        data: data.map(d => [d.time_tag, d.hp]),
+        markLine: combineMarkLines(midnightDividers),
       },
       {
         name: 'He (Earthward)',
@@ -155,6 +184,19 @@ export default function MagneticField() {
       },
     ]
   }
+
+  const exportColumns = useMemo((): ExportColumn[] => [
+    { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+    { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') },
+    { key: 'hp', label: 'Hp_Parallel(nT)', width: 16 },
+    { key: 'he', label: 'He_Earthward(nT)', width: 18 },
+    { key: 'hn', label: 'Hn_Normal(nT)', width: 16 },
+    { key: 'total', label: 'Ht_Total(nT)', width: 14 }
+  ], [])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -227,13 +269,32 @@ export default function MagneticField() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#059669' : '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#059669' : '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={data}
+                columns={exportColumns}
+                metadata={{
+                  station: 'GOES (GEOSTATIONARY ORBIT)',
+                  viewTitle: 'GOES GEOSTATIONARY MAGNETIC FIELD',
+                  description: 'Geostationary Magnetic Field Components: Parallel (Hp), Earthward (He), Normal (Hn), Total (Ht)',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: data.length
+                }}
+                filenameBase={`GOES_MAG_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#059669' : '#34D399'}
+              />
+            </div>
+          }
         >
           <ReactECharts
+            ref={chartRef}
             option={option}
             style={{ height: 520, width: '100%' }}
             onChartReady={onChartReady}

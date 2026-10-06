@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveEpam, loadEpam } from '../../services/aceService'
 import { loadSolar1 } from '../../services/radiationService'
@@ -9,7 +9,10 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
-import { formatPowerOf10 } from '../../utils/formatters'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
+import { formatPowerOf10, formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 import { useTheme } from '../../context/ThemeContext'
 
 export default function Epam() {
@@ -21,7 +24,7 @@ export default function Epam() {
   const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
@@ -35,8 +38,27 @@ export default function Epam() {
         loadEpam(limit, sDate, eDate),
         loadSolar1(limit, sDate, eDate)
       ])
-      setData(Array.isArray(dAce) ? dAce : [])
-      setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
+      const newAce = Array.isArray(dAce) ? dAce : []
+      const newSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+
+      if (showLoading || appliedRange) {
+        setData(newAce)
+        setSolar1Data(newSolar1)
+      } else {
+        // Smart merge: keep any older historical data user loaded to the left
+        setData(prev => {
+          if (!prev || prev.length === 0 || newAce.length === 0) return newAce
+          const firstNewTs = new Date(newAce[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newAce]
+        })
+        setSolar1Data(prev => {
+          if (!prev || prev.length === 0 || newSolar1.length === 0) return newSolar1
+          const firstNewTs = new Date(newSolar1[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newSolar1]
+        })
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -53,10 +75,48 @@ export default function Epam() {
     setFetching(false)
   }
 
-  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
-    data,
-    setData,
-    loadHistorical: (start, end) => loadEpam(0, start, end),
+  const activeData = satSource === 'SOLAR1' ? solar1Data : (data.length ? data : solar1Data)
+
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady, isViewingHistory } = useChartPan({
+    data: activeData,
+    setData: (merged: any[]) => {
+      if (satSource === 'SOLAR1') {
+        setSolar1Data(merged)
+      } else {
+        setData(merged)
+      }
+    },
+    loadHistorical: async (start, end) => {
+      if (satSource === 'SOLAR1') {
+        const dSolar1 = await loadSolar1(0, start, end)
+        const freshSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+        if (freshSolar1.length) {
+          setSolar1Data(prev => {
+            const existingKeys = new Set(prev.map(p => p.time_tag))
+            const filtered = freshSolar1.filter(p => !existingKeys.has(p.time_tag))
+            return [...filtered, ...prev].sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+          })
+        }
+        return freshSolar1
+      } else if (satSource === 'BOTH') {
+        const [dAce, dSolar1] = await Promise.all([
+          loadEpam(0, start, end),
+          loadSolar1(0, start, end)
+        ])
+        const freshAce = Array.isArray(dAce) ? dAce : []
+        const freshSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+        if (freshSolar1.length) {
+          setSolar1Data(prev => {
+            const existingKeys = new Set(prev.map(p => p.time_tag))
+            const filtered = freshSolar1.filter(p => !existingKeys.has(p.time_tag))
+            return [...filtered, ...prev].sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+          })
+        }
+        return freshAce
+      } else {
+        return loadEpam(0, start, end)
+      }
+    },
     windowMinutes: 1440,
     initialWindowMinutes: appliedRange ? 0 : limit,
   })
@@ -66,9 +126,13 @@ export default function Epam() {
     load(true)
   }, [limit, appliedRange])
 
+  useEffect(() => {
+    resetPan()
+  }, [satSource])
+
   useAutoFetch(async () => {
     await load(false)
-  }, 60000, !appliedRange)
+  }, 60000, !appliedRange && !isViewingHistory)
 
   const series: any[] = []
 
@@ -192,7 +256,17 @@ export default function Epam() {
     )
   }
 
+  const allEpamData = satSource === 'SOLAR1' ? solar1Data : (satSource === 'BOTH' ? [...data, ...solar1Data] : data)
+  const { minTs, maxTs } = getTimeDomain(allEpamData)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
+  ;[0, 1].forEach(gi => {
+    const s = series.find(ser => ser.xAxisIndex === gi)
+    if (s) s.markLine = combineMarkLines(midnightDividers)
+  })
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -202,7 +276,27 @@ export default function Epam() {
       padding: 14,
       textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
       extraCssText: isLight ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;' : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#9333EA' : '#C084FC', type: 'dashed', width: 1.5 } }
+      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#9333EA' : '#C084FC', type: 'dashed', width: 1.5 } },
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const rawTime = params[0]?.value ? params[0].value[0] : (params[0]?.axisValue || '')
+        const timeStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#7C3AED' : '#C084FC'}">
+          🕒 ${timeStr}
+        </div>`
+        params.forEach((p: any) => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? (val < 0.01 && val > 0 ? val.toExponential(3) : val.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;margin:3px 0;font-family:var(--font-mono);">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+              <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            </span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};">${valStr}</strong>
+          </div>`
+        })
+        return html
+      }
     },
     legend: {
       show: true,
@@ -213,8 +307,8 @@ export default function Epam() {
       link: [{ xAxisIndex: 'all' }]
     },
     grid: [
-      { top: 35, left: 85, right: 20, height: '42%' },    // Grid 0: Electron Flux
-      { top: '54%', left: 85, right: 20, height: '40%' }   // Grid 1: Proton Flux
+      { top: 35, left: 85, right: 20, height: '40%' },    // Grid 0: Electron Flux
+      { top: '54%', left: 85, right: 20, height: '38%' }   // Grid 1: Proton Flux
     ],
     xAxis: [
       {
@@ -227,7 +321,7 @@ export default function Epam() {
       {
         gridIndex: 1,
         type: 'time',
-        axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' },
+        axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange),
         splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
       }
@@ -280,6 +374,70 @@ export default function Epam() {
     series
   }
 
+  // Unified export dataset based on satSource
+  const exportData = useMemo(() => {
+    if (satSource === 'ACE') return data
+    if (satSource === 'SOLAR1') return solar1Data
+    const map = new Map<string, any>()
+    data.forEach(d => {
+      map.set(d.time_tag, { ...d, _type: 'ACE' })
+    })
+    solar1Data.forEach(d => {
+      const existing = map.get(d.time_tag) || { time_tag: d.time_tag }
+      map.set(d.time_tag, { ...existing, ...d })
+    })
+    return Array.from(map.values()).sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }, [satSource, data, solar1Data])
+
+  const exportColumns = useMemo((): ExportColumn[] => {
+    const base: ExportColumn[] = [
+      { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+      { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') }
+    ]
+
+    if (satSource === 'ACE') {
+      return [
+        ...base,
+        { key: 'e38_53', label: 'e_38-53keV', width: 14 },
+        { key: 'e175_315', label: 'e_175-315keV', width: 14 },
+        { key: 'p47_65', label: 'p_47-65keV', width: 14 },
+        { key: 'p112_187', label: 'p_112-187keV', width: 14 },
+        { key: 'p310_580', label: 'p_310-580keV', width: 14 }
+      ]
+    }
+
+    if (satSource === 'SOLAR1') {
+      return [
+        ...base,
+        { key: 'de1', label: 'de1_38-53keV', width: 14 },
+        { key: 'de2', label: 'de2_175-315keV', width: 14 },
+        { key: 'p1', label: 'p1_47-68keV', width: 14 },
+        { key: 'p2', label: 'p2_68-115keV', width: 14 },
+        { key: 'p3', label: 'p3_115-195keV', width: 14 },
+        { key: 'p4', label: 'p4_195-321keV', width: 14 },
+        { key: 'p5', label: 'p5_321-580keV', width: 14 }
+      ]
+    }
+
+    return [
+      ...base,
+      { key: 'e38_53', label: 'ACE_e38-53', width: 14 },
+      { key: 'e175_315', label: 'ACE_e175-315', width: 14 },
+      { key: 'p47_65', label: 'ACE_p47-65', width: 14 },
+      { key: 'p112_187', label: 'ACE_p112-187', width: 14 },
+      { key: 'p310_580', label: 'ACE_p310-580', width: 14 },
+      { key: 'de1', label: 'S1_de1', width: 12 },
+      { key: 'de2', label: 'S1_de2', width: 12 },
+      { key: 'p1', label: 'S1_p1', width: 12 },
+      { key: 'p2', label: 'S1_p2', width: 12 },
+      { key: 'p3', label: 'S1_p3', width: 12 }
+    ]
+  }, [satSource])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
+
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
 
@@ -328,28 +486,46 @@ export default function Epam() {
           >
             {fetching ? 'FETCHING...' : 'REFRESH'}
           </button>
+
         </div>
       </div>
 
-      {/* Toolbar: Source Toggle + Date Range */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        {/* Source Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-          <span style={{ color: isLight ? '#475569' : '#94A3B8', fontWeight: 600 }}>SATELLITE:</span>
+      {/* Satellite Switcher & Controls Strip */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        marginBottom: 20,
+        flexWrap: 'wrap'
+      }}>
+        {/* Source Switcher Toggle */}
+        <div style={{
+          display: 'flex',
+          background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+          padding: 3,
+          borderRadius: 8,
+          border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)'
+        }}>
           {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
             <button
               key={s}
               onClick={() => setSatSource(s)}
               style={{
-                background: satSource === s ? (isLight ? '#7C3AED' : '#C084FC') : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)'),
-                color: satSource === s ? '#FFF' : (isLight ? '#334155' : '#94A3B8'),
-                border: '1px solid ' + (satSource === s ? (isLight ? '#7C3AED' : '#C084FC') : (isLight ? 'rgba(26,109,181,0.2)' : 'rgba(255,255,255,0.1)')),
-                fontSize: 14,
-                fontWeight: 600,
-                padding: '5px 14px',
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                border: 'none',
+                background: satSource === s
+                  ? (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.15)')
+                  : 'transparent',
+                color: satSource === s
+                  ? (isLight ? '#7C3AED' : '#C084FC')
+                  : (isLight ? '#64748B' : '#94A3B8'),
                 borderRadius: 6,
                 cursor: 'pointer',
-                boxShadow: isLight && satSource !== s ? '0 1px 4px rgba(0,0,0,0.03)' : undefined,
+                boxShadow: isLight && satSource === s ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
                 transition: 'all 0.15s'
               }}
             >
@@ -378,15 +554,36 @@ export default function Epam() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#9333EA' : '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#9333EA' : '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={exportData}
+                columns={exportColumns}
+                metadata={{
+                  station: 'ACE / SOLAR-1 (L1 ORBIT)',
+                  viewTitle: `EPAM / STIS ENERGETIC PARTICLES (${satSource})`,
+                  description: 'Suprathermal & Energetic Particle Spectrometer (Protons & Electrons Flux)',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: exportData.length
+                }}
+                filenameBase={`EPAM_PARTICLES_${satSource}_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#7C3AED' : '#C084FC'}
+              />
+            </div>
+          }
         >
           <ReactECharts
+            key={satSource}
+            ref={chartRef}
             option={option}
             notMerge={true}
+            lazyUpdate={true}
             style={{ height: 580, width: '100%' }}
             onChartReady={onChartReady}
             onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}

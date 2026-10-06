@@ -283,11 +283,11 @@ export default function FactsWidget() {
 
       {/* Sunspot Section (NOAA) */}
       <div style={sectionHeaderStyle}>NOAA SWPC: Monthly Mean Sunspot Number</div>
-      <div style={{ background: 'rgba(0,0,0,0.4)', padding: '4px 0' }}>
+      <div style={{ background: 'transparent', padding: '4px 0' }}>
         <div style={rowStyle}>
           <span style={{ color: 'var(--text-primary, #E2E8F0)' }}>{data.currentSsn ? data.currentSsn['time-tag'] : 'Current Month'}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontWeight: 'bold', color: '#FFF' }}>
+            <span style={{ fontWeight: 'bold', color: 'var(--text-primary, #ffffff)' }}>
               {data.currentSsn ? data.currentSsn.ssn.toFixed(1) : '—'}
             </span>
             {data.currentSsn && (
@@ -303,7 +303,7 @@ export default function FactsWidget() {
         </div>
         <div style={{ ...rowStyle, borderBottom: 'none' }}>
           <span style={{ color: 'var(--text-primary, #E2E8F0)' }}>{data.prevSsn ? data.prevSsn['time-tag'] : 'Previous Month'}</span>
-          <span style={{ fontWeight: 'bold', color: '#FFF' }}>
+          <span style={{ fontWeight: 'bold', color: 'var(--text-primary, #ffffff)' }}>
             {data.prevSsn ? data.prevSsn.ssn.toFixed(1) : '—'}
           </span>
         </div>

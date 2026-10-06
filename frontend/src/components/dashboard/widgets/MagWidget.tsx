@@ -14,6 +14,7 @@ export default function MagWidget() {
   }, []);
 
   const option = {
+    useUTC: true,
     grid: { top: 10, right: 10, bottom: 20, left: 30 },
     xAxis: { type: 'time', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
     yAxis: { type: 'value', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
@@ -34,10 +35,10 @@ export default function MagWidget() {
 
   return (
     <div style={containerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div 
           onClick={() => navigate('/ace/mag')}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
           title="Click to view ACE Mag details"
         >
           <span style={{ fontSize: 13, color: isLight ? '#2E5B8A' : 'var(--text-secondary, #94A3B8)', fontFamily: 'var(--font-mono)', letterSpacing: 1, fontWeight: isLight ? 600 : 400 }}>
@@ -47,7 +48,7 @@ export default function MagWidget() {
             DETAIL ↗
           </span>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: valueColor }}>
+        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: valueColor, flexShrink: 0 }}>
           {latest ? `${latest.bz.toFixed(2)} nT` : '—'}
         </div>
       </div>

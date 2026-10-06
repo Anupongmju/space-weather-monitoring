@@ -1,0 +1,68 @@
+{
+  "nav": {
+    "title": "Space Weather",
+    "subtitle": "Real-time Monitoring & Analysis",
+    "hub": "Hub",
+    "current_conditions": "Current Conditions",
+    "live_telemetry": "LIVE TELEMETRY",
+    "domains": "DOMAINS",
+    "instruments": "INSTRUMENTS",
+    "data_sources": "DATA SOURCES",
+    "overview": "Overview Dashboard",
+    "moon": "Moon",
+    "mars": "Mars",
+    "radiation": "Radiation",
+    "analysis": "Analysis",
+    "news": "News",
+    "report": "Report",
+    "help": "Help",
+    "about": "About",
+    "theme_dark": "DARK",
+    "theme_light": "LIGHT",
+    "utc": "UTC",
+    "sections": {
+      "ace": "ACE + SOLAR-1",
+      "goes": "GOES",
+      "ground": "GROUND",
+      "moon": "MOON",
+      "mars": "MARS"
+    },
+    "items": {
+      "swepam": "ACE Solar Wind",
+      "mag_ace": "ACE Magnetic Field",
+      "sis": "ACE Solar Isotope",
+      "epam": "ACE Energetic Particles",
+      "xray": "GOES X-ray Flux",
+      "proton": "GOES Proton Flux",
+      "electron": "GOES Electron Flux",
+      "mag_goes": "GOES Magnetometer",
+      "suvi": "GOES SolarSUVI",
+      "sunspot": "Sunspot Number",
+      "neutron_map": "Global Neutron Map",
+      "neutron_monitor": "Neutron Monitor",
+      "maw_pressure": "MAW Pressure",
+      "maw_counts": "MAW Counts",
+      "maw_scatter": "MAW Scatter",
+      "maw_tubes": "MAW Tubes",
+      "moon_orbit": "Moon Orbit (GSE)",
+      "moon_rad": "Radiation & Particles",
+      "mars_surface": "Surface RAD (Curiosity)",
+      "mars_orbit": "Orbital Particles (MAVEN)"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error loading data",
+    "refresh": "Refresh",
+    "live": "LIVE",
+    "utc_time": "UTC Time",
+    "search": "Search...",
+    "no_data": "No Data Available"
+  },
+  "guide_tabs": {
+    "usage": "USAGE",
+    "impacts": "IMPACTS",
+    "details": "DETAILS",
+    "credits": "DATA SOURCES & CREDITS"
+  }
+}

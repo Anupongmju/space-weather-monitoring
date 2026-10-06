@@ -31,6 +31,15 @@ def fetch_ep(): return {"rows": fetch_epam()}
 @router.post("/fetch/sis")
 def fetch_si(): return {"rows": fetch_sis()}
 
+@router.post("/backfill")
+def backfill_ace_data(start_date: str, end_date: str):
+    from datetime import datetime
+    from backfill_ace_soho import backfill_date_range
+    s = datetime.strptime(start_date, "%Y-%m-%d")
+    e = datetime.strptime(end_date, "%Y-%m-%d")
+    backfill_date_range(s, e)
+    return {"status": "success", "start": start_date, "end": end_date}
+
 def format_date_boundary(date_str: str, is_end: bool = False) -> str:
     if not date_str:
         return ""
@@ -43,17 +52,39 @@ def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Opti
     if start_date and end_date:
         s = format_date_boundary(start_date, is_end=False)
         e = format_date_boundary(end_date, is_end=True)
-        return query(
+        rows = query(
             f"""SELECT * FROM {table_name} 
-               WHERE time_tag::TIMESTAMP >= %s::TIMESTAMP 
-                 AND time_tag::TIMESTAMP <= %s::TIMESTAMP
+               WHERE time_tag >= %s 
+                 AND time_tag <= %s
                ORDER BY time_tag ASC""",
             (s, e)
         )
+        if not rows:
+            try:
+                from datetime import datetime
+                from backfill_ace_soho import backfill_date_range
+                s_dt = datetime.strptime(start_date[:10], "%Y-%m-%d")
+                e_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
+                if 0 <= (e_dt - s_dt).days <= 31:
+                    backfill_date_range(s_dt, e_dt)
+                    rows = query(
+                        f"""SELECT * FROM {table_name} 
+                           WHERE time_tag >= %s 
+                             AND time_tag <= %s
+                           ORDER BY time_tag ASC""",
+                        (s, e)
+                    )
+            except Exception as err:
+                print(f"[Auto-Fetch ACE Error]: {err}")
+        return rows
     return query(
-        f"""SELECT * FROM {table_name} 
-           WHERE time_tag::TIMESTAMP >= (SELECT MAX(time_tag)::TIMESTAMP FROM {table_name}) - (%s || ' minutes')::INTERVAL
-           ORDER BY time_tag ASC""",
+        f"""WITH cutoff AS (
+            SELECT to_char(MAX(time_tag)::timestamp - (%s || ' minutes')::interval, 'YYYY-MM-DD HH24:MI:SS') as t
+            FROM {table_name}
+        )
+        SELECT {table_name}.* FROM {table_name}, cutoff
+        WHERE time_tag >= cutoff.t
+        ORDER BY time_tag ASC""",
         (limit,)
     )
 

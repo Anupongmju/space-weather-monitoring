@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from typing import Optional
 import datetime
-import psycopg2.extras
+import psycopg2.extras  # type: ignore
 from database import get_conn
 from fetchers.stereo_fetcher import fetch_stereo_particles
 from fetchers.solar1_fetcher import fetch_solar1_rtsw
@@ -39,29 +39,16 @@ def get_time_filtered_query(table_name: str, limit: int = 1440, start_date: Opti
             (s, e)
         )
 
-    max_row = query(f"SELECT MAX(time_tag) as max_t FROM {table_name}")
-    if not max_row or not max_row[0]['max_t']:
-        return query(f"SELECT * FROM {table_name} ORDER BY time_tag ASC LIMIT %s", (limit,))
-
-    max_t_str = max_row[0]['max_t']
-    try:
-        dt = datetime.datetime.fromisoformat(max_t_str.replace('Z', '+00:00'))
-        min_dt = dt - datetime.timedelta(minutes=limit)
-        min_t_str = min_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-    except Exception:
-        min_t_str = max_t_str
-
-    rows = query(
-        f"""SELECT * FROM {table_name} 
-           WHERE time_tag >= %s
-           ORDER BY time_tag ASC""",
-        (min_t_str,)
+    return query(
+        f"""WITH cutoff AS (
+            SELECT to_char(MAX(time_tag)::timestamp - (%s || ' minutes')::interval, 'YYYY-MM-DD HH24:MI:SS') as t
+            FROM {table_name}
+        )
+        SELECT {table_name}.* FROM {table_name}, cutoff
+        WHERE time_tag >= cutoff.t
+        ORDER BY time_tag ASC""",
+        (limit,)
     )
-
-    if not rows:
-        return query(f"SELECT * FROM {table_name} ORDER BY time_tag ASC LIMIT %s", (limit,))
-
-    return rows
 
 @router.post("/fetch")
 def fetch_all_radiation():
@@ -77,15 +64,56 @@ def get_stereo(limit: int = 1440, start_date: Optional[str] = None, end_date: Op
 
 @router.get("/solar1")
 def get_solar1(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
-    return get_time_filtered_query("solar1_stis_particles", limit, start_date, end_date)
+    rows = get_time_filtered_query("solar1_stis_particles", limit, start_date, end_date)
+    if not rows and start_date and end_date:
+        try:
+            from datetime import datetime
+            from backfill_solar1_stis import backfill_solar1_stis
+            s_dt = datetime.strptime(start_date[:10], "%Y-%m-%d")
+            e_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
+            if 0 <= (e_dt - s_dt).days <= 31:
+                backfill_solar1_stis(s_dt, e_dt, minute_interval=1)
+                rows = get_time_filtered_query("solar1_stis_particles", limit, start_date, end_date)
+        except Exception as err:
+            print(f"[Auto-Fetch SOLAR-1 Error]: {err}")
+    return rows
+
+@router.post("/solar1/backfill")
+def backfill_solar1_stis_data(start_date: str, end_date: str, freq: str = "1min"):
+    from datetime import datetime
+    from backfill_solar1_stis import backfill_solar1_stis
+    s = datetime.strptime(start_date, "%Y-%m-%d")
+    e = datetime.strptime(end_date, "%Y-%m-%d")
+    backfill_solar1_stis(s, e, minute_interval=1)
+    return {"status": "success", "start": start_date, "end": end_date}
 
 @router.get("/solar1/plasma")
 def get_solar1_plasma(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
-    return get_time_filtered_query("solar1_rtsw", limit, start_date, end_date)
+    rows = get_time_filtered_query("solar1_rtsw", limit, start_date, end_date)
+    if not rows:
+        try:
+            from fetchers.solar1_fetcher import fetch_solar1_swips_plasma
+            fetch_solar1_swips_plasma()
+            rows = get_time_filtered_query("solar1_rtsw", limit, start_date, end_date)
+        except Exception as err:
+            print(f"[Auto-Fetch SOLAR-1 Plasma Error]: {err}")
+    return rows
 
 @router.get("/solar1/mag")
 def get_solar1_mag(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):
-    return get_time_filtered_query("solar1_mag", limit, start_date, end_date)
+    rows = get_time_filtered_query("solar1_mag", limit, start_date, end_date)
+    if not rows and start_date and end_date:
+        try:
+            from datetime import datetime
+            from backfill_solar1_mag import backfill_solar1_mag
+            s_dt = datetime.strptime(start_date[:10], "%Y-%m-%d")
+            e_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
+            if 0 <= (e_dt - s_dt).days <= 31:
+                backfill_solar1_mag(s_dt, e_dt)
+                rows = get_time_filtered_query("solar1_mag", limit, start_date, end_date)
+        except Exception as err:
+            print(f"[Auto-Fetch SOLAR-1 MAG Error]: {err}")
+    return rows
 
 @router.get("/crater")
 def get_crater(limit: int = 1440, start_date: Optional[str] = None, end_date: Optional[str] = None):

@@ -17,7 +17,7 @@ export function useChartPan({
   setData,
   loadHistorical,
   timeKey = 'time_tag',
-  windowMinutes = 1440,
+  windowMinutes = 4320,
   initialWindowMinutes = 360,
   rightPaddingRatio = 0.25,
 }: UseChartPanOptions) {
@@ -25,6 +25,7 @@ export function useChartPan({
   const [hasMore, setHasMore] = useState(true)
   const [hasMoreForward, setHasMoreForward] = useState(true)
   const [zoomRange, setZoomRange] = useState<{ startValue: number; endValue: number } | null>(null)
+  const [isViewingHistory, setIsViewingHistory] = useState(false)
 
   const fetchingRef = useRef(false)
   const hasMoreRef = useRef(hasMore)
@@ -38,6 +39,7 @@ export function useChartPan({
   dataRef.current = data
 
   const debounceTimerRef = useRef<any>(null)
+  const zoomDebounceRef = useRef<any>(null)
   const chartInstanceRef = useRef<any>(null)
   const initialZoomDispatchedRef = useRef(false)
 
@@ -61,24 +63,9 @@ export function useChartPan({
     }
   }, [timeKey, initialWindowMinutes, rightPaddingRatio])
 
-  const onChartReady = useCallback((instance: any) => {
-    if (!instance || (typeof instance.isDisposed === 'function' && instance.isDisposed())) return
-    chartInstanceRef.current = instance
-    if (!initialZoomDispatchedRef.current && dataRef.current && dataRef.current.length > 0) {
-      dispatchInitialZoom(instance)
-    }
-  }, [dispatchInitialZoom])
-
-  useEffect(() => {
-    if (initialZoomDispatchedRef.current) return
-    if (!chartInstanceRef.current || (typeof chartInstanceRef.current.isDisposed === 'function' && chartInstanceRef.current.isDisposed())) return
-    if (!data || data.length === 0) return
-    dispatchInitialZoom(chartInstanceRef.current)
-  }, [data, dispatchInitialZoom])
-
-  // Fetch older data when panning left
+  // Fetch older data when panning left or zooming out
   const triggerFetchHistorical = useCallback(
-    async (currentStartVal: number, currentEndVal: number) => {
+    async (currentStartVal: number, currentEndVal: number, isZoomOut = false) => {
       const currentData = dataRef.current
       if (!hasMoreRef.current || fetchingRef.current || !currentData || currentData.length === 0) return
 
@@ -103,7 +90,12 @@ export function useChartPan({
         const merged = [...fresh, ...currentData].sort(
           (a, b) => new Date(a[timeKey]).getTime() - new Date(b[timeKey]).getTime()
         )
-        setZoomRange({ startValue: currentStartVal, endValue: currentEndVal })
+        const newStart = new Date(merged[0][timeKey]).getTime()
+        const currentSpan = Math.max(currentEndVal - currentStartVal, 3600000)
+        const startToSet = isZoomOut
+          ? Math.max(newStart, currentStartVal - currentSpan * 0.25)
+          : currentStartVal
+        setZoomRange({ startValue: startToSet, endValue: currentEndVal })
         setData(merged)
       } catch (e) {
         console.error('[useChartPan] Failed to fetch historical data:', e)
@@ -115,6 +107,53 @@ export function useChartPan({
     },
     [loadHistorical, setData, timeKey, windowMinutes]
   )
+
+  const onChartReady = useCallback((instance: any) => {
+    if (!instance || (typeof instance.isDisposed === 'function' && instance.isDisposed())) return
+    chartInstanceRef.current = instance
+    if (!initialZoomDispatchedRef.current && dataRef.current && dataRef.current.length > 0) {
+      dispatchInitialZoom(instance)
+    }
+
+    const zr = instance.getZr?.()
+    if (zr) {
+      zr.off('mousewheel')
+      zr.on('mousewheel', (e: any) => {
+        const rawEvt = e.event
+        if (!rawEvt) return
+        const isZoomOut = (e.wheelDelta ? e.wheelDelta < 0 : rawEvt.deltaY > 0)
+        if (!isZoomOut) return
+
+        const currentData = dataRef.current
+        if (!currentData || currentData.length === 0 || fetchingRef.current || !hasMoreRef.current) return
+
+        const dataStart = new Date(currentData[0][timeKey]).getTime()
+        const dataEnd = new Date(currentData[currentData.length - 1][timeKey]).getTime()
+
+        const option = instance.getOption?.()
+        const dz = option?.dataZoom?.[0]
+
+        let isAtLeftEdge = false
+        if (dz) {
+          if (typeof dz.start === 'number' && dz.start <= 12) {
+            isAtLeftEdge = true
+          } else if (dz.startValue != null && Number(dz.startValue) <= dataStart + 3 * 3600000) {
+            isAtLeftEdge = true
+          }
+        } else {
+          isAtLeftEdge = true
+        }
+
+        if (isAtLeftEdge) {
+          if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+          const currentEnd = (dz?.endValue != null) ? Number(dz.endValue) : dataEnd
+          debounceTimerRef.current = setTimeout(() => {
+            triggerFetchHistorical(dataStart, currentEnd, true)
+          }, 150)
+        }
+      })
+    }
+  }, [dispatchInitialZoom, timeKey, triggerFetchHistorical])
 
   // Fetch newer data when panning right
   const triggerFetchForward = useCallback(
@@ -187,15 +226,22 @@ export function useChartPan({
         endVal = dataStart + (endPct / 100) * totalSpan
 
       if (startVal !== null && endVal !== null && startVal < endVal) {
-        setZoomRange({ startValue: startVal, endValue: endVal })
-
         const isAtLeftEdge =
-          (startPct !== null && startPct <= 0.1) ||
-          (startVal <= dataStart + 1000)
+          (startPct !== null && startPct <= 8) ||
+          (startVal <= dataStart + 2 * 3600000)
 
         const isAtRightEdge =
           (endPct !== null && endPct >= 99.9) ||
           (endVal >= dataEnd - 1000)
+
+        // Debounce React state updates to avoid interrupting ECharts canvas mouse dragging
+        if (zoomDebounceRef.current) clearTimeout(zoomDebounceRef.current)
+        zoomDebounceRef.current = setTimeout(() => {
+          setZoomRange({ startValue: startVal!, endValue: endVal! })
+          // User is viewing history if the visible end window has moved away from the live data end
+          const atLiveEdge = endVal! >= dataEnd - 2 * 60 * 1000
+          setIsViewingHistory(!atLiveEdge)
+        }, 150)
 
         if (isAtLeftEdge && !fetchingRef.current && hasMoreRef.current) {
           if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
@@ -217,11 +263,13 @@ export function useChartPan({
     setHasMoreForward(true)
     hasMoreForwardRef.current = true
     setZoomRange(null)
+    setIsViewingHistory(false)
     fetchingRef.current = false
     lastBoundaryRef.current = null
     lastRightBoundaryRef.current = null
     initialZoomDispatchedRef.current = false
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    if (zoomDebounceRef.current) clearTimeout(zoomDebounceRef.current)
   }, [])
 
   return {
@@ -231,5 +279,6 @@ export function useChartPan({
     resetPan,
     zoomRange,
     onChartReady,
+    isViewingHistory,
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveGoesWind, loadGoesWind } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -9,7 +9,11 @@ import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import { useLineDrawing } from '../../hooks/useLineDrawing'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useTheme } from '../../context/ThemeContext'
+import { formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 
 export default function SolarWind() {
   const { theme } = useTheme()
@@ -18,7 +22,7 @@ export default function SolarWind() {
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef<any>(null)
@@ -127,7 +131,22 @@ export default function SolarWind() {
 
   const latest = data[data.length - 1]
 
+  const { minTs, maxTs } = getTimeDomain(data)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
+  const buildUserMarkLines = (gi: number) => {
+    const filtered = lines.filter(l => l.gridIndex === gi)
+    if (filtered.length === 0) return undefined
+    return {
+      data: filtered.map(l => [
+        { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
+        { coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color }, lineStyle: { color: l.color, width: 1.8, opacity: 0.9 }, label: { show: false } }
+      ])
+    }
+  }
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -135,9 +154,29 @@ export default function SolarWind() {
       borderColor: isLight ? '#FDE68A' : 'rgba(245,158,11,0.6)',
       borderWidth: 1.5,
       padding: 14,
-      textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 14.5 },
+      textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
       extraCssText: isLight ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;' : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#D97706' : '#F59E0B', type: 'dashed', width: 1.5 } }
+      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#D97706' : '#F59E0B', type: 'dashed', width: 1.5 } },
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const rawTime = params[0]?.value ? params[0].value[0] : (params[0]?.axisValue || '')
+        const timeStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#D97706' : '#F59E0B'}">
+          🕒 ${timeStr}
+        </div>`
+        params.forEach((p: any) => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;margin:3px 0;font-family:var(--font-mono);">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+              <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            </span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};">${valStr}</strong>
+          </div>`
+        })
+        return html
+      }
     },
     axisPointer: {
       link: [{ xAxisIndex: 'all' }]
@@ -145,7 +184,7 @@ export default function SolarWind() {
     grid: [
       { top: 35, left: 85, right: 20, height: '26%' },    // Grid 0: Density
       { top: '38%', left: 85, right: 20, height: '26%' },   // Grid 1: Speed
-      { top: '69%', left: 85, right: 20, height: '26%' }    // Grid 2: Temperature
+      { top: '69%', left: 85, right: 20, height: '24%' }    // Grid 2: Temperature
     ],
     xAxis: [
       {
@@ -165,7 +204,7 @@ export default function SolarWind() {
       {
         gridIndex: 2,
         type: 'time',
-        axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 14.5, fontFamily: 'monospace, sans-serif' },
+        axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange),
         splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
       }
@@ -240,18 +279,7 @@ export default function SolarWind() {
         itemStyle: { color: isLight ? '#D97706' : '#FBBF24' },
         lineStyle: { width: 2.2, opacity: 1 },
         data: data.map(d => [d.time_tag, d.density]),
-        markLine: lines.filter(l => l.gridIndex === 0).length > 0 ? {
-          silent: true, symbol: ['circle', 'circle'],
-          symbolSize: 6,
-          data: lines.filter(l => l.gridIndex === 0).map(l => [
-            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
-            {
-              coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
-              lineStyle: { color: l.color, width: 1.8, opacity: 0.9 },
-              label: { show: false }
-            }
-          ])
-        } : undefined,
+        markLine: combineMarkLines(midnightDividers, buildUserMarkLines(0)),
       },
       {
         name: 'Speed',
@@ -261,18 +289,7 @@ export default function SolarWind() {
         itemStyle: { color: isLight ? '#EA580C' : '#FB923C' },
         lineStyle: { width: 2.2, opacity: 1 },
         data: data.map(d => [d.time_tag, d.speed]),
-        markLine: lines.filter(l => l.gridIndex === 1).length > 0 ? {
-          silent: true, symbol: ['circle', 'circle'],
-          symbolSize: 6,
-          data: lines.filter(l => l.gridIndex === 1).map(l => [
-            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
-            {
-              coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
-              lineStyle: { color: l.color, width: 1.8, opacity: 0.9 },
-              label: { show: false }
-            }
-          ])
-        } : undefined,
+        markLine: combineMarkLines(midnightDividers, buildUserMarkLines(1)),
       },
       {
         name: 'Temperature',
@@ -282,18 +299,7 @@ export default function SolarWind() {
         itemStyle: { color: isLight ? '#0284C7' : '#38BDF8' },
         lineStyle: { width: 2.2, opacity: 1 },
         data: data.map(d => [d.time_tag, d.temperature]),
-        markLine: lines.filter(l => l.gridIndex === 2).length > 0 ? {
-          silent: true, symbol: ['circle', 'circle'],
-          symbolSize: 6,
-          data: lines.filter(l => l.gridIndex === 2).map(l => [
-            { coord: [l.p1.time, l.p1.value], itemStyle: { color: l.color } },
-            {
-              coord: [l.p2.time, l.p2.value], itemStyle: { color: l.color },
-              lineStyle: { color: l.color, width: 1.8, opacity: 0.9 },
-              label: { show: false }
-            }
-          ])
-        } : undefined,
+        markLine: combineMarkLines(midnightDividers, buildUserMarkLines(2)),
       },
     ]
   }
@@ -309,6 +315,18 @@ export default function SolarWind() {
   function fmtValue(v: number, gridIndex: number) {
     return gridIndex === 2 ? Math.round(v).toLocaleString() : v.toFixed(2)
   }
+
+  const exportColumns = useMemo((): ExportColumn[] => [
+    { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+    { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') },
+    { key: 'density', label: 'Proton_Density(p/cc)', width: 20 },
+    { key: 'speed', label: 'Bulk_Speed(km/s)', width: 18 },
+    { key: 'temperature', label: 'Ion_Temperature(K)', width: 20 }
+  ], [])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -431,6 +449,20 @@ export default function SolarWind() {
                   </button>
                 )}
               </div>
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={data}
+                columns={exportColumns}
+                metadata={{
+                  station: 'GOES / DSCOVR (L1 ORBIT)',
+                  viewTitle: 'GOES SOLAR WIND PLASMA METRICS',
+                  description: 'Real-Time Solar Wind Plasma: Proton Density, Bulk Speed, and Ion Temperature',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: data.length
+                }}
+                filenameBase={`GOES_SOLAR_WIND_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#D97706' : '#F59E0B'}
+              />
             </div>
           }
         >

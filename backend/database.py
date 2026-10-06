@@ -193,12 +193,26 @@ def init_db():
         pressure_mbar REAL
     )''')
 
-    # Ensure columns exist if table already created
-    for col in [
-        'dose_a1', 'dose_a2', 'dose_b', 'dose_c', 'dose_d', 'dose_e', 'dose_f',
-        'l1_cnt_fast', 'l1_cnt_slow', 'l2_coinc_ab', 'l2_coinc_ade', 'pressure_mbar'
-    ]:
-        c.execute(f"ALTER TABLE mars_rad_doserates ADD COLUMN IF NOT EXISTS {col} REAL")
+    c.execute('''CREATE TABLE IF NOT EXISTS mars_maven_particles (
+        time_tag TEXT PRIMARY KEY,
+        year INTEGER,
+        doy INTEGER,
+        hour INTEGER,
+        ion_1 REAL, ion_2 REAL, ion_3 REAL, ion_4 REAL, ion_5 REAL, ion_6 REAL, ion_7 REAL,
+        ion_8 REAL, ion_9 REAL, ion_10 REAL, ion_11 REAL, ion_12 REAL, ion_13 REAL, ion_14 REAL,
+        ion_15 REAL, ion_16 REAL, ion_17 REAL, ion_18 REAL, ion_19 REAL, ion_20 REAL, ion_21 REAL,
+        ion_22 REAL, ion_23 REAL, ion_24 REAL, ion_25 REAL, ion_26 REAL, ion_27 REAL, ion_28 REAL,
+        ele_1 REAL, ele_2 REAL, ele_3 REAL, ele_4 REAL, ele_5 REAL, ele_6 REAL, ele_7 REAL,
+        ele_8 REAL, ele_9 REAL, ele_10 REAL, ele_11 REAL, ele_12 REAL, ele_13 REAL, ele_14 REAL, ele_15 REAL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_mars_maven_time_tag ON mars_maven_particles (time_tag)')
+    c.execute('''CREATE TABLE IF NOT EXISTS noaa_kp_index (
+        time_tag TEXT PRIMARY KEY,
+        kp REAL,
+        a_running REAL,
+        station_count INTEGER
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_noaa_kp_time_tag ON noaa_kp_index (time_tag)')
 
     conn.commit()
     conn.close()

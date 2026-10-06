@@ -10,6 +10,9 @@ interface DualMonthDatePickerProps {
   label?: string
   accentColor?: string
   autoOpen?: boolean
+  applyText?: string
+  compact?: boolean
+  placeholder?: string
 }
 
 const MONTH_NAMES = [
@@ -75,6 +78,9 @@ export default function DualMonthDatePicker({
   label = '',
   accentColor = '#22C55E',
   autoOpen = false,
+  applyText = 'GO',
+  compact = false,
+  placeholder,
 }: DualMonthDatePickerProps) {
   const { theme } = useTheme()
   const isLight = theme === 'light'
@@ -377,15 +383,15 @@ export default function DualMonthDatePicker({
             value={inputVal}
             readOnly
             onClick={() => setIsOpen(!isOpen)}
-            placeholder="DD/MM/YYYY - DD/MM/YYYY"
+            placeholder={placeholder || "DD/MM/YYYY - DD/MM/YYYY"}
             style={{
-              width: 236,
-              padding: '6px 36px 6px 12px',
+              width: compact ? 200 : 236,
+              padding: compact ? '4px 30px 4px 8px' : '6px 36px 6px 12px',
               border: 'none',
               outline: 'none',
               background: 'transparent',
               color: isLight ? '#0F172A' : '#F8FAFC',
-              fontSize: 14,
+              fontSize: compact ? 12 : 14,
               fontFamily: 'var(--font-mono)',
               fontWeight: 600,
               cursor: 'pointer',
@@ -411,23 +417,23 @@ export default function DualMonthDatePicker({
               justifyContent: 'center',
             }}
           >
-            <Calendar size={15} />
+            <Calendar size={compact ? 13 : 15} />
           </button>
         </div>
 
-        {/* Action GO Button */}
+        {/* Action Button */}
         <button
           type="button"
           onClick={handleApplyClick}
           disabled={loading}
           style={{
-            padding: '6px 16px',
+            padding: compact ? '4px 10px' : '6px 16px',
             background: isLight ? '#FFFFFF' : 'transparent',
             border: `1.5px solid ${accentColor}`,
             borderRadius: 6,
             color: accentColor,
             fontFamily: 'var(--font-mono)',
-            fontSize: 13.5,
+            fontSize: compact ? 12 : 13.5,
             fontWeight: 700,
             cursor: loading ? 'wait' : 'pointer',
             transition: 'all 0.15s ease',
@@ -442,7 +448,7 @@ export default function DualMonthDatePicker({
             e.currentTarget.style.color = accentColor
           }}
         >
-          {loading ? '...' : 'GO'}
+          {loading ? '...' : (applyText || 'GO')}
         </button>
       </div>
 

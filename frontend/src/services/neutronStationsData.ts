@@ -643,3 +643,240 @@ export const MAGNETIC_EQUATOR_POINTS: { lon: number; lat: number }[] = [
   { lon: 171.53, lat: 7.55 },
   { lon: 180.0, lat: 5.87 }
 ];
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── GLE#77 Event (10-11 May 2024) 30-Minute Peak Increase Dataset ──
+// ══════════════════════════════════════════════════════════════════════════
+
+export type GLEEnhancementTier = 'very_high' | 'moderate' | 'low' | 'none';
+
+export interface GLE77StationData {
+  increasePercent: number; // 30-min peak average relative increase (%)
+  tier: GLEEnhancementTier;
+  tierLabel: string;
+  notes?: string;
+}
+
+export const GLE77_STATION_MAP: Record<string, GLE77StationData> = {
+  // 🟡 Tier 1: Very High Increase (>= 65%) - Exact 30-min peak rolling mean from backend/data/cosmic
+  NAIN:  { increasePercent: 138.5, tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'Canadian polar funnel prompt response; peak +138.5% at 11/11 11:07 UTC' },
+  MWSN:  { increasePercent: 126.7, tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'East Antarctic coast viewing direction; peak +126.7% at 11/11 10:54 UTC' },
+  SOPO:  { increasePercent: 102.0, tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'South Pole polar horn detection; peak +102.0% at 11/11 12:36 UTC' },
+  SNAE:  { increasePercent: 88.0,  tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'SANAE IV Antarctic high sensitivity; peak ~+88.0%' },
+  PWNK:  { increasePercent: 83.0,  tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'Peawanuck sub-polar prompt detection; peak +83.0% at 11/11 12:31 UTC' },
+  DOMB:  { increasePercent: 68.3,  tier: 'very_high', tierLabel: 'Very High (≥ 65%)', notes: 'Dome C (Concordia B) Antarctic station; peak +68.3% at 11/11 14:55 UTC' },
+
+  // 🟠 Tier 2: Moderate Increase (30% - 65%)
+  NEWK:  { increasePercent: 59.5, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Newark viewing cone aligned with IMF connection; peak +59.5% at 11/11 10:50 UTC' },
+  CALG:  { increasePercent: 58.6, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Calgary mid-high latitude detection; peak +58.6% at 11/11 12:43 UTC' },
+  OULU:  { increasePercent: 53.3, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Oulu European high-latitude monitor; peak +53.3% at 11/11 10:46 UTC' },
+  DOMC:  { increasePercent: 52.9, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Dome C (Concordia C) Antarctic station; peak +52.9% at 11/11 14:46 UTC' },
+  TXBY:  { increasePercent: 49.0, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Tixie Bay Siberian Arctic high-latitude response; peak ~+49.0%' },
+  NRLK:  { increasePercent: 45.0, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Norilsk North Siberian monitor; peak ~+45.0%' },
+  FSMT:  { increasePercent: 38.1, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Fort Smith sub-polar enhancement; peak +38.1% at 11/11 13:50 UTC' },
+  YKTK:  { increasePercent: 36.5, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Yakutsk Eastern Siberian station; peak ~+36.5%' },
+  JUAN:  { increasePercent: 35.0, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Juan Carlos I Antarctic Peninsula detection; peak ~+35.0%' },
+  KERG:  { increasePercent: 30.4, tier: 'moderate', tierLabel: 'Moderate (30% - 65%)', notes: 'Kerguelen Southern Indian Ocean monitor; peak +30.4% at 11/11 13:36 UTC' },
+
+  // 🔴 Tier 3: Low Increase (< 30%)
+  INVK:  { increasePercent: 27.6, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Inuvik Arctic Canadian monitor; peak +27.6% at 11/11 12:35 UTC' },
+  APTY:  { increasePercent: 27.3, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Apatity Kola Peninsula polar station; peak +27.3% at 11/11 10:47 UTC' },
+  JBGO:  { increasePercent: 26.9, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Jang Bogo Korean Antarctic station; peak +26.9% at 11/11 14:19 UTC' },
+  TERA:  { increasePercent: 25.5, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Terre Adelie Antarctic coast detection; peak +25.5% at 11/11 13:24 UTC' },
+  THUL:  { increasePercent: 20.2, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Thule Greenland polar cap detection; peak +20.2% at 11/11 13:13 UTC' },
+  NVBK:  { increasePercent: 18.0, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Novosibirsk Western Siberian mid-latitude detection' },
+  KIEL2: { increasePercent: 17.7, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Kiel North German coastal monitor; peak +17.7% at 11/11 11:41 UTC' },
+  MOSC:  { increasePercent: 16.0, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Moscow Russian plain mid-latitude monitor' },
+  LDVL:  { increasePercent: 15.5, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Leadville Rocky Mountain high-altitude detection' },
+  MGDN:  { increasePercent: 14.5, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Magadan Far East Russian station' },
+  IRKT:  { increasePercent: 12.3, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Irkutsk Baikal region mid-latitude monitor; peak +12.3% at 11/11 11:36 UTC' },
+  CAPS:  { increasePercent: 12.0, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Cape Schmidt Chukotka Arctic monitor' },
+  KIEV:  { increasePercent: 11.8, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Kiev Eastern European detection' },
+  LMKS:  { increasePercent: 10.6, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Lomnicky Stit High Tatra detector; peak +10.6% at 11/11 11:49 UTC' },
+  DRBS:  { increasePercent: 10.3, tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Dourbes Belgian mid-latitude detection; peak +10.3% at 11/11 11:40 UTC' },
+  JUNG1: { increasePercent: 7.2,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Jungfraujoch 1 Swiss Alps high-altitude station; peak +7.2% at 11/11 11:29 UTC' },
+  JUNG:  { increasePercent: 6.7,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Jungfraujoch Swiss Alps high-altitude station; peak +6.7% at 11/11 11:10 UTC' },
+  ATHN:  { increasePercent: 3.2,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Athens Mediterranean monitor; peak +3.2% at 11/15 22:37 UTC' },
+  ICRB:  { increasePercent: 3.2,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Incline Cosmic Ray B monitor; peak +3.2%' },
+  MXCO:  { increasePercent: 3.1,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Mexico City sub-tropical high-altitude detection; peak +3.1% at 11/11 10:41 UTC' },
+  BKSN:  { increasePercent: 2.9,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Baksan Caucasus high-altitude detection; peak +2.9% at 11/11 11:06 UTC' },
+  CALM:  { increasePercent: 2.5,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Castilla-La Mancha Iberian monitor; peak +2.5% at 11/11 04:23 UTC' },
+  HLKL:  { increasePercent: 2.4,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Thimon (Haleakala) Pacific high-altitude station; peak +2.4% at 11/11 10:41 UTC' },
+  ICRO:  { increasePercent: 1.7,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Incline Cosmic Ray O monitor; peak +1.7%' },
+  ROME:  { increasePercent: 1.2,  tier: 'low', tierLabel: 'Low (< 30%)', notes: 'Rome Mediterranean mid-latitude detection; peak +1.2% at 11/11 22:04 UTC' },
+
+  // ⚫ Tier 4: No Enhancement (0%) - Cutoff Rigidity Barrier Exceeded
+  PSNM:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Doi Inthanon cutoff rigidity (~16.8 GV) barrier deflected all incoming solar particles' },
+  TIBT:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Tibet rigidity barrier (~14.1 GV) prevented particle penetration' },
+  CHAC:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Chacaltaya equatorial cutoff (~12.5 GV) shielded' },
+  HERM:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Hermanus cutoff barrier (~4.58 GV) and unfavorable viewing angle' },
+  TSMB:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Tsumeb tropical cutoff (~9.15 GV) shielded' },
+  POTC:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Potchefstroom geomagnetic barrier (~6.98 GV)' },
+  AATB:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Alma-Ata cutoff barrier (~6.69 GV) shielded' },
+  MTHM:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Mt Hermon cutoff barrier (~10.4 GV) shielded' },
+  TBLS:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Tbilisi cutoff barrier (~6.91 GV)' },
+  EREV:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Erevan cutoff barrier (~7.60 GV)' },
+  KGN2:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'King George station offline / no peak observed' },
+  BRBG:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Barentsburg telemetry gap during prompt phase' },
+  TURK:  { increasePercent: 0.0,  tier: 'none', tierLabel: 'No Enhancement (0%)', notes: 'Turku monitor no significant enhancement' }
+};
+
+export type GLEAveragingWindow = 10 | 20 | 30 | 40;
+
+// Precomputed peak % increase for 10-min, 20-min, 30-min, and 40-min rolling averages from backend/data/cosmic
+export const GLE77_WINDOW_PEAKS: Record<GLEAveragingWindow, Record<string, number>> = {
+  10: {
+    APTY: 33.9, ATHN: 4.3, BKSN: 3.3, CALG: 60.5, CALM: 4.7, DOMB: 71.3, DOMC: 54.1,
+    DRBS: 11.5, FSMT: 38.9, ICRB: 5.8, ICRO: 3.2, INVK: 28.6, IRKT: 13.6, JBGO: 26.6,
+    JUNG: 7.3, JUNG1: 7.5, KERG: 30.9, KIEL2: 18.5, LMKS: 11.1, MWSN: 133.0, MXCO: 4.2,
+    NAIN: 147.4, NEWK: 61.2, OULU: 68.3, PWNK: 87.6, ROME: 1.8, SOPO: 120.6, TERA: 26.2,
+    THUL: 21.0, HLKL: 2.9, SNAE: 94.2, TXBY: 52.5, NRLK: 48.0, YKTK: 39.0, JUAN: 37.5,
+    NVBK: 19.5, MOSC: 17.5, LDVL: 16.8, MGDN: 15.5, CAPS: 13.2, KIEV: 12.8
+  },
+  20: {
+    APTY: 31.0, ATHN: 3.2, BKSN: 3.2, CALG: 59.6, CALM: 3.1, DOMB: 69.5, DOMC: 53.5,
+    DRBS: 10.5, FSMT: 38.3, ICRB: 3.6, ICRO: 2.0, INVK: 27.9, IRKT: 12.7, JBGO: 25.7,
+    JUNG: 6.9, JUNG1: 7.4, KERG: 30.7, KIEL2: 17.9, LMKS: 10.8, MWSN: 131.3, MXCO: 3.7,
+    NAIN: 143.5, NEWK: 60.5, OULU: 61.9, PWNK: 85.5, ROME: 1.4, SOPO: 110.9, TERA: 25.8,
+    THUL: 20.5, HLKL: 2.6, SNAE: 91.0, TXBY: 50.8, NRLK: 46.5, YKTK: 37.8, JUAN: 36.2,
+    NVBK: 18.8, MOSC: 16.8, LDVL: 16.0, MGDN: 15.0, CAPS: 12.5, KIEV: 12.3
+  },
+  30: {
+    APTY: 27.3, ATHN: 2.5, BKSN: 2.9, CALG: 58.6, CALM: 2.5, DOMB: 68.3, DOMC: 52.9,
+    DRBS: 10.3, FSMT: 38.1, ICRB: 3.2, ICRO: 1.7, INVK: 27.6, IRKT: 12.3, JBGO: 25.2,
+    JUNG: 6.7, JUNG1: 7.2, KERG: 30.4, KIEL2: 17.7, LMKS: 10.6, MWSN: 126.7, MXCO: 3.1,
+    NAIN: 138.5, NEWK: 59.5, OULU: 53.3, PWNK: 83.0, ROME: 1.2, SOPO: 102.0, TERA: 25.5,
+    THUL: 20.2, HLKL: 2.4, SNAE: 88.0, TXBY: 49.0, NRLK: 45.0, YKTK: 36.5, JUAN: 35.0,
+    NVBK: 18.0, MOSC: 16.0, LDVL: 15.5, MGDN: 14.5, CAPS: 12.0, KIEV: 11.8
+  },
+  40: {
+    APTY: 25.9, ATHN: 2.4, BKSN: 2.9, CALG: 58.0, CALM: 2.0, DOMB: 67.9, DOMC: 52.6,
+    DRBS: 10.3, FSMT: 37.7, ICRB: 2.9, ICRO: 1.2, INVK: 27.4, IRKT: 12.1, JBGO: 25.1,
+    JUNG: 6.7, JUNG1: 7.1, KERG: 30.2, KIEL2: 17.3, LMKS: 10.5, MWSN: 119.6, MXCO: 3.0,
+    NAIN: 133.9, NEWK: 58.0, OULU: 46.8, PWNK: 80.9, ROME: 1.1, SOPO: 101.3, TERA: 25.3,
+    THUL: 19.8, HLKL: 2.3, SNAE: 84.5, TXBY: 47.0, NRLK: 43.5, YKTK: 35.0, JUAN: 33.8,
+    NVBK: 17.2, MOSC: 15.2, LDVL: 14.8, MGDN: 13.9, CAPS: 11.4, KIEV: 11.2
+  }
+};
+
+function getTierFromPercent(val: number): GLEEnhancementTier {
+  if (val >= 65.0) return 'very_high';
+  if (val >= 30.0) return 'moderate';
+  if (val >= 5.0) return 'low';
+  return 'none';
+}
+
+// Helper to get GLE#77 data for any station with specific averaging window (10, 20, 30, 40m)
+export function getGLE77Data(
+  stationId: string,
+  cutoffRigidity: number = 0,
+  window: GLEAveragingWindow = 30
+): GLE77StationData {
+  const windowTable = GLE77_WINDOW_PEAKS[window] || GLE77_WINDOW_PEAKS[30];
+  if (stationId in windowTable) {
+    const val = windowTable[stationId];
+    const tier = getTierFromPercent(val);
+    const tierLabel = tier === 'very_high' ? 'Very High (≥ 65%)'
+                    : tier === 'moderate' ? 'Moderate (30% - 65%)'
+                    : tier === 'low' ? 'Low (< 30%)'
+                    : 'No Enhancement (0%)';
+    const baseEntry = GLE77_STATION_MAP[stationId];
+    return {
+      increasePercent: val,
+      tier,
+      tierLabel,
+      notes: baseEntry?.notes || `Peak +${val.toFixed(1)}% (${window}-min rolling average)`
+    };
+  }
+
+  // Check static fallback map
+  if (GLE77_STATION_MAP[stationId]) {
+    return GLE77_STATION_MAP[stationId];
+  }
+
+  // If station is not in explicit GLE#77 table, infer from cutoff rigidity
+  if (cutoffRigidity > 5.0) {
+    return {
+      increasePercent: 0.0,
+      tier: 'none',
+      tierLabel: 'No Enhancement (0%)',
+      notes: `Geomagnetic cutoff (${cutoffRigidity.toFixed(1)} GV) barrier deflected solar particles.`
+    };
+  }
+  return {
+    increasePercent: 0.0,
+    tier: 'none',
+    tierLabel: 'No Enhancement (0%)',
+    notes: 'No GLE telemetry reported for this station'
+  };
+}
+
+// Styling helper for GLE#77 Map Markers (Size & Color)
+// continuousPercent allows fluid, nuanced size variations between 10m, 20m, 30m, 40m averages!
+export function getGLE77MarkerStyle(
+  tier: GLEEnhancementTier,
+  isSelected: boolean = false,
+  continuousPercent?: number
+) {
+  const pct = continuousPercent !== undefined ? continuousPercent : 0;
+
+  switch (tier) {
+    case 'very_high': { // 🟡 Largest size (23 - 29px), yellow
+      const dynamicSize = continuousPercent !== undefined
+        ? Math.round(22 + Math.min(7, Math.max(1, ((pct - 65) / 80) * 7)))
+        : 26;
+      return {
+        color: '#FACC15', // Bright Yellow
+        glowColor: 'rgba(250, 204, 21, 0.75)',
+        borderColor: isSelected ? '#FFFFFF' : '#713F12',
+        borderWidth: 2.5,
+        size: dynamicSize,
+        pulseSize: dynamicSize + 16,
+        hasPulse: false, // Keep static as requested
+        zIndex: 35
+      };
+    }
+    case 'moderate': { // 🟠 Medium size (16 - 21px), orange
+      const dynamicSize = continuousPercent !== undefined
+        ? Math.round(15 + Math.min(6, Math.max(1, ((pct - 30) / 35) * 6)))
+        : 18;
+      return {
+        color: '#FB923C', // Vibrant Orange
+        glowColor: 'rgba(251, 146, 60, 0.65)',
+        borderColor: isSelected ? '#FFFFFF' : '#7C2D12',
+        borderWidth: 2,
+        size: dynamicSize,
+        pulseSize: dynamicSize + 12,
+        hasPulse: false, // Keep static as requested
+        zIndex: 30
+      };
+    }
+    case 'low': { // 🔴 Small size (10 - 14px), red
+      const dynamicSize = continuousPercent !== undefined
+        ? Math.round(9 + Math.min(5, Math.max(1, (pct / 30) * 5)))
+        : 12;
+      return {
+        color: '#EF4444', // Red
+        glowColor: 'rgba(239, 68, 68, 0.5)',
+        borderColor: isSelected ? '#FFFFFF' : '#450A0A',
+        borderWidth: 1.5,
+        size: dynamicSize,
+        pulseSize: dynamicSize + 8,
+        hasPulse: false,
+        zIndex: 25
+      };
+    }
+    case 'none': // ⚫ Smallest size (7px), dark circle with white rim
+    default:
+      return {
+        color: '#090D16', // Solid Dark / Black
+        glowColor: 'rgba(0, 0, 0, 0.4)',
+        borderColor: isSelected ? '#38BDF8' : '#F8FAFC', // Crisp white rim
+        borderWidth: 1.8,
+        size: 7,
+        pulseSize: 0,
+        hasPulse: false,
+        zIndex: 15
+      };
+  }
+}

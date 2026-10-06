@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { useTranslation } from 'react-i18next'
 import { fetchAndSaveMag, loadMag } from '../../services/aceService'
 import { loadSolar1Mag } from '../../services/radiationService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -9,9 +10,14 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useTheme } from '../../context/ThemeContext'
+import { formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 
 export default function Mag() {
+  const { t } = useTranslation()
   const { theme } = useTheme()
   const isLight = theme === 'light'
 
@@ -20,7 +26,7 @@ export default function Mag() {
   const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef(null)
@@ -34,8 +40,27 @@ export default function Mag() {
         loadMag(limit, sDate, eDate),
         loadSolar1Mag(limit, sDate, eDate)
       ])
-      setData(Array.isArray(dAce) ? dAce : [])
-      setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
+      const newAce = Array.isArray(dAce) ? dAce : []
+      const newSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+
+      if (showLoading || appliedRange) {
+        setData(newAce)
+        setSolar1Data(newSolar1)
+      } else {
+        // Smart merge: keep any older historical data user loaded to the left
+        setData(prev => {
+          if (!prev || prev.length === 0 || newAce.length === 0) return newAce
+          const firstNewTs = new Date(newAce[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newAce]
+        })
+        setSolar1Data(prev => {
+          if (!prev || prev.length === 0 || newSolar1.length === 0) return newSolar1
+          const firstNewTs = new Date(newSolar1[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newSolar1]
+        })
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -52,10 +77,48 @@ export default function Mag() {
     setFetching(false)
   }
 
-  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
-    data,
-    setData,
-    loadHistorical: (start, end) => loadMag(0, start, end),
+  const activeData = satSource === 'SOLAR1' ? solar1Data : (data.length ? data : solar1Data)
+
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady, isViewingHistory } = useChartPan({
+    data: activeData,
+    setData: (merged: any[]) => {
+      if (satSource === 'SOLAR1') {
+        setSolar1Data(merged)
+      } else {
+        setData(merged)
+      }
+    },
+    loadHistorical: async (start, end) => {
+      if (satSource === 'SOLAR1') {
+        const dSolar1 = await loadSolar1Mag(0, start, end)
+        const freshSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+        if (freshSolar1.length) {
+          setSolar1Data(prev => {
+            const existingKeys = new Set(prev.map(p => p.time_tag))
+            const filtered = freshSolar1.filter(p => !existingKeys.has(p.time_tag))
+            return [...filtered, ...prev].sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+          })
+        }
+        return freshSolar1
+      } else if (satSource === 'BOTH') {
+        const [dAce, dSolar1] = await Promise.all([
+          loadMag(0, start, end),
+          loadSolar1Mag(0, start, end)
+        ])
+        const freshAce = Array.isArray(dAce) ? dAce : []
+        const freshSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+        if (freshSolar1.length) {
+          setSolar1Data(prev => {
+            const existingKeys = new Set(prev.map(p => p.time_tag))
+            const filtered = freshSolar1.filter(p => !existingKeys.has(p.time_tag))
+            return [...filtered, ...prev].sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+          })
+        }
+        return freshAce
+      } else {
+        return loadMag(0, start, end)
+      }
+    },
     windowMinutes: 1440,
     initialWindowMinutes: appliedRange ? 0 : limit,
   })
@@ -65,9 +128,13 @@ export default function Mag() {
     load(true)
   }, [limit, appliedRange])
 
+  useEffect(() => {
+    resetPan()
+  }, [satSource])
+
   useAutoFetch(async () => {
     await load(false)
-  }, 60000, !appliedRange)
+  }, 60000, !appliedRange && !isViewingHistory)
 
   const latest = data[data.length - 1]
   const bzStatus = !latest ? 'offline' : latest.bz < -10 ? 'danger' : latest.bz < 0 ? 'warning' : 'normal'
@@ -173,8 +240,22 @@ export default function Mag() {
     )
   }
 
+  const allMagData = satSource === 'SOLAR1' ? solar1Data : (satSource === 'BOTH' ? [...data, ...solar1Data] : data)
+  const { minTs, maxTs } = getTimeDomain(allMagData)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
+  const firstGrid0 = series.find(s => s.xAxisIndex === 0)
+  if (firstGrid0) {
+    firstGrid0.markLine = combineMarkLines(midnightDividers)
+  }
+  const firstGrid1 = series.find(s => s.xAxisIndex === 1)
+  if (firstGrid1) {
+    firstGrid1.markLine = combineMarkLines(midnightDividers)
+  }
+
   // Multi-grid ECharts option configuration
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -184,7 +265,27 @@ export default function Mag() {
       padding: 14,
       textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
       extraCssText: isLight ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;' : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#1A6DB5' : '#38BDF8', type: 'dashed', width: 1.5 } }
+      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#1A6DB5' : '#38BDF8', type: 'dashed', width: 1.5 } },
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const rawTime = params[0]?.value ? params[0].value[0] : (params[0]?.axisValue || '')
+        const timeStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#0284C7' : '#38BDF8'}">
+          🕒 ${timeStr}
+        </div>`
+        params.forEach((p: any) => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? val.toFixed(2) : '—'
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;margin:3px 0;font-family:var(--font-mono);">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+              <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            </span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};">${valStr} nT</strong>
+          </div>`
+        })
+        return html
+      }
     },
     legend: {
       show: true,
@@ -195,8 +296,8 @@ export default function Mag() {
       link: [{ xAxisIndex: 'all' }]
     },
     grid: [
-      { top: 35, left: 85, right: 20, height: '42%' },    // Grid 0: Bt / Bz
-      { top: '54%', left: 85, right: 20, height: '40%' }   // Grid 1: Bx / By
+      { top: 35, left: 85, right: 20, height: '40%' },    // Grid 0: Bt / Bz
+      { top: '54%', left: 85, right: 20, height: '38%' }   // Grid 1: Bx / By
     ],
     xAxis: [
       {
@@ -209,7 +310,7 @@ export default function Mag() {
       {
         gridIndex: 1,
         type: 'time',
-        axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' },
+        axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange),
         splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
         axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
       }
@@ -261,6 +362,74 @@ export default function Mag() {
     ],
     series
   }
+
+  // Unified export dataset based on satSource
+  const exportData = useMemo(() => {
+    if (satSource === 'ACE') return data
+    if (satSource === 'SOLAR1') return solar1Data
+    const map = new Map<string, any>()
+    data.forEach(d => {
+      map.set(d.time_tag, {
+        time_tag: d.time_tag,
+        ace_bt: d.bt,
+        ace_bx: d.bx_gse,
+        ace_by: d.by_gse,
+        ace_bz: d.bz_gse
+      })
+    })
+    solar1Data.forEach(d => {
+      const existing = map.get(d.time_tag) || { time_tag: d.time_tag }
+      existing.solar1_bt = d.bt
+      existing.solar1_bx = d.bx_gse
+      existing.solar1_by = d.by_gse
+      existing.solar1_bz = d.bz_gse
+      map.set(d.time_tag, existing)
+    })
+    return Array.from(map.values()).sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }, [satSource, data, solar1Data])
+
+  const exportColumns = useMemo((): ExportColumn[] => {
+    const base: ExportColumn[] = [
+      { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+      { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') }
+    ]
+
+    if (satSource === 'ACE') {
+      return [
+        ...base,
+        { key: 'bt', label: 'Bt(nT)', width: 12 },
+        { key: 'bx_gse', label: 'Bx_GSE(nT)', width: 14 },
+        { key: 'by_gse', label: 'By_GSE(nT)', width: 14 },
+        { key: 'bz_gse', label: 'Bz_GSE(nT)', width: 14 }
+      ]
+    }
+
+    if (satSource === 'SOLAR1') {
+      return [
+        ...base,
+        { key: 'bt', label: 'Bt(nT)', width: 12 },
+        { key: 'bx_gse', label: 'Bx_GSE(nT)', width: 14 },
+        { key: 'by_gse', label: 'By_GSE(nT)', width: 14 },
+        { key: 'bz_gse', label: 'Bz_GSE(nT)', width: 14 }
+      ]
+    }
+
+    return [
+      ...base,
+      { key: 'ace_bt', label: 'ACE_Bt(nT)', width: 14 },
+      { key: 'ace_bx', label: 'ACE_Bx(nT)', width: 14 },
+      { key: 'ace_by', label: 'ACE_By(nT)', width: 14 },
+      { key: 'ace_bz', label: 'ACE_Bz(nT)', width: 14 },
+      { key: 'solar1_bt', label: 'SOLAR1_Bt(nT)', width: 16 },
+      { key: 'solar1_bx', label: 'SOLAR1_Bx(nT)', width: 16 },
+      { key: 'solar1_by', label: 'SOLAR1_By(nT)', width: 16 },
+      { key: 'solar1_bz', label: 'SOLAR1_Bz(nT)', width: 16 }
+    ]
+  }, [satSource])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -315,27 +484,37 @@ export default function Mag() {
 
       {/* Toolbar: Source Toggle + Date Range */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        {/* Source Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-          <span style={{ color: isLight ? '#475569' : '#94A3B8', fontWeight: 600 }}>SATELLITE:</span>
+        {/* Source Switcher Toggle */}
+        <div style={{
+          display: 'flex',
+          background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+          padding: 3,
+          borderRadius: 8,
+          border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)'
+        }}>
           {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
             <button
               key={s}
               onClick={() => setSatSource(s)}
               style={{
-                background: satSource === s ? (isLight ? '#1A6DB5' : '#38BDF8') : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)'),
-                color: satSource === s ? '#FFF' : (isLight ? '#334155' : '#94A3B8'),
-                border: '1px solid ' + (satSource === s ? (isLight ? '#1A6DB5' : '#38BDF8') : (isLight ? 'rgba(26,109,181,0.2)' : 'rgba(255,255,255,0.1)')),
-                fontSize: 14,
-                fontWeight: 600,
-                padding: '5px 14px',
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                border: 'none',
+                background: satSource === s
+                  ? (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.15)')
+                  : 'transparent',
+                color: satSource === s
+                  ? (isLight ? '#0284C7' : '#38BDF8')
+                  : (isLight ? '#64748B' : '#94A3B8'),
                 borderRadius: 6,
                 cursor: 'pointer',
-                boxShadow: isLight && satSource !== s ? '0 1px 4px rgba(0,0,0,0.03)' : undefined,
+                boxShadow: isLight && satSource === s ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
                 transition: 'all 0.15s'
               }}
             >
-              {s === 'SOLAR1' ? 'SOLAR-1 (SWFO-L1)' : s === 'BOTH' ? 'BOTH (ACE + SOLAR-1)' : 'ACE'}
+              {s === 'SOLAR1' ? 'SOLAR-1 (MAG)' : s === 'BOTH' ? 'BOTH (ACE + SOLAR-1)' : 'ACE'}
             </button>
           ))}
         </div>
@@ -360,15 +539,36 @@ export default function Mag() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#1A6DB5' : '#38BDF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#1A6DB5' : '#38BDF8', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={exportData}
+                columns={exportColumns}
+                metadata={{
+                  station: 'ACE / SOLAR-1 (L1 ORBIT)',
+                  viewTitle: `INTERPLANETARY MAGNETIC FIELD (${satSource})`,
+                  description: 'Interplanetary Magnetic Field (IMF): Total Magnitude (Bt) and Coordinate Components (Bx, By, Bz)',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: exportData.length
+                }}
+                filenameBase={`IMF_MAG_${satSource}_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#1A6DB5' : '#38BDF8'}
+              />
+            </div>
+          }
         >
           <ReactECharts
+            ref={chartRef}
+            key={satSource}
             option={option}
             notMerge={true}
+            lazyUpdate={true}
             style={{ height: 580, width: '100%' }}
             onChartReady={onChartReady}
             onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}
@@ -382,10 +582,10 @@ export default function Mag() {
         onTabChange={setActiveTab}
         accentColor={isLight ? '#1A6DB5' : '#38BDF8'}
         tabs={[
-          { id: 'usage', label: '01. USAGE (การใช้งาน)' },
-          { id: 'impacts', label: '02. IMPACTS (ผลกระทบ)' },
-          { id: 'details', label: '03. DETAILS (ข้อมูลอุปกรณ์)' },
-          { id: 'credits', label: '04. DATA SOURCE & CREDITS (แหล่งข้อมูล)' }
+          { id: 'usage', label: t('guide_tabs.usage') },
+          { id: 'impacts', label: t('guide_tabs.impacts') },
+          { id: 'details', label: t('guide_tabs.details') },
+          { id: 'credits', label: t('guide_tabs.credits') }
         ]}
       >
         {activeTab === 'usage' && (
@@ -397,7 +597,7 @@ export default function Mag() {
               fontFamily: "'Orbitron', var(--font-sans), monospace",
               fontWeight: 700
             }}>
-              การวัดค่าองค์ประกอบสนามแม่เหล็ก (IMF Components)
+              {t('guides.mag.usage.title')}
             </h4>
             <p style={{
               color: isLight ? '#334155' : '#CBD5E1',
@@ -406,7 +606,7 @@ export default function Mag() {
               textAlign: 'justify',
               lineHeight: '1.7'
             }}>
-              <strong>MAG (Magnetometer)</strong> จะรายงานค่าความเข้มและทิศทางของสนามแม่เหล็กระหว่างดาวเคราะห์ (IMF) ในระบบพิกัดคาร์ทีเซียนแบบ 3 มิติ (GSM Coordinates) เพื่อบอกทิศทางของเส้นแรงแม่เหล็กที่พุ่งผ่านตัวยานอวกาศ ดังนี้:
+              <strong>MAG (Magnetometer)</strong> {t('guides.mag.usage.desc')}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{
@@ -417,7 +617,7 @@ export default function Mag() {
                 borderRadius: isLight ? '0 6px 6px 0' : 0
               }}>
                 <span style={{ color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 700, fontSize: 13 }}>Bt (Total Magnitude):</span>
-                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>ความเข้มของสนามแม่เหล็กทั้งหมดในเวลานั้น (nT) ยิ่งมีค่าสูง แสดงว่าสนามแม่เหล็กมีความปั่นป่วนสูง</span>
+                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>{t('guides.mag.usage.bt')}</span>
               </div>
               <div style={{
                 borderLeft: `3px solid ${isLight ? '#0284C7' : '#38BDF8'}`,
@@ -427,7 +627,7 @@ export default function Mag() {
                 borderRadius: isLight ? '0 6px 6px 0' : 0
               }}>
                 <span style={{ color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 700, fontSize: 13 }}>Bx:</span>
-                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>แกนที่ชี้จากโลกตรงไปยังดวงอาทิตย์ บอกว่าทิศทางเส้นแม่เหล็กพุ่งเข้าหรือออกจากดวงอาทิตย์</span>
+                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>{t('guides.mag.usage.bx')}</span>
               </div>
               <div style={{
                 borderLeft: `3px solid ${isLight ? '#D97706' : '#FBBF24'}`,
@@ -437,7 +637,7 @@ export default function Mag() {
                 borderRadius: isLight ? '0 6px 6px 0' : 0
               }}>
                 <span style={{ color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 700, fontSize: 13 }}>By:</span>
-                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>แกนที่ขนานกับระนาบวงโคจรของโลก (ชี้ตรงข้ามกับการเคลื่อนที่ของโลก)</span>
+                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>{t('guides.mag.usage.by')}</span>
               </div>
               <div style={{
                 borderLeft: `3px solid ${isLight ? '#DC2626' : '#EF4444'}`,
@@ -447,7 +647,7 @@ export default function Mag() {
                 borderRadius: isLight ? '0 6px 6px 0' : 0
               }}>
                 <span style={{ color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 700, fontSize: 13 }}>Bz:</span>
-                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>แกนแนวตั้งตั้งฉากกับระนาบวงโคจรโลก เป็นดัชนีสำคัญที่สุดในการเฝ้าระวังพายุสุริยะ</span>
+                <span style={{ color: isLight ? '#475569' : '#94A3B8', fontSize: 13, marginLeft: 6 }}>{t('guides.mag.usage.bz')}</span>
               </div>
             </div>
           </div>
@@ -462,7 +662,7 @@ export default function Mag() {
               fontFamily: "'Orbitron', var(--font-sans), monospace",
               fontWeight: 700
             }}>
-              ทิศทางของแกน Bz และผลกระทบต่อโลก (Bz Alignment & Impacts)
+              {t('guides.mag.impacts.title')}
             </h4>
             <p style={{
               color: isLight ? '#334155' : '#CBD5E1',
@@ -471,7 +671,7 @@ export default function Mag() {
               textAlign: 'justify',
               lineHeight: '1.7'
             }}>
-              ทิศทางของสนามแม่เหล็กแกน Bz เป็นตัวแปรที่ชี้วัดว่า พลังงานจากพายุสุริยะจะสามารถเข้าสู่ชั้นบรรยากาศโลกได้หรือไม่:
+              {t('guides.mag.impacts.desc')}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
               <div style={{
@@ -481,10 +681,10 @@ export default function Mag() {
                 border: isLight ? '1px solid #BBF7D0' : '1px solid rgba(255,255,255,0.06)'
               }}>
                 <h5 style={{ color: '#059669', margin: '0 0 6px 0', fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                  Bz เป็นบวก (+ / ชี้ขึ้นเหนือ)
+                  {t('guides.mag.impacts.north_title')}
                 </h5>
                 <p style={{ color: isLight ? '#166534' : '#94A3B8', fontSize: 13, margin: 0, lineHeight: '1.6' }}>
-                  สนามแม่เหล็ก IMF ชี้ไปทางเดียวกับสนามแม่เหล็กโลก เกิดแรงผลักสะท้อนอนุภาคออกไป โลกปลอดภัยจากการรบกวนของพายุสุริยะ
+                  {t('guides.mag.impacts.north_desc')}
                 </p>
               </div>
               <div style={{
@@ -494,10 +694,10 @@ export default function Mag() {
                 border: isLight ? '1px solid #FECACA' : '1px solid rgba(255,255,255,0.06)'
               }}>
                 <h5 style={{ color: '#DC2626', margin: '0 0 6px 0', fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                  Bz เป็นลบ (- / ชี้ลงใต้)
+                  {t('guides.mag.impacts.south_title')}
                 </h5>
                 <p style={{ color: isLight ? '#991B1B' : '#94A3B8', fontSize: 13, margin: 0, lineHeight: '1.6' }}>
-                  สนามแม่เหล็ก IMF ชี้ทิศตรงข้ามโลก ทำให้เกิด Magnetic Reconnection ถ่ายโอนพลังงานเข้าสู่บรรยากาศ กระตุ้นพายุแม่เหล็กโลกและออโรร่ารุนแรง
+                  {t('guides.mag.impacts.south_desc')}
                 </p>
               </div>
             </div>
@@ -513,25 +713,25 @@ export default function Mag() {
               fontFamily: "'Orbitron', var(--font-sans), monospace",
               fontWeight: 700
             }}>
-              รายละเอียดทางเทคนิคของอุปกรณ์ MAG
+              {t('guides.mag.details.title')}
             </h4>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: isLight ? '#334155' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
               <tbody>
                 <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', width: '35%', fontWeight: 600 }}>ยานอวกาศที่ติดตั้ง</td>
-                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 600 }}>ACE (Advanced Composition Explorer) — NASA</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', width: '35%', fontWeight: 600 }}>{t('guides.mag.details.spacecraft_label')}</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC', fontWeight: 600 }}>{t('guides.mag.details.spacecraft_val')}</td>
                 </tr>
                 <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>ตำแหน่งวงโคจร</td>
-                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>L1 Lagrangian Point (ห่างจากโลกประมาณ 1.5 ล้านกิโลเมตร)</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>{t('guides.mag.details.orbit_label')}</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>{t('guides.mag.details.orbit_val')}</td>
                 </tr>
                 <tr style={{ borderBottom: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)' }}>
-                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>ประเภทของเซนเซอร์</td>
-                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>Dual Triaxial Fluxgate Magnetometers บนบูมแยก 2 ด้าน</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>{t('guides.mag.details.sensor_label')}</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>{t('guides.mag.details.sensor_val')}</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>ย่านการตรวจวัด</td>
-                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>±4 nT ถึง ±65,536 nT (ความแม่นยำสูงถึง 0.004 nT)</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#64748B' : '#64748B', fontWeight: 600 }}>{t('guides.mag.details.range_label')}</td>
+                  <td style={{ padding: '10px 0', color: isLight ? '#0C1E35' : '#F8FAFC' }}>{t('guides.mag.details.range_val')}</td>
                 </tr>
               </tbody>
             </table>
@@ -547,7 +747,7 @@ export default function Mag() {
               fontFamily: "'Orbitron', var(--font-sans), monospace",
               fontWeight: 700
             }}>
-              แหล่งที่มาของข้อมูล & เครดิต (Data Source & Credits)
+              {t('guides.mag.credits.title')}
             </h4>
             <p style={{
               color: isLight ? '#334155' : '#CBD5E1',
@@ -555,17 +755,17 @@ export default function Mag() {
               margin: '0 0 14px 0',
               lineHeight: '1.7'
             }}>
-              ข้อมูลแม่เหล็กไฟฟ้าและการวิเคราะห์ค่าองค์ประกอบ IMF ทั้งหมดได้รับการสนับสนุนแบบสาธารณะ:
+              {t('guides.mag.credits.desc')}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, color: isLight ? '#334155' : '#94A3B8' }}>
               <div style={{ borderLeft: `2px solid ${isLight ? '#1A6DB5' : 'rgba(255,255,255,0.2)'}`, paddingLeft: 12 }}>
-                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>Space Weather Prediction Center (SWPC):</strong> เผยแพร่ข้อมูล Real-time Magnetic Field API
+                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>Space Weather Prediction Center (SWPC):</strong> {t('guides.mag.credits.swpc')}
               </div>
               <div style={{ borderLeft: `2px solid ${isLight ? '#1A6DB5' : 'rgba(255,255,255,0.2)'}`, paddingLeft: 12 }}>
-                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>NASA ACE Project Office:</strong> ควบคุมและดูแลรักษายานอวกาศเซนเซอร์แมกนีโตมิเตอร์
+                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>NASA ACE Project Office:</strong> {t('guides.mag.credits.nasa')}
               </div>
               <div style={{ borderLeft: `2px solid ${isLight ? '#1A6DB5' : 'rgba(255,255,255,0.2)'}`, paddingLeft: 12 }}>
-                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>Bartol Research Institute:</strong> สถาบันวิจัยมหาวิทยาลัยเดลาแวร์ ผู้ร่วมพัฒนาอุปกรณ์ MAG
+                <strong style={{ color: isLight ? '#0C1E35' : '#F8FAFC' }}>Bartol Research Institute:</strong> {t('guides.mag.credits.bartol')}
               </div>
             </div>
             <div style={{
@@ -578,7 +778,7 @@ export default function Mag() {
               color: isLight ? '#475569' : '#FBBF24',
               fontFamily: 'var(--font-mono)'
             }}>
-              ข้อมูลอ้างอิง API: ดึงผ่าน <a href="https://services.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer" style={{ color: isLight ? '#1A6DB5' : '#38BDF8', textDecoration: 'underline' }}>NOAA SWPC JSON Services</a> อัปเดตทุก 1 นาที
+              {t('guides.mag.credits.api_ref')}
             </div>
           </div>
         )}

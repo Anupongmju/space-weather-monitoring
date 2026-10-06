@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ZoomIn,
   ZoomOut,
@@ -20,23 +21,40 @@ import {
   NeutronStation,
   MAGNETIC_EQUATOR_POINTS,
   getRigidityColor,
-  getShieldingDescription
+  getShieldingDescription,
+  getGLE77Data,
+  getGLE77MarkerStyle,
+  GLE77StationData,
+  GLEEnhancementTier,
+  GLEAveragingWindow,
+  GLE77_STATION_MAP
 } from '../../services/neutronStationsData'
 import { ISO_RIGIDITY_CONTOURS } from '../../services/geomagneticContours'
-import { loadNeutron } from '../../services/cosmicService'
+import { loadNeutron, loadGLE77Timeline, GLE77TimelinePayload } from '../../services/cosmicService'
+
+export type RigidityFilter = 'all' | 'polar' | 'mid' | 'equatorial'
+export type MapDisplayMode = 'rigidity' | 'gle77'
 
 interface NeutronWorldMapProps {
   onSelectStation: (station: NeutronStation) => void
   selectedStation: NeutronStation | null
+  rigidityFilter?: RigidityFilter
+  mapMode?: MapDisplayMode
+  averagingWindow?: GLEAveragingWindow
+  onAveragingWindowChange?: (win: GLEAveragingWindow) => void
 }
 
 type BasemapStyle = 'satellite_day' | 'night_lights' | 'dark_space'
-type RigidityFilter = 'all' | 'polar' | 'mid' | 'equatorial'
 
 export default function NeutronWorldMap({
   onSelectStation,
-  selectedStation
+  selectedStation,
+  rigidityFilter = 'all',
+  mapMode = 'gle77',
+  averagingWindow = 30,
+  onAveragingWindowChange
 }: NeutronWorldMapProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Map Pan & Zoom Transform State
@@ -61,9 +79,75 @@ export default function NeutronWorldMap({
   const [showLabels, setShowLabels] = useState(true)
   const [showRigidityContours, setShowRigidityContours] = useState(false)
   const [showMagneticEquator, setShowMagneticEquator] = useState(false)
-  const [rigidityFilter, setRigidityFilter] = useState<RigidityFilter>('all')
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // ── GLE#77 Time-Series Looping Playback State ──
+  const [timelinePayload, setTimelinePayload] = useState<GLE77TimelinePayload | null>(null)
+  const [currentFrame, setCurrentFrame] = useState<number>(0)
+  const [isPlaying, setIsPlaying] = useState<boolean>(true)
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(2) // 2x default speed for fluid animation
+  const [isLooping, setIsLooping] = useState<boolean>(true)
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState<boolean>(false)
+
+  // Fetch timeline dataset whenever mapMode is 'gle77' or averagingWindow changes
+  useEffect(() => {
+    if (mapMode !== 'gle77') return
+    let isCancelled = false
+    setIsLoadingTimeline(true)
+    const win = (averagingWindow === 20 || averagingWindow === 30) ? averagingWindow : 10
+    loadGLE77Timeline(win)
+      .then(payload => {
+        if (!isCancelled) {
+          setTimelinePayload(payload)
+          // Start ~2.5 hours before peak flare so the build-up & shockwave are immediately seen
+          const framesBefore = Math.round(150 / win)
+          const onset = Math.max(0, (payload.stats?.peakFrame ?? 0) - framesBefore)
+          setCurrentFrame(onset)
+          setIsLoadingTimeline(false)
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load GLE77 timeline:', err)
+        if (!isCancelled) setIsLoadingTimeline(false)
+      })
+    return () => { isCancelled = true }
+  }, [mapMode, averagingWindow])
+
+  // Continuous animation ticker loop (starts before peak and loops event cycle)
+  useEffect(() => {
+    if (mapMode !== 'gle77' || !isPlaying || !timelinePayload || timelinePayload.data.length === 0) return
+    const total = timelinePayload.data.length
+    const win = timelinePayload.window || averagingWindow || 10
+    const framesBefore = Math.round(150 / win)
+    const onset = Math.max(0, (timelinePayload.stats?.peakFrame ?? 0) - framesBefore)
+    const timer = setInterval(() => {
+      setCurrentFrame(prev => {
+        if (prev >= total - 1) {
+          // Loop back to onset so user constantly sees the dramatic expansion cycle
+          return onset
+        }
+        return prev + 1
+      })
+    }, 2000)
+
+    return () => clearInterval(timer)
+  }, [mapMode, isPlaying, timelinePayload])
+
+  // Map station ID -> current % increase for the active frame
+  const currentStationValues = useMemo(() => {
+    if (mapMode !== 'gle77' || !timelinePayload || !timelinePayload.data[currentFrame]) {
+      return new Map<string, number>()
+    }
+    const map = new Map<string, number>()
+    const frameData = timelinePayload.data[currentFrame]
+    timelinePayload.stations.forEach((stId, idx) => {
+      map.set(stId, frameData[idx] ?? 0)
+    })
+    return map
+  }, [mapMode, timelinePayload, currentFrame])
+
+  const currentTimestamp = timelinePayload?.timestamps[currentFrame] || ''
+  const totalFrames = timelinePayload?.timestamps.length || 0
   // Hover state & sparkline cache
   const [hoveredStation, setHoveredStation] = useState<NeutronStation | null>(null)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
@@ -97,7 +181,10 @@ export default function NeutronWorldMap({
     // lon: -180..+180 -> 0..MAP_W
     const x = ((lon + 180) / 360) * MAP_W
     // lat: +90..-90 -> 0..MAP_H
-    const y = ((90 - lat) / 180) * MAP_H
+    // South Pole is at -90.0. Clamping to -80.0 brings SOPO safely inside the Antarctic
+    // ice sheet (~67px above bottom edge), clearly visible and clickable without leaving any black gap below.
+    const safeLat = Math.max(-80.0, Math.min(85, lat))
+    const y = ((90 - safeLat) / 180) * MAP_H
     return { x, y }
   }, [MAP_W, MAP_H])
 
@@ -113,31 +200,30 @@ export default function NeutronWorldMap({
     })
   }, [rigidityFilter])
 
-  // ── Clamp pan so map always fills the viewport (no empty black edges) ──
+  // Pan boundary clamp to prevent map from being lost
   const clampPan = useCallback((px: number, py: number, z: number): { x: number; y: number } => {
     const el = containerRef.current
     if (!el) return { x: px, y: py }
     const { width, height } = el.getBoundingClientRect()
     const scaledW = MAP_W * z
     const scaledH = MAP_H * z
-    // If the scaled map is smaller than the viewport on an axis, center it
+
     const clampedX = scaledW <= width
       ? (width - scaledW) / 2
       : Math.min(0, Math.max(width - scaledW, px))
+
     const clampedY = scaledH <= height
       ? (height - scaledH) / 2
       : Math.min(0, Math.max(height - scaledH, py))
+
     return { x: clampedX, y: clampedY }
   }, [MAP_W, MAP_H])
 
-  // ── Compute minimum zoom so map always fully covers the viewport ──
   const getMinZoom = useCallback((): number => {
     const el = containerRef.current
-    if (!el) return 0.8
+    if (!el) return 0.5
     const { width, height } = el.getBoundingClientRect()
-    const minByW = width / MAP_W
-    const minByH = height / MAP_H
-    return Math.max(minByW, minByH, 0.5)
+    return Math.max(width / MAP_W, height / MAP_H)
   }, [MAP_W, MAP_H])
 
   // Mouse pan & zoom handlers
@@ -185,11 +271,7 @@ export default function NeutronWorldMap({
       const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85
       const currentZoom = zoomRef.current
       const currentPan = panRef.current
-      const minZoom = (() => {
-        const w = rect.width
-        const h = rect.height
-        return Math.max(w / MAP_W, h / MAP_H, 0.5)
-      })()
+      const minZoom = Math.max(rect.width / MAP_W, rect.height / MAP_H)
       const nextZoom = Math.min(Math.max(currentZoom * zoomFactor, minZoom), 8.0)
 
       // Zoom centered towards cursor position
@@ -198,17 +280,7 @@ export default function NeutronWorldMap({
         x: currentPan.x - (cursorX - currentPan.x) * (scaleChange / currentZoom),
         y: currentPan.y - (cursorY - currentPan.y) * (scaleChange / currentZoom)
       }
-      const newPan = (() => {
-        const scaledW = MAP_W * nextZoom
-        const scaledH = MAP_H * nextZoom
-        const clampedX = scaledW <= rect.width
-          ? (rect.width - scaledW) / 2
-          : Math.min(0, Math.max(rect.width - scaledW, rawPan.x))
-        const clampedY = scaledH <= rect.height
-          ? (rect.height - scaledH) / 2
-          : Math.min(0, Math.max(rect.height - scaledH, rawPan.y))
-        return { x: clampedX, y: clampedY }
-      })()
+      const newPan = clampPan(rawPan.x, rawPan.y, nextZoom)
 
       zoomRef.current = nextZoom
       panRef.current = newPan
@@ -219,7 +291,7 @@ export default function NeutronWorldMap({
     // { passive: false } is critical — allows preventDefault() to suppress page scroll
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, []) // empty deps: el ref is stable, we read fresh values via zoomRef/panRef
+  }, [clampPan, MAP_W, MAP_H])
 
   const handleZoomIn = () => {
     const next = Math.min(zoom * 1.3, 8.0)
@@ -237,15 +309,18 @@ export default function NeutronWorldMap({
   }
 
   const handleResetView = () => {
-    // Reset to min-zoom that fills the screen, centered
-    const minZ = getMinZoom()
-    const z = Math.max(1, minZ)
+    // Reset to full width and align bottom to show SOPO without needing to scroll
     const el = containerRef.current
-    if (!el) { setZoom(z); setPan({ x: 0, y: 0 }); return }
+    if (!el) return
     const { width, height } = el.getBoundingClientRect()
-    const cx = (width - MAP_W * z) / 2
-    const cy = (height - MAP_H * z) / 2
+    const z = Math.max(width / MAP_W, height / MAP_H)
+    const scaledW = MAP_W * z
+    const scaledH = MAP_H * z
+    const cx = (width - scaledW) / 2
+    const cy = height - scaledH
     const clamped = clampPan(cx, cy, z)
+    zoomRef.current = z
+    panRef.current = clamped
     setZoom(z)
     setPan(clamped)
   }
@@ -257,18 +332,12 @@ export default function NeutronWorldMap({
     const { x, y } = projectCoordinates(station.lat, station.lon)
     const targetZoom = 2.5
 
-    const mapScale = rect.width / MAP_W
-    const stationPixelX = x * mapScale
-    const stationPixelY = y * mapScale
-
     const centerX = rect.width / 2
     const centerY = rect.height / 2
 
+    const clamped = clampPan(centerX - x * targetZoom, centerY - y * targetZoom, targetZoom)
     setZoom(targetZoom)
-    setPan({
-      x: centerX - stationPixelX * targetZoom,
-      y: centerY - stationPixelY * targetZoom
-    })
+    setPan(clamped)
     onSelectStation(station)
   }
 
@@ -289,7 +358,7 @@ export default function NeutronWorldMap({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
-  // ── On mount (and resize): auto-fit the map to cover the viewport ──
+  // ── On mount (and resize): fill width (no side black space) and align bottom to show SOPO directly ──
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -297,15 +366,17 @@ export default function NeutronWorldMap({
     const fitToViewport = () => {
       const { width, height } = el.getBoundingClientRect()
       if (!width || !height) return
-      // Pick the zoom that makes the map cover the screen (cover strategy)
-      const z = Math.max(width / MAP_W, height / MAP_H, 0.5)
-      // Center the map
-      const cx = (width - MAP_W * z) / 2
-      const cy = (height - MAP_H * z) / 2
+      // Fill entire width with zero side margins, and position bottom flush to show Antarctica & SOPO
+      const z = Math.max(width / MAP_W, height / MAP_H)
+      const scaledW = MAP_W * z
+      const scaledH = MAP_H * z
+      const cx = (width - scaledW) / 2
+      const cy = height - scaledH
+      const clamped = clampPan(cx, cy, z)
       zoomRef.current = z
-      panRef.current = { x: cx, y: cy }
+      panRef.current = clamped
       setZoom(z)
-      setPan({ x: cx, y: cy })
+      setPan(clamped)
     }
 
     // Run once on mount
@@ -393,7 +464,7 @@ export default function NeutronWorldMap({
         position: 'relative',
         width: '100%',
         height: '100%',
-        minHeight: 'calc(100vh - 60px)',
+        minHeight: '100%',
         background: '#020617',
         overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -695,12 +766,103 @@ export default function NeutronWorldMap({
           {filteredStations.map(station => {
             const { x, y } = projectCoordinates(station.lat, station.lon)
             const isOnline = station.status === 'active'
-            const color = getRigidityColor(station.cutoffRigidity, isOnline)
             const isSelected = selectedStation?.id === station.id
             const isHovered = hoveredStation?.id === station.id
 
             // Scale marker size dynamically so it stays visible and crisp at all zoom levels
             const baseScale = Math.max(0.85, Math.min(1.5, 1.25 / Math.sqrt(zoom)))
+
+            // Check if station has recorded data in the GLE#77 event dataset
+            const hasGle77Data = Boolean(
+              timelinePayload
+                ? timelinePayload.stations.includes(station.id)
+                : (station.id in GLE77_STATION_MAP)
+            )
+            const isNoDataOrOffline = mapMode === 'gle77' ? !hasGle77Data : !isOnline
+
+            // Determine marker color, size, and styling based on active mapMode
+            let color = getRigidityColor(station.cutoffRigidity, isOnline)
+            let markerSize = isSelected ? 15 : (isOnline ? 11 : 6)
+            let borderWidth = isOnline ? 2 : 1
+            let borderColor = isSelected ? color : (isOnline ? '#070C17' : '#334155')
+            let glow = isOnline ? `0 0 10px ${color}, 0 0 20px ${color}80` : 'none'
+            let hasRadarPulse = isOnline && (isSelected || isHovered)
+            let radarPulseSize = isSelected ? 28 : 18
+            let radarPulseColor = `${color}40`
+            let zIndexPriority = isSelected ? 50 : isHovered ? 40 : (isOnline ? 20 : 5)
+            let gleData: GLE77StationData | null = null
+            let dynamicPct = 0.0
+
+            if (mapMode === 'gle77') {
+              if (!hasGle77Data) {
+                // Station has NO DATA in this GLE#77 event / detector is offline:
+                // Clear slate node (8.5px) with crisp border and subtle ambient shadow
+                markerSize = isSelected ? 12 : 8.5
+                color = '#64748B'
+                borderWidth = 1.5
+                borderColor = '#CBD5E1'
+                glow = '0 0 6px rgba(100, 116, 139, 0.4)'
+                hasRadarPulse = false
+                zIndexPriority = isSelected ? 35 : 8
+              } else {
+                const currentVal = currentStationValues.get(station.id) ?? 0.0
+                dynamicPct = currentVal
+                const val = Math.max(0, currentVal)
+
+                if (val <= 0.5) {
+                  // Active monitor baseline quiet: Hollow ring (transparent inside with crisp silver border)
+                  markerSize = isSelected ? 14 : 10
+                  color = 'rgba(15, 23, 42, 0.4)'
+                  borderWidth = 2
+                  borderColor = isSelected ? '#38BDF8' : '#CBD5E1'
+                  glow = isSelected ? '0 0 8px rgba(56, 189, 248, 0.6)' : 'none'
+                  hasRadarPulse = false
+                  zIndexPriority = isSelected ? 50 : 15
+                } else if (val < 15.0) {
+                  // Low enhancement (1-15%): Grows to 16-24px, bright coral/orange
+                  markerSize = Math.round(15 + (val / 15) * 9)
+                  color = '#FB923C'
+                  borderWidth = 2.5
+                  borderColor = '#FFFFFF'
+                  glow = '0 0 16px rgba(251, 146, 60, 0.85)'
+                  hasRadarPulse = false
+                  zIndexPriority = isSelected ? 50 : 25
+                } else if (val < 45.0) {
+                  // Moderate enhancement (15-45%): Grows to 25-37px, vibrant amber
+                  markerSize = Math.round(25 + ((val - 15) / 30) * 12)
+                  color = '#F59E0B'
+                  borderWidth = 3
+                  borderColor = '#FEF08A'
+                  glow = '0 0 24px rgba(245, 158, 11, 0.9), 0 0 40px rgba(245, 158, 11, 0.5)'
+                  hasRadarPulse = true
+                  radarPulseSize = markerSize + 12
+                  radarPulseColor = 'rgba(245, 158, 11, 0.4)'
+                  zIndexPriority = isSelected ? 50 : 30
+                } else if (val < 85.0) {
+                  // High enhancement (45-85%): Expands to 38-52px, radiant golden sun
+                  markerSize = Math.round(38 + ((val - 45) / 40) * 14)
+                  color = '#FACC15'
+                  borderWidth = 3.5
+                  borderColor = '#FFFFFF'
+                  glow = '0 0 32px #FACC15, 0 0 55px rgba(250, 204, 21, 0.85)'
+                  hasRadarPulse = true
+                  radarPulseSize = markerSize + 18
+                  radarPulseColor = 'rgba(250, 204, 21, 0.5)'
+                  zIndexPriority = isSelected ? 55 : 35
+                } else {
+                  // Super surge (>85%): Expands to 53-70px, colossal white-gold orb!
+                  markerSize = Math.round(53 + Math.min(17, ((val - 85) / 60) * 17))
+                  color = '#FEF08A'
+                  borderWidth = 4
+                  borderColor = '#FFFFFF'
+                  glow = '0 0 45px #FEF08A, 0 0 85px rgba(250, 204, 21, 0.95), 0 0 120px rgba(250, 204, 21, 0.6)'
+                  hasRadarPulse = true
+                  radarPulseSize = markerSize + 26
+                  radarPulseColor = 'rgba(254, 240, 138, 0.7)'
+                  zIndexPriority = isSelected ? 65 : 45
+                }
+              }
+            }
 
             return (
               <div
@@ -710,16 +872,17 @@ export default function NeutronWorldMap({
                   position: 'absolute',
                   left: x,
                   top: y,
-                  width: 36,
-                  height: 36,
+                  width: Math.max(48, markerSize + 20),
+                  height: Math.max(48, markerSize + 20),
                   transform: `translate(-50%, -50%) scale(${baseScale})`,
                   pointerEvents: 'auto',
                   cursor: 'pointer',
-                  zIndex: isSelected ? 40 : isHovered ? 30 : 20,
+                  zIndex: zIndexPriority,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: isOnline ? 1 : 0.7
+                  opacity: isNoDataOrOffline ? (isHovered || isSelected ? 1 : 0.72) : 1,
+                  transition: 'opacity 0.2s ease'
                 }}
                 onClick={e => {
                   e.stopPropagation()
@@ -746,48 +909,48 @@ export default function NeutronWorldMap({
                 }}
                 onMouseLeave={() => setHoveredStation(null)}
               >
-                {/* Invisible generous hover/click hitbox area */}
+                {/* Generous hover/click hitbox area */}
                 <div
                   style={{
                     position: 'absolute',
-                    inset: -8,
+                    inset: -14,
                     borderRadius: '50%',
                     background: 'transparent',
                     cursor: 'pointer'
                   }}
                 />
 
-                {/* Outer Pulsing Radar Ring (Active for Online or when Selected/Hovered) */}
-                {(isOnline || isSelected || isHovered) && (
+                {/* Outer Radar Ring (In standard rigidity mode for live streams or in gle77 during large surges) */}
+                {hasRadarPulse && (
                   <div
                     style={{
                       position: 'absolute',
                       top: '50%',
                       left: '50%',
-                      width: isSelected ? 26 : 18,
-                      height: isSelected ? 26 : 18,
-                      marginTop: isSelected ? -13 : -9,
-                      marginLeft: isSelected ? -13 : -9,
+                      width: radarPulseSize,
+                      height: radarPulseSize,
+                      marginTop: -(radarPulseSize / 2),
+                      marginLeft: -(radarPulseSize / 2),
                       borderRadius: '50%',
-                      background: `${color}40`,
+                      background: radarPulseColor,
                       border: `1px solid ${color}`,
-                      animation: isOnline ? 'radarPulse 2.4s cubic-bezier(0.2, 0.8, 0.4, 1) infinite' : 'none',
+                      animation: 'radarPulse 1.8s cubic-bezier(0.2, 0.8, 0.4, 1) infinite',
                       pointerEvents: 'none'
                     }}
                   />
                 )}
 
-                {/* Second Radar Ring for selected stations */}
+                {/* Second Selection Ring */}
                 {isSelected && (
                   <div
                     style={{
                       position: 'absolute',
                       top: '50%',
                       left: '50%',
-                      width: 36,
-                      height: 36,
-                      marginTop: -18,
-                      marginLeft: -18,
+                      width: markerSize + 14,
+                      height: markerSize + 14,
+                      marginTop: -((markerSize + 14) / 2),
+                      marginLeft: -((markerSize + 14) / 2),
                       borderRadius: '50%',
                       border: `1.5px dashed ${color}`,
                       animation: 'radarPulse 3s cubic-bezier(0.2, 0.8, 0.4, 1) 0.8s infinite',
@@ -796,49 +959,67 @@ export default function NeutronWorldMap({
                   />
                 )}
 
-                {/* Core Station Dot */}
+                {/* Core Station Circle / Marker with smooth size and color morphing transitions */}
                 <div
                   style={{
-                    width: isSelected ? 15 : 11,
-                    height: isSelected ? 15 : 11,
+                    width: markerSize,
+                    height: markerSize,
                     borderRadius: '50%',
-                    background: isSelected ? '#FFFFFF' : color,
-                    border: `2px solid ${isSelected ? color : '#070C17'}`,
-                    boxShadow: `0 0 10px ${color}, 0 0 20px ${color}80`,
-                    transition: 'all 0.15s ease',
-                    transform: isHovered || isSelected ? 'scale(1.4)' : 'scale(1)',
-                    pointerEvents: 'none'
+                    background: (mapMode === 'rigidity' && isSelected) ? '#FFFFFF' : color,
+                    border: `${borderWidth}px solid ${borderColor}`,
+                    boxShadow: glow,
+                    transition: mapMode === 'gle77'
+                      ? 'width 0.8s ease-out, height 0.8s ease-out, background 0.8s ease-out, border-color 0.8s ease-out, box-shadow 0.8s ease-out'
+                      : 'width 0.8s cubic-bezier(0.34, 1.35, 0.64, 1), height 0.8s cubic-bezier(0.34, 1.35, 0.64, 1), background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease, transform 0.2s ease',
+                    transform: isHovered || isSelected ? 'scale(1.25)' : 'scale(1)',
+                    pointerEvents: 'none',
+                    zIndex: 20
                   }}
                 />
 
-                {/* Station Tag / Label */}
-                {(showLabels || isHovered || isSelected) && (
-                  <div
-                    className="marker-label"
-                    style={{
-                      position: 'absolute',
-                      top: isSelected ? 24 : 20,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      whiteSpace: 'nowrap',
-                      background: 'rgba(5, 10, 24, 0.92)',
-                      backdropFilter: 'blur(6px)',
-                      border: `1px solid ${isSelected ? color : isHovered ? color : 'rgba(255, 255, 255, 0.2)'}`,
-                      padding: '2px 6px',
-                      borderRadius: 3,
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      fontWeight: 700,
-                      color: isSelected ? '#FFFFFF' : color,
-                      letterSpacing: 0.5,
-                      pointerEvents: 'none',
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {station.id}
-                  </div>
-                )}
+                {/* Station Tag / Label (Positioned cleanly below the circle with high-contrast text) */}
+                {(showLabels || isHovered || isSelected) && (() => {
+                  const isPolarSouth = station.lat < -70
+                  const margin = 5
+                  const halfSize = Math.round(markerSize / 2)
+                  return (
+                    <div
+                      className="marker-label"
+                      style={{
+                        position: 'absolute',
+                        ...(isPolarSouth
+                          ? { bottom: `calc(50% + ${halfSize + margin}px)` }
+                          : { top: `calc(50% + ${halfSize + margin}px)` }
+                        ),
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        whiteSpace: 'nowrap',
+                        background: isNoDataOrOffline ? 'rgba(15, 23, 42, 0.85)' : 'rgba(3, 7, 18, 0.85)',
+                        backdropFilter: 'blur(6px)',
+                        WebkitBackdropFilter: 'blur(6px)',
+                        border: `1px ${isNoDataOrOffline ? 'dashed' : 'solid'} ${isSelected ? color : isHovered ? color : isNoDataOrOffline ? 'rgba(203, 213, 225, 0.55)' : 'rgba(255, 255, 255, 0.22)'}`,
+                        padding: '1px 5px',
+                        borderRadius: 3,
+                        fontSize: isNoDataOrOffline ? 10.5 : 11,
+                        fontFamily: 'monospace',
+                        fontWeight: isNoDataOrOffline ? 700 : 800,
+                        color: isNoDataOrOffline ? '#CBD5E1' : '#F8FAFC',
+                        letterSpacing: 0.6,
+                        pointerEvents: 'none',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                        transition: 'top 0.4s ease-out, bottom 0.4s ease-out',
+                        display: 'flex',
+                        alignItems: 'center',
+                        zIndex: 30
+                      }}
+                    >
+                      <span>{station.id}</span>
+                    </div>
+                  )
+                })()}
+
+
+
               </div>
             )
           })}
@@ -846,101 +1027,6 @@ export default function NeutronWorldMap({
       </div>
 
       {/* ═══════════════════════ FLOATING HUD CONTROLS ═══════════════════════ */}
-      {/* Top Left: Title & Filter Controls */}
-      <div style={{
-        position: 'absolute',
-        top: 16,
-        left: 16,
-        zIndex: 60,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        maxWidth: 500,
-        width: 'max-content'
-      }}>
-        {/* Title Badge */}
-        <div style={{
-          background: 'rgba(6, 13, 31, 0.78)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
-          borderLeft: '4px solid #38BDF8',
-          padding: '10px 14px',
-          borderRadius: 4,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-          transition: 'all 0.2s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, whiteSpace: 'nowrap' }}>
-            <span style={{
-              fontFamily: "'Orbitron', var(--font-sans), monospace",
-              fontSize: 13,
-              fontWeight: 800,
-              color: '#F8FAFC',
-              letterSpacing: 1,
-              whiteSpace: 'nowrap'
-            }}>
-              GLOBAL NEUTRON STATIONS
-            </span>
-            <span style={{
-              background: 'rgba(34, 197, 94, 0.12)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              color: '#4ADE80',
-              padding: '3px 8px',
-              borderRadius: 3,
-              fontFamily: 'monospace',
-              fontSize: 13,
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E', boxShadow: '0 0 6px #22C55E', flexShrink: 0 }} />
-              {NEUTRON_STATIONS.filter(s => s.status === 'active').length} LIVE / {NEUTRON_STATIONS.length} TOTAL
-            </span>
-          </div>
-          <p style={{
-            margin: '4px 0 0',
-            color: '#94A3B8',
-            fontSize: 10.5,
-            fontFamily: 'monospace',
-            whiteSpace: 'nowrap'
-          }}>
-            Real-time planetary cosmic ray & solar particle monitoring network
-          </p>
-        </div>
-
-        {/* Rigidity Filter Chips */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {[
-            { id: 'all', label: 'All', color: '#38BDF8' },
-            { id: 'polar', label: 'Polar (<2 GV)', color: '#EF4444' },
-            { id: 'mid', label: 'Mid (2-10 GV)', color: '#EAB308' },
-            { id: 'equatorial', label: 'Equatorial (>10 GV)', color: '#A855F7' }
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setRigidityFilter(f.id as RigidityFilter)}
-              style={{
-                padding: '4px 9px',
-                background: rigidityFilter === f.id ? `${f.color}35` : 'rgba(6, 13, 31, 0.78)',
-                backdropFilter: 'blur(12px)',
-                border: `1px solid ${rigidityFilter === f.id ? f.color : 'rgba(255,255,255,0.12)'}`,
-                color: rigidityFilter === f.id ? '#FFFFFF' : '#CBD5E1',
-                fontFamily: 'monospace',
-                fontSize: 13,
-                fontWeight: rigidityFilter === f.id ? 700 : 500,
-                cursor: 'pointer',
-                borderRadius: 3,
-                transition: 'all 0.15s'
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Top Right: Zoom & Layer Control Toolbar */}
       <div style={{
         position: 'absolute',
@@ -1149,65 +1235,55 @@ export default function NeutronWorldMap({
         </div>
       </div>
 
-      {/* Bottom Bar: Cutoff Rigidity Legend & Info */}
-      <div style={{
-        position: 'absolute',
-        bottom: 16,
-        left: 16,
-        zIndex: 60,
-        background: 'rgba(6, 13, 31, 0.78)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        padding: '10px 16px',
-        borderRadius: 4,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-        flexWrap: 'wrap',
-        maxWidth: 'calc(100% - 32px)',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-        transition: 'all 0.2s ease'
-      }}>
-        <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#94A3B8', fontWeight: 600, letterSpacing: 1 }}>
-          VERTICAL CUTOFF RIGIDITY (Rc):
+      {/* Subtle GLE#77 Loop Status Badge (Non-intrusive corner pill) */}
+      {mapMode === 'gle77' && timelinePayload && (
+        <div style={{
+          position: 'absolute',
+          bottom: 14,
+          right: 16,
+          zIndex: 40,
+          background: 'rgba(3, 7, 18, 0.88)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(250, 204, 21, 0.35)',
+          borderRadius: 6,
+          padding: '5px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          boxShadow: '0 4px 18px rgba(0,0,0,0.7)',
+          fontFamily: 'monospace'
+        }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22C55E', boxShadow: '0 0 8px #22C55E' }} />
+          <span style={{ fontSize: 11, color: '#FACC15', fontWeight: 800 }}>
+            GLE#77 LOOP ({averagingWindow}m):
+          </span>
+          <span style={{ fontSize: 11.5, color: '#F8FAFC', fontWeight: 700 }}>
+            {currentTimestamp || '---'} UTC
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {[
-            { label: '< 1 GV (Polar)', color: '#EF4444' },
-            { label: '1 - 3 GV', color: '#F97316' },
-            { label: '3 - 5 GV', color: '#EAB308' },
-            { label: '5 - 8 GV', color: '#22C55E' },
-            { label: '8 - 12 GV', color: '#06B6D4' },
-            { label: '12 - 15 GV', color: '#3B82F6' },
-            { label: '> 15 GV (Doi Inthanon)', color: '#A855F7' },
-            { label: 'No Stream / Offline', color: '#64748B' },
-            { label: '🧲 Magnetic Equator', color: '#F97316', isLine: true }
-          ].map(item => (
-            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {item.isLine ? (
-                <span style={{ width: 14, height: 2, background: item.color, borderTop: '1px dashed #F97316', boxShadow: `0 0 6px ${item.color}` }} />
-              ) : (
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, boxShadow: `0 0 6px ${item.color}` }} />
-              )}
-              <span style={{ color: item.isLine ? '#FDBA74' : '#CBD5E1', fontSize: 13, fontFamily: 'monospace', fontWeight: item.isLine ? 700 : 400 }}>
-                {item.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
+
 
       {/* Hover Tooltip (Follows Cursor) with Real-Time Sparkline Graph */}
       {hoveredStation && !selectedStation && (() => {
         const isOnline = hoveredStation.status === 'active'
-        const color = getRigidityColor(hoveredStation.cutoffRigidity, isOnline)
+        const hasGle77Data = Boolean(
+          timelinePayload
+            ? timelinePayload.stations.includes(hoveredStation.id)
+            : (hoveredStation.id in GLE77_STATION_MAP)
+        )
+        const gleData = getGLE77Data(hoveredStation.id, hoveredStation.cutoffRigidity, averagingWindow)
+        const gStyle = getGLE77MarkerStyle(gleData.tier, false, gleData.increasePercent)
+        const color = mapMode === 'gle77'
+          ? (!hasGle77Data ? '#64748B' : gleData.tier === 'none' ? '#CBD5E1' : gStyle.color)
+          : getRigidityColor(hoveredStation.cutoffRigidity, isOnline)
         const sparkline = sparklines[hoveredStation.id]
         const rawPoints = sparkline?.data || []
         const validPoints = rawPoints.filter(p => p && p.count_rate > 0)
 
         // Tooltip geometry
-        const tooltipWidth = 240
-        const tooltipHeight = isOnline ? 150 : 100
+        const tooltipWidth = 260
+        const tooltipHeight = mapMode === 'gle77' ? (isOnline ? 180 : 125) : (isOnline ? 150 : 100)
         const left = Math.min(Math.max(tooltipPos.x + 18, 16), (containerRef.current?.clientWidth || 800) - tooltipWidth - 16)
         const top = tooltipPos.y > tooltipHeight + 20
           ? tooltipPos.y - tooltipHeight
@@ -1219,7 +1295,7 @@ export default function NeutronWorldMap({
             left,
             top,
             zIndex: 80,
-            background: 'rgba(6, 13, 31, 0.95)',
+            background: 'rgba(6, 13, 31, 0.96)',
             backdropFilter: 'blur(16px)',
             border: `1px solid ${color}`,
             borderLeft: `4px solid ${color}`,
@@ -1258,13 +1334,90 @@ export default function NeutronWorldMap({
               </span>
             </div>
 
+            {/* GLE#77 Special Event Badge (When in GLE#77 mode) */}
+            {mapMode === 'gle77' && (() => {
+              if (!hasGle77Data) {
+                return (
+                  <div style={{
+                    margin: '6px 0',
+                    padding: '6px 8px',
+                    borderRadius: 4,
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px dashed rgba(100, 116, 139, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span style={{ fontSize: 9.5, fontFamily: 'monospace', color: '#94A3B8' }}>
+                      GLE#77 TELEMETRY:
+                    </span>
+                    <span style={{
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      color: hoveredStation.status === 'offline' ? '#EF4444' : '#64748B'
+                    }}>
+                      {hoveredStation.status === 'offline' ? 'STATION OFFLINE' : 'NO RECORDED DATA'}
+                    </span>
+                  </div>
+                )
+              }
+
+              const liveVal = currentStationValues.get(hoveredStation.id) ?? 0.0
+              const liveColor = liveVal >= 65 ? '#FEF08A' : liveVal >= 30 ? '#FACC15' : liveVal >= 5 ? '#FB923C' : '#CBD5E1'
+              return (
+                <div style={{
+                  margin: '6px 0',
+                  padding: '6px 8px',
+                  borderRadius: 4,
+                  background: 'rgba(15, 23, 42, 0.75)',
+                  border: `1px solid ${liveColor}50`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4
+                }}>
+                  {/* Current Frame Value */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 9.5, fontFamily: 'monospace', color: '#CBD5E1', fontWeight: 700 }}>
+                      {t('cosmic.current_flux')} ({currentTimestamp || t('common.live')}):
+                    </span>
+                    <span style={{
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                      fontWeight: 800,
+                      color: liveColor,
+                      textShadow: liveVal >= 5 ? `0 0 10px ${liveColor}` : 'none'
+                    }}>
+                      {liveVal > 0 ? `+${liveVal.toFixed(1)}%` : `${liveVal.toFixed(1)}%`}
+                    </span>
+                  </div>
+
+                  {/* Event Peak Value */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 3 }}>
+                    <span style={{ fontSize: 8.5, fontFamily: 'monospace', color: '#64748B' }}>
+                      {t('cosmic.event_peak')} ({averagingWindow}{t('cosmic.min')}):
+                    </span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: gStyle.color }}>
+                      {gleData.increasePercent > 0 ? `+${gleData.increasePercent.toFixed(1)}%` : '0.0%'}
+                    </span>
+                  </div>
+
+                  {gleData.notes && (
+                    <div style={{ fontSize: 8.5, color: '#94A3B8', lineHeight: 1.2, marginTop: 1 }}>
+                      {gleData.notes}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* Metrics */}
             <div style={{ fontSize: 9.5, color: '#CBD5E1', fontFamily: 'monospace', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <div>
-                <span style={{ color: '#64748B' }}>Coords:</span> {hoveredStation.lat.toFixed(2)}°, {hoveredStation.lon.toFixed(2)}° ({hoveredStation.altitude}m)
+                <span style={{ color: '#64748B' }}>{t('cosmic.coords')}:</span> {hoveredStation.lat.toFixed(2)}°, {hoveredStation.lon.toFixed(2)}° ({hoveredStation.altitude}m)
               </div>
               <div>
-                <span style={{ color: '#64748B' }}>Cutoff Rc:</span>{' '}
+                <span style={{ color: '#64748B' }}>{t('cosmic.cutoff_rc')}:</span>{' '}
                 <strong style={{ color: isOnline ? color : '#94A3B8' }}>
                   {hoveredStation.cutoffRigidity.toFixed(2)} GV
                 </strong>
@@ -1276,7 +1429,7 @@ export default function NeutronWorldMap({
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 {sparkline?.loading ? (
                   <div style={{ height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 12, fontFamily: 'monospace' }}>
-                    LOADING TELEMETRY...
+                    {t('cosmic.loading_telemetry')}
                   </div>
                 ) : validPoints.length >= 2 ? (() => {
                   const values = validPoints.map(p => p.count_rate)

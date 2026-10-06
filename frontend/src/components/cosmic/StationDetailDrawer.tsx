@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
+import { useTranslation } from 'react-i18next'
 import { X, ExternalLink, Activity, Compass, ShieldAlert, Mountain, RefreshCw } from 'lucide-react'
-import { NeutronStation, getRigidityColor, getShieldingDescription } from '../../services/neutronStationsData'
+import {
+  NeutronStation,
+  getRigidityColor,
+  getShieldingDescription,
+  getGLE77Data,
+  getGLE77MarkerStyle
+} from '../../services/neutronStationsData'
 import { loadNeutron, fetchAndSaveNeutron } from '../../services/cosmicService'
+import { formatUTCTime } from '../../utils/formatters'
 
 interface StationDetailDrawerProps {
   station: NeutronStation | null
@@ -15,6 +23,7 @@ export default function StationDetailDrawer({
   onClose,
   onNavigateToFullTelemetry
 }: StationDetailDrawerProps) {
+  const { t } = useTranslation()
   const [telemetry, setTelemetry] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
@@ -73,6 +82,7 @@ export default function StationDetailDrawer({
   }
 
   const chartOption = {
+    useUTC: true,
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#090d16',
@@ -88,20 +98,15 @@ export default function StationDetailDrawer({
         const p = params[0]
         if (!p || !p.value) return ''
         const rawTime = p.value[0]
-        const d = new Date(rawTime)
-        const isValid = !isNaN(d.getTime())
-        const dateStr = isValid ? d.toISOString().slice(0, 10) : ''
-        const timeStr = isValid
-          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-          : String(rawTime)
+        const timeStr = formatUTCTime(rawTime, true)
         const val = typeof p.value[1] === 'number' ? p.value[1].toFixed(1) : p.value[1]
         const pct = avgCount && typeof p.value[1] === 'number'
           ? (((p.value[1] - avgCount) / avgCount) * 100)
           : 0
 
-        return `<div style="font-family:monospace;font-size: 14px;line-height:1.6;padding:2px 4px">
-          <div style="color:#94A3B8;font-size: 13px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:2px">
-            📅 <b style="color:#F8FAFC">${dateStr}</b> · ⏱️ <b style="color:#38BDF8">${timeStr}</b>
+        return `<div style="font-family:monospace;font-size: 13px;line-height:1.6;padding:2px 4px">
+          <div style="color:#94A3B8;font-size: 12px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:2px">
+            🕒 <b style="color:#38BDF8">${timeStr}</b>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="color:${color}">●</span> Count Rate: <b style="color:#FFF">${val}</b> counts/min
@@ -251,7 +256,7 @@ export default function StationDetailDrawer({
             borderRadius: 3
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 13, fontFamily: 'monospace' }}>
-              <ShieldAlert size={12} color={color} /> CUTOFF RIGIDITY (Rc)
+              <ShieldAlert size={12} color={color} /> {t('cosmic.cutoff_rc').toUpperCase()} (Rc)
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Orbitron', monospace", color }}>
@@ -269,7 +274,7 @@ export default function StationDetailDrawer({
             borderRadius: 3
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8', fontSize: 13, fontFamily: 'monospace' }}>
-              <Mountain size={12} color="#38BDF8" /> ELEVATION (ASL)
+              <Mountain size={12} color="#38BDF8" /> {t('cosmic.altitude').toUpperCase()} (ASL)
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: '#38BDF8' }}>
@@ -294,7 +299,7 @@ export default function StationDetailDrawer({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94A3B8' }}>
             <Compass size={13} color="#94A3B8" />
-            <span>GEO COORDINATES</span>
+            <span>{t('cosmic.coords').toUpperCase()}</span>
           </div>
           <span style={{ color: '#F8FAFC', fontWeight: 600 }}>
             {station.lat >= 0 ? `${station.lat.toFixed(2)}°N` : `${Math.abs(station.lat).toFixed(2)}°S`},{' '}
@@ -317,6 +322,50 @@ export default function StationDetailDrawer({
           </div>
         </div>
 
+        {/* GLE#77 Event Response Card */}
+        {(() => {
+          const gleData = getGLE77Data(station.id, station.cutoffRigidity)
+          const gStyle = getGLE77MarkerStyle(gleData.tier)
+          const tierEmoji = gleData.tier === 'very_high' ? '🟡' : gleData.tier === 'moderate' ? '🟠' : gleData.tier === 'low' ? '🔴' : '⚫'
+          return (
+            <div style={{
+              background: gleData.tier === 'very_high' ? 'rgba(250, 204, 21, 0.08)' :
+                          gleData.tier === 'moderate'  ? 'rgba(251, 146, 60, 0.08)' :
+                          gleData.tier === 'low'       ? 'rgba(239, 68, 68, 0.08)' :
+                                                         'rgba(15, 23, 42, 0.6)',
+              border: `1px solid ${gStyle.color}40`,
+              borderLeft: `3px solid ${gStyle.color}`,
+              padding: '10px 12px',
+              borderRadius: '0 3px 3px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: gStyle.color, fontFamily: 'monospace' }}>
+                  {tierEmoji} GLE#77 {t('cosmic.event_peak')}
+                </span>
+                <span style={{
+                  fontSize: 16,
+                  fontWeight: 800,
+                  fontFamily: "'Orbitron', monospace",
+                  color: gStyle.color
+                }}>
+                  {gleData.increasePercent > 0 ? `+${gleData.increasePercent.toFixed(1)}%` : '0.0%'}
+                </span>
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#F1F5F9', fontFamily: 'monospace' }}>
+                {gleData.tierLabel}
+              </div>
+              {gleData.notes && (
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.4 }}>
+                  {gleData.notes}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Live Telemetry Section */}
         <div>
           <div style={{
@@ -328,7 +377,7 @@ export default function StationDetailDrawer({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Activity size={13} color={color} />
               <span style={{ fontSize: 14, fontFamily: "'Orbitron', monospace", color: '#F8FAFC', fontWeight: 600 }}>
-                COUNT RATE TELEMETRY
+                {t('cosmic.telemetry')}
               </span>
             </div>
             <button
@@ -347,7 +396,7 @@ export default function StationDetailDrawer({
               }}
             >
               <RefreshCw size={11} className={fetching ? 'animate-spin' : ''} />
-              {fetching ? 'FETCHING...' : 'REFRESH'}
+              {fetching ? '...' : t('common.refresh').toUpperCase()}
             </button>
           </div>
 
@@ -362,13 +411,13 @@ export default function StationDetailDrawer({
             }}>
               {loading ? (
                 <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 14, fontFamily: 'monospace' }}>
-                  LOADING TELEMETRY...
+                  {t('cosmic.loading_telemetry')}
                 </div>
               ) : telemetry.length > 0 ? (
                 <ReactECharts option={chartOption} style={{ height: 140, width: '100%' }} notMerge={true} />
               ) : (
                 <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: 14, fontFamily: 'monospace' }}>
-                  NO DATA AVAILABLE
+                  {t('common.no_data').toUpperCase()}
                 </div>
               )}
             </div>
@@ -384,7 +433,7 @@ export default function StationDetailDrawer({
           paddingTop: 12
         }}>
           <div style={{ marginBottom: 4 }}>
-            <span style={{ color: '#F8FAFC', fontWeight: 600 }}>Detector Type:</span> {station.detectorType}
+            <span style={{ color: '#F8FAFC', fontWeight: 600 }}>{t('cosmic.detector')}:</span> {station.detectorType}
           </div>
           {station.institute && (
             <div style={{ marginBottom: 6 }}>

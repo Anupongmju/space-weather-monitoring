@@ -14,6 +14,7 @@ export default function ThuleWidget() {
   }, []);
 
   const option = {
+    useUTC: true,
     grid: { top: 10, right: 10, bottom: 20, left: 45 },
     xAxis: { type: 'time', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
     yAxis: { type: 'value', scale: true, splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
@@ -34,10 +35,10 @@ export default function ThuleWidget() {
 
   return (
     <div style={containerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div 
           onClick={() => navigate('/cosmic/neutron')}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
           title="Click to view Cosmic Ray Neutron details"
         >
           <span style={{ fontSize: 13, color: isLight ? '#2E5B8A' : 'var(--text-secondary, #94A3B8)', fontFamily: 'var(--font-mono)', letterSpacing: 1, fontWeight: isLight ? 600 : 400 }}>
@@ -47,7 +48,7 @@ export default function ThuleWidget() {
             GREENLAND ↗
           </span>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: isLight ? '#0891B2' : '#06B6D4' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: isLight ? '#0891B2' : '#06B6D4', flexShrink: 0 }}>
           {latest && latest.count_rate ? `${latest.count_rate.toFixed(1)} cpm` : '—'}
         </div>
       </div>

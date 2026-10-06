@@ -27,7 +27,7 @@ export default React.memo(function MarsOrbitBackground({
         return { x: 260, y: 220, scale: 0.85 }
       case 'hero':
       case 'center':
-        return { x: 1350, y: 540, scale: 1.6 }
+        return { x: 960, y: 530, scale: 1.75 }
       case 'center-left':
       default:
         return { x: 520, y: 660, scale: 1.95 }

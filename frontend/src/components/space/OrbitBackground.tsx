@@ -183,8 +183,9 @@ export default React.memo(function OrbitBackground() {
       // ── Real Astronomical Moon Position (29.5-day Lunar Orbit & Phase) ──
       // Calculate real-time Moon Phase / RA in degrees
       const moonDeg = ra !== null && ra !== 0 ? ra : getAnalyticalMoonRA();
-      // Map phase/RA to diagram angle around Earth (Sun is at -X / 180 degrees)
-      const target = Math.PI + (moonDeg * Math.PI) / 180;
+      // Map phase/RA to diagram angle around Earth in Counter-Clockwise (CCW) direction
+      // (Sun is at Left / 180 degrees; Moon moves New Moon -> First Quarter -> Full Moon)
+      const target = Math.PI - (moonDeg * Math.PI) / 180;
       const current = currentAngleRef.current;
 
       // Smooth angle easing
@@ -1146,8 +1147,8 @@ export default React.memo(function OrbitBackground() {
         {/* Lagrange L1 Indicator */}
         <g transform={`translate(${EARTH_X - 600}, ${CY})`}>
           {/* L1 Center Point */}
-          <circle cx="0" cy="0" r="3" fill="rgba(255,87,34,0.4)" />
-          <text x="0" y="-12" fill="rgba(255,87,34,0.5)" fontSize="10" fontFamily="monospace" textAnchor="middle" letterSpacing="1">L1</text>
+          <circle cx="0" cy="0" r="4" fill="#FF5722" />
+          <text x="0" y="-16" fill="#FF7043" fontSize="14" fontWeight="bold" fontFamily="monospace" textAnchor="middle" letterSpacing="1.5">L1</text>
 
           {/* L1 Orbit Rings (DSCOVR vertical & SOLAR-1 inclined horizontal) */}
           <ellipse cx="0" cy="0" rx="30" ry="56" fill="none" stroke="rgba(56,189,248,0.15)" strokeWidth="0.8" strokeDasharray="3 5" />

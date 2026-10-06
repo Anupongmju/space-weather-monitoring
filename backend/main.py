@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from database import init_db
-from routers import ace, goes, cosmic, maw, news, enlil, archive_ace, radiation
+from routers import ace, goes, cosmic, maw, psnm, news, enlil, archive_ace, radiation, sunspot, mars, moon, geomag
 from scheduler import start_scheduler
  
 @asynccontextmanager
@@ -39,12 +39,11 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-from routers import ace, goes, cosmic, maw, news, enlil, archive_ace, radiation, sunspot, mars, moon
-
 app.include_router(ace.router)
 app.include_router(goes.router)
 app.include_router(cosmic.router)
 app.include_router(maw.router)
+app.include_router(psnm.router)
 app.include_router(news.router)
 app.include_router(enlil.router)
 app.include_router(archive_ace.router)
@@ -52,6 +51,7 @@ app.include_router(radiation.router)
 app.include_router(sunspot.router)
 app.include_router(mars.router)
 app.include_router(moon.router)
+app.include_router(geomag.router)
 
 @app.get("/")
 def root():
@@ -66,6 +66,7 @@ def fetch_all():
     from fetchers.solar1_fetcher import fetch_solar1_rtsw
     from fetchers.crater_fetcher import fetch_crater_doserates
     from fetchers.mars_rad_fetcher import fetch_mars_rad
+    from fetchers.kp_fetcher import fetch_kp_index
     return {
         "ace":       fetch_all_ace(),
         "goes":      fetch_all_goes(),
@@ -73,5 +74,6 @@ def fetch_all():
         "stereo":    fetch_stereo_particles(),
         "solar1":    fetch_solar1_rtsw(),
         "crater":    fetch_crater_doserates(),
-        "mars":      fetch_mars_rad()
+        "mars":      fetch_mars_rad(),
+        "kp":        fetch_kp_index()
     }

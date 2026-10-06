@@ -1,0 +1,68 @@
+{
+  "nav": {
+    "title": "สภาพอวกาศ",
+    "subtitle": "ระบบติดตามและวิเคราะห์สภาพอวกาศแบบเรียลไทม์",
+    "hub": "ฮับหลัก",
+    "current_conditions": "สภาวะปัจจุบัน",
+    "live_telemetry": "โทรมาตรสด",
+    "domains": "กลุ่มข้อมูล",
+    "instruments": "เครื่องมือตรวจวัด",
+    "data_sources": "แหล่งข้อมูลดาวเทียม",
+    "overview": "แดชบอร์ดภาพรวม",
+    "moon": "ดวงจันทร์",
+    "mars": "ดาวอังคาร",
+    "radiation": "การแผ่รังสี",
+    "analysis": "การวิเคราะห์",
+    "news": "ข่าวสาร",
+    "report": "รายงานสรุป",
+    "help": "คู่มือช่วยเหลือ",
+    "about": "เกี่ยวกับโครงการ",
+    "theme_dark": "โหมดมืด",
+    "theme_light": "โหมดสว่าง",
+    "utc": "เวลาสากล (UTC)",
+    "sections": {
+      "ace": "ดาวเทียม ACE + SOLAR-1",
+      "goes": "ดาวเทียม GOES",
+      "ground": "สถานีภาคพื้นดิน",
+      "moon": "ดวงจันทร์",
+      "mars": "ดาวอังคาร"
+    },
+    "items": {
+      "swepam": "ลมสุริยะ (ACE SWEPAM)",
+      "mag_ace": "สนามแม่เหล็ก (ACE MAG)",
+      "sis": "ไอโซโทปสุริยะ (ACE SIS)",
+      "epam": "อนุภาคพลังงานสูง (ACE EPAM)",
+      "xray": "ฟลักซ์รังสีเอ็กซ์ (GOES XRS)",
+      "proton": "ฟลักซ์โปรตอน (GOES Proton)",
+      "electron": "ฟลักซ์อิเล็กตรอน (GOES Electron)",
+      "mag_goes": "สนามแม่เหล็กโลก (GOES MAG)",
+      "suvi": "ภาพถ่ายดวงอาทิตย์ (GOES SUVI)",
+      "sunspot": "จำนวนจุดดับดวงอาทิตย์",
+      "neutron_map": "แผนที่รังสีคอสมิกทั่วโลก",
+      "neutron_monitor": "เครื่องตรวจวัดนิวตรอน",
+      "maw_pressure": "ความดันบรรยากาศ (MAW)",
+      "maw_counts": "อัตราการนับอนุภาค (MAW)",
+      "maw_scatter": "สถิติการกระจายตัว (MAW)",
+      "maw_tubes": "สถานะหลอดตรวจวัด (MAW)",
+      "moon_orbit": "วงโคจรดวงจันทร์ (GSE)",
+      "moon_rad": "รังสีและอนุภาคดวงจันทร์",
+      "mars_surface": "รังสีพื้นผิวดาวอังคาร (Curiosity)",
+      "mars_orbit": "อนุภาคในวงโคจร (MAVEN)"
+    }
+  },
+  "common": {
+    "loading": "กำลังโหลดข้อมูล...",
+    "error": "เกิดข้อผิดพลาดในการโหลดข้อมูล",
+    "refresh": "รีเฟรช",
+    "live": "ถ่ายทอดสด",
+    "utc_time": "เวลาสากล",
+    "search": "ค้นหา...",
+    "no_data": "ไม่มีข้อมูล"
+  },
+  "guide_tabs": {
+    "usage": "การใช้งาน (USAGE)",
+    "impacts": "ผลกระทบ (IMPACTS)",
+    "details": "ข้อมูลอุปกรณ์ (DETAILS)",
+    "credits": "แหล่งข้อมูล (CREDITS)"
+  }
+}

@@ -6,7 +6,7 @@ import AlertsWidget from './widgets/AlertsWidget';
 
 export default function RightColumn() {
   return (
-    <div style={{ flex: '1 1 30%', minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: '1 1 30%', minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column' }}>
       <EnlilWidget />
       <NewsWidget />
       <BlogWidget />

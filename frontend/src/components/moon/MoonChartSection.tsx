@@ -3,7 +3,10 @@ import ReactECharts from 'echarts-for-react'
 import { ArrowUp, Radiation, Zap, Maximize2, Minimize2 } from 'lucide-react'
 import { MoonEventPosition } from '../../services/moonService'
 import SciFiFullscreenOverlay from '../ui/SciFiFullscreenOverlay'
+import ExportChartMenu from '../ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useTheme } from '../../context/ThemeContext'
+import { formatPowerOf10 } from '../../utils/formatters'
 
 interface MoonChartSectionProps {
   events: MoonEventPosition[]
@@ -127,6 +130,66 @@ const MoonChartSection = React.memo(function MoonChartSection({
 
   const chLabels = useMemo(() => goes?.channel_labels || DEFAULT_DIFF_LABELS, [goes])
 
+  const chartRefCrater = useRef<any>(null)
+  const chartRefGoes = useRef<any>(null)
+
+  const exportColumnsCrater: ExportColumn[] = useMemo(() => [
+    { key: 'time', label: 'Time (UTC)', width: 20 },
+    { key: 'd12', label: 'D12 Thin (cGy/yr)', width: 18, format: (v) => v != null ? Number(v).toFixed(4) : 'N/A' },
+    { key: 'd34', label: 'D34 GCR (cGy/yr)', width: 18, format: (v) => v != null ? Number(v).toFixed(4) : 'N/A' },
+    { key: 'd56', label: 'D56 Tissue (cGy/yr)', width: 18, format: (v) => v != null ? Number(v).toFixed(4) : 'N/A' },
+  ], [])
+
+  const exportDataCrater = useMemo(() => {
+    if (!dose?.hourly) return []
+    return dose.hourly.map((h, i) => ({
+      time: h.time ?? `+${i * 5}m`,
+      d12: h.d12,
+      d34: h.d34,
+      d56: h.d56,
+    }))
+  }, [dose?.hourly])
+
+  const exportMetadataCrater = useMemo(() => ({
+    station: 'LRO CRaTER (Moon Orbit)',
+    viewTitle: `LRO CRaTER 7-Day Radiation Dose Rate (${activeEvent?.date ?? 'Event'})`,
+    description: 'LRO Cosmic Ray Telescope for the Effects of Radiation (CRaTER) 7-day dose rate (−3d to +4d) around lunar event.',
+    timeRangeText: `${activeEvent?.date ?? 'Event'} ± 4 days`,
+    totalRecords: exportDataCrater.length
+  }), [activeEvent?.date, exportDataCrater.length])
+
+  const exportColumnsGoes: ExportColumn[] = useMemo(() => {
+    const cols: ExportColumn[] = [{ key: 'time', label: 'Time (UTC)', width: 20 }]
+    chLabels.forEach((label, idx) => {
+      cols.push({
+        key: `ch${idx}`,
+        label: `${label} (${goes?.mode === 'DIFFERENTIAL' ? 'diff-flux' : 'pfu'})`,
+        width: 18,
+        formatter: (v) => v != null ? Number(v).toExponential(3) : 'N/A'
+      })
+    })
+    return cols
+  }, [chLabels, goes?.mode])
+
+  const exportDataGoes = useMemo(() => {
+    if (!goes?.series) return []
+    return goes.series.map((g: any, i: number) => {
+      const row: any = { time: g.time ?? `+${i * 5}m` }
+      for (let k = 0; k < 13; k++) {
+        row[`ch${k}`] = g[`ch${k}`] ?? null
+      }
+      return row
+    })
+  }, [goes?.series])
+
+  const exportMetadataGoes = useMemo(() => ({
+    station: `${goes?.satellite ?? 'GOES'} Space Environment In-Situ Suite (SGPS)`,
+    viewTitle: `${goes?.satellite ?? 'GOES'} Proton 7-Day Event Profile (${activeEvent?.date ?? 'Event'})`,
+    description: `GOES 13-channel proton flux spectrum (−3d to +4d) during lunar event ${activeEvent?.date ?? ''}.`,
+    timeRangeText: `${activeEvent?.date ?? 'Event'} ± 4 days`,
+    totalRecords: exportDataGoes.length
+  }), [goes?.satellite, activeEvent?.date, exportDataGoes.length])
+
   // ── ECharts Option for CRaTER (7-Day Hardware-Accelerated Canvas with Mouse Wheel Zoom) ──
   const craterOption = useMemo(() => {
     if (!hasValidDose || !dose?.hourly) return null
@@ -236,12 +299,14 @@ const MoonChartSection = React.memo(function MoonChartSection({
           color: isLight ? '#475569' : '#F8FAFC',
           fontSize: 13,
           fontFamily: 'monospace, sans-serif',
-          formatter: (v: number) => {
-            if (v >= 10) return v.toFixed(0)
-            if (v >= 1) return v.toFixed(1)
-            if (v >= 0.01) return v.toFixed(3)
-            return v.toExponential(0)
-          },
+          formatter: craterLogScale
+            ? (v: number) => formatPowerOf10(v)
+            : (v: number) => {
+                if (v >= 10) return v.toFixed(0)
+                if (v >= 1) return v.toFixed(1)
+                if (v >= 0.01) return v.toFixed(3)
+                return v.toExponential(0)
+              },
         },
       },
       series: [
@@ -412,7 +477,7 @@ const MoonChartSection = React.memo(function MoonChartSection({
           color: isLight ? '#475569' : '#F8FAFC',
           fontSize: 13,
           fontFamily: 'monospace, sans-serif',
-          formatter: (v: number) => (v >= 1 ? v.toFixed(1) : v.toExponential(0)),
+          formatter: goesLogScale ? (v: number) => formatPowerOf10(v) : (v: number) => (v >= 1 ? v.toFixed(1) : v.toExponential(0)),
         },
       },
       series: seriesList,
@@ -745,6 +810,7 @@ const MoonChartSection = React.memo(function MoonChartSection({
                 <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                   {hasValidDose && craterOption ? (
                     <ReactECharts
+                      ref={chartRefCrater}
                       option={craterOption}
                       notMerge={true}
                       lazyUpdate={true}
@@ -817,6 +883,14 @@ const MoonChartSection = React.memo(function MoonChartSection({
                         <Maximize2 size={12} />
                         <span>FULLSCREEN</span>
                       </button>
+                      <ExportChartMenu
+                        chartRef={chartRefCrater}
+                        data={exportDataCrater}
+                        columns={exportColumnsCrater}
+                        metadata={exportMetadataCrater}
+                        filenameBase={`lro_crater_${(activeEvent?.date ?? 'event').replace(/\//g, '-')}`}
+                        accentColor="#F472B6"
+                      />
                     </div>
                     <div style={{ fontSize: 10.5, color: '#64748B', fontFamily: 'var(--font-mono)' }}>
                       LRO / Cosmic Ray Telescope · D12 D34 D56 Detectors (−3d to +4d)
@@ -837,6 +911,7 @@ const MoonChartSection = React.memo(function MoonChartSection({
                 <div style={{ width: '100%', height: 260, minWidth: 0, position: 'relative' }}>
                   {hasValidDose && craterOption ? (
                     <ReactECharts
+                      ref={chartRefCrater}
                       option={craterOption}
                       notMerge={true}
                       lazyUpdate={true}
@@ -922,6 +997,7 @@ const MoonChartSection = React.memo(function MoonChartSection({
                 <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                   {hasValidGoes && goesOption ? (
                     <ReactECharts
+                      ref={chartRefGoes}
                       option={goesOption}
                       notMerge={true}
                       lazyUpdate={true}
@@ -993,6 +1069,14 @@ const MoonChartSection = React.memo(function MoonChartSection({
                         <Maximize2 size={12} />
                         <span>FULLSCREEN</span>
                       </button>
+                      <ExportChartMenu
+                        chartRef={chartRefGoes}
+                        data={exportDataGoes}
+                        columns={exportColumnsGoes}
+                        metadata={exportMetadataGoes}
+                        filenameBase={`goes_proton_${(activeEvent?.date ?? 'event').replace(/\//g, '-')}`}
+                        accentColor="#FBBF24"
+                      />
                     </div>
                     <div style={{ fontSize: 10.5, color: '#64748B', fontFamily: 'var(--font-mono)' }}>
                       GOES SGPS 13-Channel Energy Spectrum (−3d to +4d)
@@ -1013,6 +1097,7 @@ const MoonChartSection = React.memo(function MoonChartSection({
                 <div style={{ width: '100%', height: 260, minWidth: 0, position: 'relative' }}>
                   {hasValidGoes && goesOption ? (
                     <ReactECharts
+                      ref={chartRefGoes}
                       option={goesOption}
                       notMerge={true}
                       lazyUpdate={true}

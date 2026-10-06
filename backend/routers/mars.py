@@ -51,30 +51,17 @@ def get_mars_rad(limit: int = 1440, start_date: Optional[str] = None, end_date: 
             (s, e)
         )
 
-    # By default, return time-filtered latest rows
-    max_row = query("SELECT MAX(time_tag) as max_t FROM mars_rad_doserates")
-    if not max_row or not max_row[0]['max_t']:
-        return query("SELECT * FROM mars_rad_doserates ORDER BY time_tag ASC LIMIT %s", (limit,))
-
-    max_t_str = max_row[0]['max_t']
-    try:
-        dt = datetime.datetime.fromisoformat(max_t_str.replace('Z', '+00:00'))
-        min_dt = dt - datetime.timedelta(minutes=limit)
-        min_t_str = min_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-    except Exception:
-        min_t_str = max_t_str
-
-    rows = query(
-        """SELECT * FROM mars_rad_doserates 
-           WHERE time_tag >= %s
-           ORDER BY time_tag ASC""",
-        (min_t_str,)
+    # By default, return time-filtered latest rows using CTE index scan
+    return query(
+        """WITH cutoff AS (
+            SELECT to_char(MAX(time_tag)::timestamp - (%s || ' minutes')::interval, 'YYYY-MM-DD HH24:MI:SS') as t
+            FROM mars_rad_doserates
+        )
+        SELECT mars_rad_doserates.* FROM mars_rad_doserates, cutoff
+        WHERE time_tag >= cutoff.t
+        ORDER BY time_tag ASC""",
+        (limit,)
     )
-
-    if not rows:
-        return query("SELECT * FROM mars_rad_doserates ORDER BY time_tag ASC LIMIT %s", (limit,))
-
-    return rows
 
 @router.get("/summary")
 def get_mars_summary():
@@ -103,6 +90,10 @@ def get_mars_summary():
     daily_dose_plastic = round(plastic_val * 24.0 / 1000.0, 3) # mSv/day (approx Q ~ 1)
     annual_dose_mSv = round(daily_dose_plastic * 365.0, 1)
 
+    # Latest MAVEN orbiter particle status
+    maven_latest = query("SELECT time_tag, ion_1, ion_12, ion_20, ion_28, ele_1, ele_8, ele_15 FROM mars_maven_particles ORDER BY time_tag DESC LIMIT 1")
+    maven_info = maven_latest[0] if maven_latest else None
+
     return {
         "current_sol": latest.get("sol", current_sol),
         "latest_time_tag": latest.get("time_tag"),
@@ -114,5 +105,26 @@ def get_mars_summary():
         "daily_dose_plastic_mSv": daily_dose_plastic,
         "annual_projected_mSv": annual_dose_mSv,
         "status": "NORMAL / GCR QUIET",
-        "human_safety_level": "NOMINAL EXPOSURE"
+        "human_safety_level": "NOMINAL EXPOSURE",
+        "maven_latest": maven_info
     }
+
+@router.get("/maven")
+def get_mars_maven(limit: int = 168, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    if start_date and end_date:
+        s_date = start_date.strip()[:10]
+        e_date = end_date.strip()[:10]
+        return query(
+            """SELECT * FROM mars_maven_particles 
+               WHERE substring(time_tag, 1, 10) >= %s AND substring(time_tag, 1, 10) <= %s
+               ORDER BY time_tag ASC""",
+            (s_date, e_date)
+        )
+    return query(
+        """SELECT * FROM (
+               SELECT * FROM mars_maven_particles 
+               ORDER BY time_tag DESC LIMIT %s
+           ) sub ORDER BY time_tag ASC""",
+        (limit,)
+    )
+

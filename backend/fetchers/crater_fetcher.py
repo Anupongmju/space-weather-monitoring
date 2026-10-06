@@ -3,7 +3,24 @@ from datetime import datetime, timedelta, timezone
 from database import get_conn
 from psycopg2.extras import execute_values  # type: ignore
 
-CRATER_URL = "https://crater-web.sr.unh.edu/data/craterProducts/doserates/data/2026212/doserates_standard_2026212_31days_allevents.txt"
+def get_latest_crater_url() -> str:
+    """Finds the most recent 31-day CRaTER dose rate file available on UNH server."""
+    now = datetime.now(timezone.utc)
+    # Check backwards from today for up to 35 days
+    for delta in range(0, 35):
+        dt = now - timedelta(days=delta)
+        year = dt.year
+        doy = dt.timetuple().tm_yday
+        code = f"{year}{doy:03d}"
+        url = f"https://crater-web.sr.unh.edu/data/craterProducts/doserates/data/{code}/doserates_standard_{code}_31days_allevents.txt"
+        try:
+            res = httpx.head(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
+            if res.status_code == 200:
+                return url
+        except Exception:
+            continue
+    # Fallback to latest known confirmed DOY
+    return "https://crater-web.sr.unh.edu/data/craterProducts/doserates/data/2026266/doserates_standard_2026266_31days_allevents.txt"
 
 def fetch_crater_doserates():
     """
@@ -11,7 +28,8 @@ def fetch_crater_doserates():
     Converts Julian Date to UTC timestamp and stores paired + individual detector dose rates in crater_doserates table.
     """
     try:
-        r = httpx.get(CRATER_URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+        url = get_latest_crater_url()
+        r = httpx.get(url, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
         r.raise_for_status()
 
         lines = [l.strip() for l in r.text.splitlines() if l.strip() and not l.startswith('#')]

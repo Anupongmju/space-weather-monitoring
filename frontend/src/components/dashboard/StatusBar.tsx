@@ -196,7 +196,7 @@ export default function StatusBar({
   summary,
   items = DEFAULT_STATUS_ITEMS,
   columns = 3,
-  maxWidth = 520,
+  maxWidth = 'min(660px, 94vw)',
 }: StatusBarProps) {
   const loading = summary?.loading ?? false
 
@@ -220,16 +220,13 @@ export default function StatusBar({
         borderRadius: 0,
         position: 'relative',
         maxWidth: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth,
+        width: '100%',
         margin: '0 auto 20px',
         backdropFilter: 'blur(8px)',
         background: 'rgba(12, 32, 46, 0.1)',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
       }}
     >
-      {/* <div style={{ position: 'absolute', top: -1, left: -1, width: 10, height: 10, borderTop: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none', zIndex: 10 }} />
-      <div style={{ position: 'absolute', top: -1, right: -1, width: 10, height: 10, borderTop: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none', zIndex: 10 }} />
-      <div style={{ position: 'absolute', bottom: -1, left: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderLeft: '2px solid #3498DB', pointerEvents: 'none', zIndex: 10 }} />
-      <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: '2px solid #3498DB', borderRight: '2px solid #3498DB', pointerEvents: 'none', zIndex: 10 }} /> */}
       {computedItems.map((item, idx) => {
         const rgb = hexToRgb(item.color)
 
@@ -245,23 +242,29 @@ export default function StatusBar({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              minHeight: '70px',
+              minHeight: '68px',
+              overflow: 'hidden',
             }}
           >
             <div
               style={{
-                fontSize: '15px',
-                color: 'rgba(255,255,255,0.3)',
-                letterSpacing: 1.2,
+                fontSize: 'clamp(10.5px, 1.1vw, 12px)',
+                color: 'rgba(255,255,255,0.4)',
+                letterSpacing: '0.8px',
                 marginBottom: 4,
                 fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
               }}
+              title={item.name}
             >
               {item.name}
             </div>
             <div
               style={{
-                fontSize: '15px',
+                fontSize: 'clamp(14px, 1.4vw, 16px)',
                 fontWeight: 700,
                 color: 'white',
                 fontFamily: "'Orbitron', monospace",
@@ -274,7 +277,7 @@ export default function StatusBar({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '3px',
+                gap: '4px',
                 padding: '2px 6px',
                 borderRadius: '4px',
                 background: loading
@@ -284,10 +287,11 @@ export default function StatusBar({
                   ? '1px solid rgba(255,255,255,0.08)'
                   : `1px solid rgba(${rgb}, 0.3)`,
                 color: loading ? '#606075' : item.color,
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 700,
                 fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.5px',
+                whiteSpace: 'nowrap',
               }}
             >
               {!loading && (
@@ -298,6 +302,7 @@ export default function StatusBar({
                     borderRadius: '50%',
                     background: item.color,
                     boxShadow: `0 0 5px ${item.color}`,
+                    flexShrink: 0,
                   }}
                 />
               )}

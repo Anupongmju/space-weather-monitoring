@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveSis, loadSis } from '../../services/aceService'
 import { loadSolar1 } from '../../services/radiationService'
@@ -9,7 +9,10 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
-import { formatPowerOf10 } from '../../utils/formatters'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
+import { formatPowerOf10, formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 import { useTheme } from '../../context/ThemeContext'
 
 export default function Sis() {
@@ -21,9 +24,10 @@ export default function Sis() {
   const [satSource, setSatSource] = useState<'ACE' | 'SOLAR1' | 'BOTH'>('ACE')
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
+  const chartRef = useRef(null)
 
   const load = async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -34,8 +38,27 @@ export default function Sis() {
         loadSis(limit, sDate, eDate),
         loadSolar1(limit, sDate, eDate)
       ])
-      setData(Array.isArray(dAce) ? dAce : [])
-      setSolar1Data(Array.isArray(dSolar1) ? dSolar1 : [])
+      const newAce = Array.isArray(dAce) ? dAce : []
+      const newSolar1 = Array.isArray(dSolar1) ? dSolar1 : []
+
+      if (showLoading || appliedRange) {
+        setData(newAce)
+        setSolar1Data(newSolar1)
+      } else {
+        // Smart merge: keep any older historical data user loaded to the left
+        setData(prev => {
+          if (!prev || prev.length === 0 || newAce.length === 0) return newAce
+          const firstNewTs = new Date(newAce[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newAce]
+        })
+        setSolar1Data(prev => {
+          if (!prev || prev.length === 0 || newSolar1.length === 0) return newSolar1
+          const firstNewTs = new Date(newSolar1[0].time_tag).getTime()
+          const older = prev.filter(p => new Date(p.time_tag).getTime() < firstNewTs)
+          return [...older, ...newSolar1]
+        })
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -52,7 +75,7 @@ export default function Sis() {
     setFetching(false)
   }
 
-  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady } = useChartPan({
+  const { onDataZoom, panLoading, resetPan, zoomRange, onChartReady, isViewingHistory } = useChartPan({
     data,
     setData,
     loadHistorical: (start, end) => loadSis(0, start, end),
@@ -67,7 +90,7 @@ export default function Sis() {
 
   useAutoFetch(async () => {
     await load(false)
-  }, 60000, !appliedRange)
+  }, 60000, !appliedRange && !isViewingHistory)
 
   const series: any[] = []
 
@@ -117,7 +140,16 @@ export default function Sis() {
     )
   }
 
+  const allSisData = satSource === 'SOLAR1' ? solar1Data : (satSource === 'BOTH' ? [...data, ...solar1Data] : data)
+  const { minTs, maxTs } = getTimeDomain(allSisData)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
+  if (series[0]) {
+    series[0].markLine = combineMarkLines(midnightDividers)
+  }
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -127,14 +159,34 @@ export default function Sis() {
       padding: 14,
       textStyle: { color: isLight ? '#0F172A' : '#F8FAFC', fontFamily: 'var(--font-mono)', fontSize: 13 },
       extraCssText: isLight ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;' : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
-      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#059669' : '#34D399', type: 'dashed', width: 1.5 } }
+      axisPointer: { type: 'line', lineStyle: { color: isLight ? '#059669' : '#34D399', type: 'dashed', width: 1.5 } },
+      formatter: (params: any) => {
+        if (!params || !params.length) return ''
+        const rawTime = params[0]?.value ? params[0].value[0] : (params[0]?.axisValue || '')
+        const timeStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#059669' : '#34D399'}">
+          🕒 ${timeStr}
+        </div>`
+        params.forEach((p: any) => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          const valStr = typeof val === 'number' ? (val < 0.01 && val > 0 ? val.toExponential(3) : val.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;margin:3px 0;font-family:var(--font-mono);">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+              <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+            </span>
+            <strong style="color:${isLight ? '#0F172A' : '#F8FAFC'};">${valStr}</strong>
+          </div>`
+        })
+        return html
+      }
     },
     legend: {
       show: true,
       textStyle: { color: isLight ? '#334155' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' },
       top: 0
     },
-    grid: { top: 35, right: 20, bottom: 30, left: 85 },
+    grid: { top: 35, right: 20, bottom: 45, left: 85 },
     dataZoom: [
       {
         type: 'inside',
@@ -149,7 +201,7 @@ export default function Sis() {
     xAxis: {
       type: 'time',
       splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
-      axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' },
+      axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange),
       axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
     },
     yAxis: {
@@ -169,6 +221,56 @@ export default function Sis() {
     },
     series
   }
+
+  // Unified export dataset based on satSource
+  const exportData = useMemo(() => {
+    if (satSource === 'ACE') return data
+    if (satSource === 'SOLAR1') return solar1Data
+    const map = new Map<string, any>()
+    data.forEach(d => {
+      map.set(d.time_tag, { ...d, _type: 'ACE' })
+    })
+    solar1Data.forEach(d => {
+      const existing = map.get(d.time_tag) || { time_tag: d.time_tag }
+      map.set(d.time_tag, { ...existing, ...d })
+    })
+    return Array.from(map.values()).sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }, [satSource, data, solar1Data])
+
+  const exportColumns = useMemo((): ExportColumn[] => {
+    const base: ExportColumn[] = [
+      { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+      { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') }
+    ]
+
+    if (satSource === 'ACE') {
+      return [
+        ...base,
+        { key: 'integral_10mev', label: 'Protons_>10MeV', width: 18 },
+        { key: 'integral_30mev', label: 'Protons_>30MeV', width: 18 }
+      ]
+    }
+
+    if (satSource === 'SOLAR1') {
+      return [
+        ...base,
+        { key: 'p7', label: 'S1_p7(>10MeV_proxy)', width: 22 },
+        { key: 'p8', label: 'S1_p8(>30MeV_proxy)', width: 22 }
+      ]
+    }
+
+    return [
+      ...base,
+      { key: 'integral_10mev', label: 'ACE_>10MeV', width: 16 },
+      { key: 'integral_30mev', label: 'ACE_>30MeV', width: 16 },
+      { key: 'p7', label: 'S1_p7_>10MeV', width: 16 },
+      { key: 'p8', label: 'S1_p8_>30MeV', width: 16 }
+    ]
+  }, [satSource])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -223,23 +325,33 @@ export default function Sis() {
 
       {/* Toolbar: Source Selector + Date Range */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        {/* Source Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-          <span style={{ color: isLight ? '#475569' : '#94A3B8', fontWeight: 600 }}>SATELLITE:</span>
+        {/* Source Switcher Toggle */}
+        <div style={{
+          display: 'flex',
+          background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+          padding: 3,
+          borderRadius: 8,
+          border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)'
+        }}>
           {(['ACE', 'SOLAR1', 'BOTH'] as const).map(s => (
             <button
               key={s}
               onClick={() => setSatSource(s)}
               style={{
-                background: satSource === s ? (isLight ? '#059669' : '#34D399') : (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)'),
-                color: satSource === s ? '#FFF' : (isLight ? '#334155' : '#94A3B8'),
-                border: '1px solid ' + (satSource === s ? (isLight ? '#059669' : '#34D399') : (isLight ? 'rgba(26,109,181,0.2)' : 'rgba(255,255,255,0.1)')),
-                fontSize: 14,
-                fontWeight: 600,
-                padding: '5px 14px',
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                border: 'none',
+                background: satSource === s
+                  ? (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.15)')
+                  : 'transparent',
+                color: satSource === s
+                  ? (isLight ? '#059669' : '#34D399')
+                  : (isLight ? '#64748B' : '#94A3B8'),
                 borderRadius: 6,
                 cursor: 'pointer',
-                boxShadow: isLight && satSource !== s ? '0 1px 4px rgba(0,0,0,0.03)' : undefined,
+                boxShadow: isLight && satSource === s ? '0 1px 4px rgba(0,0,0,0.06)' : undefined,
                 transition: 'all 0.15s'
               }}
             >
@@ -267,15 +379,36 @@ export default function Sis() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#059669' : '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#059669' : '#34D399', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={exportData}
+                columns={exportColumns}
+                metadata={{
+                  station: 'ACE / SOLAR-1 (L1 ORBIT)',
+                  viewTitle: `SIS / STIS HIGH-ENERGY PROTON FLUX (${satSource})`,
+                  description: 'Solar Isotope Spectrometer & STIS: Integral High-Energy Protons (>10 & >30 MeV)',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: exportData.length
+                }}
+                filenameBase={`SIS_PROTONS_${satSource}_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#059669' : '#34D399'}
+              />
+            </div>
+          }
         >
           <ReactECharts
+            ref={chartRef}
+            key={satSource}
             option={option}
-            notMerge={true}
+            notMerge={false}
+            lazyUpdate={true}
             style={{ height: 520, width: '100%' }}
             onChartReady={onChartReady}
             onEvents={{ datazoom: onDataZoom, dataZoom: onDataZoom }}

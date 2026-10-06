@@ -1,16 +1,18 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import MagWidget from './widgets/MagWidget';
 import SwepamWidget from './widgets/SwepamWidget';
 import XrayWidget from './widgets/XrayWidget';
 import CosmicWidget from './widgets/CosmicWidget';
 import ProtonWidget from './widgets/ProtonWidget';
 import ElectronWidget from './widgets/ElectronWidget';
-import SunspotWidget from './widgets/SunspotWidget';
+import KpWidget from './widgets/KpWidget';
 import ThuleWidget from './widgets/ThuleWidget';
 import FactsWidget from './widgets/FactsWidget';
 import SolarImagesWidget from './widgets/SolarImagesWidget';
 
 export default function LeftColumn() {
+  const { t } = useTranslation();
   const cardStyle: React.CSSProperties = {
     background: 'var(--bg-surface, #050A14)',
     backdropFilter: 'blur(8px)',
@@ -50,11 +52,11 @@ export default function LeftColumn() {
   const accentColor = 'var(--primary, #3498DB)';
 
   return (
-    <div style={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ flex: '1 1 70%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <SolarImagesWidget />
       
-      {/* Top Row: 2 columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+      {/* Telemetry Section */}
+      <div style={{ width: '100%' }}>
         <div style={{ ...cardStyle, position: 'relative' }}>
           <div style={{ position: 'absolute', top: -1, left: -1, width: 10, height: 10, borderTop: `2px solid ${accentColor}`, borderLeft: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: -1, right: -1, width: 10, height: 10, borderTop: `2px solid ${accentColor}`, borderRight: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
@@ -62,17 +64,17 @@ export default function LeftColumn() {
           <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderBottom: `2px solid ${accentColor}`, borderRight: `2px solid ${accentColor}`, pointerEvents: 'none' }} />
           <h3 style={titleStyle}>
             <span style={{ width: '8px', height: '8px', background: accentColor, borderRadius: '50%' }}></span> 
-            SYSTEM TELEMETRY
+            {t('dashboard.system_telemetry', 'SYSTEM TELEMETRY')}
           </h3>
-          <p style={textStyle}>REAL-TIME SENSOR DATA</p>
-          <div style={{ marginTop: '15px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+          <p style={textStyle}>{t('dashboard.realtime_sensor_data', 'REAL-TIME SENSOR DATA')}</p>
+          <div className="telemetry-grid" style={{ marginTop: '15px' }}>
             <MagWidget />
             <SwepamWidget />
-            <XrayWidget />
-            <CosmicWidget />
             <ProtonWidget />
+            <CosmicWidget />
+            <XrayWidget />
             <ElectronWidget />
-            <SunspotWidget />
+            <KpWidget />
             <ThuleWidget />
           </div>
         </div>

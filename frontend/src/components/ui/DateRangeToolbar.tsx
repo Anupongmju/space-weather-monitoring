@@ -3,13 +3,13 @@ import { Calendar } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import DualMonthDatePicker from './DualMonthDatePicker'
 
-export type TimeRange = 360 | 1440 | 4320 | 10080
+export type TimeRange = 1440 | 4320 | 10080 | 43200
 
 export const TIME_LABELS: Record<number, string> = {
-  360: '6H',
   1440: '1D',
   4320: '3D',
   10080: '7D',
+  43200: '30D',
 }
 
 const getTodayStr = () => new Date().toISOString().split('T')[0]
@@ -26,6 +26,7 @@ export interface DateRangeToolbarProps {
   onApplyRange: (range: { startDate: string; endDate: string } | null) => void
   accentColor?: string
   loading?: boolean
+  presets?: TimeRange[]
 }
 
 export default function DateRangeToolbar({
@@ -35,6 +36,7 @@ export default function DateRangeToolbar({
   onApplyRange,
   accentColor = '#818CF8',
   loading = false,
+  presets = [1440, 4320, 10080],
 }: DateRangeToolbarProps) {
   const { theme } = useTheme()
   const isLight = theme === 'light'
@@ -75,7 +77,7 @@ export default function DateRangeToolbar({
           transition: 'all 0.2s ease',
         }}
       >
-        {([360, 1440, 4320, 10080] as TimeRange[]).map(v => (
+        {presets.map(v => (
           <button
             key={v}
             disabled={loading}

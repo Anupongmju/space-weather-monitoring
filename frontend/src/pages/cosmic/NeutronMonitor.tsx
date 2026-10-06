@@ -1,17 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Map, RefreshCw, CheckSquare, Square, Sparkles } from 'lucide-react'
+import { Map as MapIcon, RefreshCw, CheckSquare, Square, Sparkles, Search, Layers } from 'lucide-react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveNeutron, loadNeutron, STATIONS } from '../../services/cosmicService'
+import { NEUTRON_STATIONS } from '../../services/neutronStationsData'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useTheme } from '../../context/ThemeContext'
+import { formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 
 const KEY_STATION_IDS = ['PSNM', 'OULU', 'SOPO', 'JUNG1', 'THUL', 'MOSC', 'KIEL2']
+
+const STATION_STATUS_MAP: Record<string, 'active' | 'offline'> = {
+  BKSN: 'active',
+  CALM: 'active',
+  JUNG1: 'active',
+  LMKS: 'active',
+  ...NEUTRON_STATIONS.reduce((acc, s) => {
+    acc[s.id] = s.status
+    return acc
+  }, {} as Record<string, 'active' | 'offline'>)
+}
 
 const STATION_COLORS: Record<string, string> = STATIONS.reduce((acc, s, i) => {
   const hue = (i * 137.508) % 360
@@ -32,21 +48,67 @@ export default function NeutronMonitor() {
     return STATIONS.reduce((acc, s) => ({ ...acc, [s.id]: s.id === initialStation }), {})
   })
   const [loading, setLoading] = useState(true)
-  const [fetching, setFetching] = useState(false)
-  const [fetchStation, setFetchStation] = useState(initialStation)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [hours, setHours] = useState(24)
+  const [viewMode, setViewMode] = useState<'variation' | 'rate'>('variation')
+  const [stationSearch, setStationSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'offline'>('active')
+  const [isMultiSelect, setIsMultiSelect] = useState(false)
   const [activeTab, setActiveTab] = useState('usage')
+  const chartRef = useRef<any>(null)
+
+  const exportData = useMemo(() => {
+    const activeStations = Object.keys(active).filter(s => active[s])
+    if (!activeStations.length) return []
+    const map = new Map<string, any>()
+    activeStations.forEach(st => {
+      const arr = data[st] || []
+      arr.forEach(d => {
+        const item = map.get(d.time_tag) || { time_tag: d.time_tag }
+        item[st] = d.value
+        map.set(d.time_tag, item)
+      })
+    })
+    return Array.from(map.values()).sort((a, b) => new Date(a.time_tag).getTime() - new Date(b.time_tag).getTime())
+  }, [active, data])
+
+  const exportColumns = useMemo((): ExportColumn[] => {
+    const base: ExportColumn[] = [
+      { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+      { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') }
+    ]
+    const activeStations = Object.keys(active).filter(s => active[s])
+    const stCols = activeStations.map(st => ({
+      key: st,
+      label: `${st}_(${viewMode === 'variation' ? 'Var_%' : 'Counts'})`,
+      width: 14
+    }))
+    return [...base, ...stCols]
+  }, [active, viewMode])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   // When arriving from map page with a target station
   useEffect(() => {
     const target = (location.state as any)?.targetStation || searchParams.get('station')
     if (target) {
       setActive({ [target]: true })
-      setFetchStation(target)
     }
   }, [location.state, searchParams])
+
+  const handleLimitChange = (newLimit: TimeRange) => {
+    setLimit(newLimit)
+    if (newLimit >= 10080) {
+      setHours(168)
+    } else if (newLimit >= 4320) {
+      setHours(72)
+    } else {
+      setHours(24)
+    }
+  }
 
   // Load telemetry data for active stations
   const load = async (showLoading = true) => {
@@ -61,10 +123,12 @@ export default function NeutronMonitor() {
       const results = await Promise.all(
         activeStations.map(async s => {
           let d = await loadNeutron(s.id, limit, appliedRange?.startDate, appliedRange?.endDate)
-          // If no local records exist for this active station, attempt live fetch from NMDB
-          if ((!Array.isArray(d) || d.length === 0) && !appliedRange) {
+          const targetPoints = limit > 1440 ? Math.floor(limit * 0.6) : 30
+          // If no local records exist or points are fewer than requested window, fetch from NMDB
+          if ((!Array.isArray(d) || d.length < targetPoints) && !appliedRange) {
             try {
-              await fetchAndSaveNeutron(s.id, hours)
+              const fetchH = Math.max(hours, Math.ceil(limit / 60))
+              await fetchAndSaveNeutron(s.id, fetchH)
               d = await loadNeutron(s.id, limit)
             } catch (e) {
               console.warn(`Failed auto-fetch for station ${s.id}:`, e)
@@ -83,20 +147,6 @@ export default function NeutronMonitor() {
     }
   }
 
-  const fetch_ = async () => {
-    setFetching(true)
-    try {
-      await fetchAndSaveNeutron(fetchStation, hours)
-      const d = await loadNeutron(fetchStation, limit, appliedRange?.startDate, appliedRange?.endDate)
-      setData(prev => ({ ...prev, [fetchStation]: d }))
-      setActive(prev => ({ ...prev, [fetchStation]: true }))
-    } catch (e) {
-      console.error('Failed fetching remote telemetry:', e)
-    } finally {
-      setFetching(false)
-    }
-  }
-
   useEffect(() => {
     load()
   }, [active, limit, appliedRange])
@@ -110,11 +160,16 @@ export default function NeutronMonitor() {
     }
   }, 60000)
 
-  const toggleStation = (id: string) => {
-    setActive(prev => ({ ...prev, [id]: !prev[id] }))
+  const handleStationClick = (id: string) => {
+    if (isMultiSelect) {
+      setActive(prev => ({ ...prev, [id]: !prev[id] }))
+    } else {
+      setActive({ [id]: true })
+    }
   }
 
   const selectKeyStations = () => {
+    setIsMultiSelect(true)
     const next: Record<string, boolean> = {}
     STATIONS.forEach(s => {
       next[s.id] = KEY_STATION_IDS.includes(s.id)
@@ -123,6 +178,7 @@ export default function NeutronMonitor() {
   }
 
   const selectAllStations = () => {
+    setIsMultiSelect(true)
     const next: Record<string, boolean> = {}
     STATIONS.forEach(s => { next[s.id] = true })
     setActive(next)
@@ -135,6 +191,21 @@ export default function NeutronMonitor() {
   }
 
   const activeCount = Object.values(active).filter(Boolean).length
+
+  const activeStationsTotal = STATIONS.filter(s => (STATION_STATUS_MAP[s.id] || 'offline') === 'active').length
+  const offlineStationsTotal = STATIONS.filter(s => (STATION_STATUS_MAP[s.id] || 'offline') === 'offline').length
+
+  const filteredStations = STATIONS.filter(s => {
+    const status = STATION_STATUS_MAP[s.id] || 'offline'
+    if (statusFilter !== 'all' && status !== statusFilter) return false
+    const q = stationSearch.toLowerCase().trim()
+    if (!q) return true
+    return (
+      s.id.toLowerCase().includes(q) ||
+      s.label.toLowerCase().includes(q) ||
+      s.country.toLowerCase().includes(q)
+    )
+  })
 
   // Build ECharts series
   const series = STATIONS
@@ -151,6 +222,7 @@ export default function NeutronMonitor() {
       return {
         name: `${s.label} (${s.id})`,
         type: 'line',
+        smooth: 0.15,
         showSymbol: false,
         connectNulls: true,
         triggerEvent: true,
@@ -158,56 +230,100 @@ export default function NeutronMonitor() {
         itemStyle: { color },
         emphasis: {
           focus: 'series',
-          lineStyle: { width: 4.0 }
+          lineStyle: { width: 3.5 }
         },
         blur: {
           lineStyle: { opacity: 0.15 }
         },
         data: stationData.map((d: any) => {
-          if (!baseline || baseline === 0 || !d.count_rate || d.count_rate <= 0) return [d.time_tag, null]
+          if (!d.count_rate || d.count_rate <= 0) return [d.time_tag, null]
+          if (viewMode === 'rate') {
+            return [d.time_tag, Number(d.count_rate.toFixed(2))]
+          }
+          if (!baseline || baseline === 0) return [d.time_tag, null]
           const pct = ((d.count_rate - baseline) / baseline) * 100
           return [d.time_tag, Number(pct.toFixed(2))]
         }),
       }
     })
 
+  const allPoints = Object.values(data).flat()
+  const { minTs, maxTs } = getTimeDomain(allPoints)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+  const isMultiDay = limit > 1440 || !!appliedRange
+
+  if (series.length > 0 && midnightDividers.length > 0) {
+    (series[0] as any).markLine = combineMarkLines(midnightDividers)
+  }
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
+    legend: {
+      show: true,
+      top: 0,
+      textStyle: {
+        color: isLight ? '#334155' : '#CBD5E1',
+        fontSize: 13,
+        fontFamily: 'var(--font-mono)'
+      }
+    },
     tooltip: {
       trigger: 'axis',
       backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
       borderColor: isLight ? '#C084FC' : 'rgba(192, 132, 252, 0.6)',
       borderWidth: 1.5,
-      padding: 12,
+      padding: 14,
       extraCssText: isLight
-        ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 6px;'
-        : 'box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border-radius: 6px;',
+        ? 'box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px;'
+        : 'box-shadow: 0 20px 40px rgba(0,0,0,0.9); border-radius: 8px;',
       textStyle: {
         color: isLight ? '#0F172A' : '#F8FAFC',
         fontFamily: 'var(--font-mono)',
         fontSize: 13
       },
+      axisPointer: {
+        type: 'line',
+        lineStyle: {
+          color: isLight ? '#7C3AED' : '#C084FC',
+          type: 'dashed',
+          width: 1.5
+        }
+      },
       formatter: (params: any) => {
         if (!params || !params.length) return ''
-        const time = params[0]?.axisValueLabel || params[0]?.name || ''
-        const timeStr = time ? new Date(time).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : ''
+        const rawTime = params[0]?.data?.[0] || params[0]?.axisValue
+        const timeStr = formatUTCTime(rawTime, true)
 
         let html = `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};">
-            <strong style="color:${isLight ? '#7C3AED' : '#C084FC'};font-family:var(--font-mono);font-size:13px;">🕒 ${timeStr}</strong>
+          <div style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'};font-weight:700;color:${isLight ? '#7C3AED' : '#C084FC'}">
+            🕒 ${timeStr}
           </div>
-          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center;font-size:12px;font-family:var(--font-mono);">
+          <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-family:var(--font-mono);">
         `
 
         params.forEach((p: any) => {
           const val = Array.isArray(p.value) ? p.value[1] : p.value
-          const valStr = typeof val === 'number' ? (val > 0 ? `+${val.toFixed(2)}%` : `${val.toFixed(2)}%`) : 'N/A'
-          const valColor = typeof val === 'number' ? (val < -3 ? '#EF4444' : (val > 0 ? (isLight ? '#059669' : '#34D399') : (isLight ? '#0F172A' : '#F8FAFC'))) : '#94A3B8'
+          let valStr = 'N/A'
+          let valColor = isLight ? '#0F172A' : '#F8FAFC'
+          if (typeof val === 'number') {
+            if (viewMode === 'variation') {
+              valStr = val > 0 ? `+${val.toFixed(2)}%` : `${val.toFixed(2)}%`
+              valColor = val < -3 ? '#EF4444' : (val > 0 ? (isLight ? '#059669' : '#34D399') : (isLight ? '#0F172A' : '#F8FAFC'))
+            } else {
+              valStr = `${val.toFixed(2)} cts/s`
+              valColor = isLight ? '#0284C7' : '#38BDF8'
+            }
+          }
 
           html += `
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
-            <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
-            <strong style="color:${valColor};text-align:right;">${valStr}</strong>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+              <span style="display:flex;align-items:center;gap:6px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};"></span>
+                <span style="color:${isLight ? '#475569' : '#CBD5E1'};">${p.seriesName}</span>
+              </span>
+              <strong style="color:${valColor};">${valStr}</strong>
+            </div>
           `
         })
 
@@ -215,8 +331,7 @@ export default function NeutronMonitor() {
         return html
       }
     },
-    legend: { show: false },
-    grid: { top: 25, right: 30, bottom: 45, left: 85 },
+    grid: { top: 38, right: 30, bottom: 45, left: 75 },
     dataZoom: [
       {
         type: 'inside',
@@ -224,20 +339,6 @@ export default function NeutronMonitor() {
         filterMode: 'none',
         zoomOnMouseWheel: true,
         moveOnMouseMove: true,
-      },
-      {
-        type: 'slider',
-        xAxisIndex: 0,
-        height: 22,
-        bottom: 10,
-        fillerColor: isLight ? 'rgba(124, 58, 237, 0.12)' : 'rgba(192, 132, 252, 0.15)',
-        borderColor: isLight ? 'rgba(124, 58, 237, 0.25)' : 'rgba(192, 132, 252, 0.3)',
-        handleStyle: { color: isLight ? '#7C3AED' : '#C084FC' },
-        textStyle: { color: isLight ? '#475569' : '#94A3B8', fontSize: 11, fontFamily: 'var(--font-mono)' },
-        dataBackground: {
-          lineStyle: { color: isLight ? '#7C3AED' : '#C084FC' },
-          areaStyle: { color: isLight ? 'rgba(124, 58, 237, 0.2)' : 'rgba(192, 132, 252, 0.2)' }
-        }
       }
     ],
     xAxis: {
@@ -252,22 +353,18 @@ export default function NeutronMonitor() {
       axisLine: {
         lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' }
       },
-      axisLabel: {
-        color: isLight ? '#475569' : '#CBD5E1',
-        fontSize: 13,
-        fontFamily: 'var(--font-mono)'
-      }
+      axisLabel: createTimeAxisLabel(isLight, isMultiDay)
     },
     yAxis: {
       type: 'value',
       scale: true,
-      name: '% VARIATION',
+      name: viewMode === 'variation' ? '% VARIATION' : 'COUNTS / SEC',
       nameLocation: 'middle',
       nameGap: 52,
       nameTextStyle: {
         color: isLight ? '#7C3AED' : '#C084FC',
-        fontSize: 16,
-        fontWeight: 800,
+        fontSize: 13,
+        fontWeight: 700,
         fontFamily: 'var(--font-mono)'
       },
       splitLine: {
@@ -282,15 +379,13 @@ export default function NeutronMonitor() {
       },
       axisLabel: {
         color: isLight ? '#475569' : '#CBD5E1',
-        fontSize: 13,
+        fontSize: 12,
         fontFamily: 'var(--font-mono)',
-        formatter: '{value}%'
+        formatter: viewMode === 'variation' ? '{value}%' : '{value}'
       }
     },
     series,
   }
-
-  const activeStationList = STATIONS.filter(s => active[s.id] && data[s.id]?.length)
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -340,7 +435,7 @@ export default function NeutronMonitor() {
               transition: 'all 0.15s'
             }}
           >
-            <Map size={15} />
+            <MapIcon size={15} />
             <span>GLOBAL EARTH MAP</span>
           </Link>
           <StatusBadge status={series.length ? 'normal' : 'offline'} />
@@ -360,316 +455,469 @@ export default function NeutronMonitor() {
         </div>
       </div>
 
-      {/* Row 2 Toolbar: Date Range Picker */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+      {/* Row 2 Toolbar: Mode Selector + Date Range Picker */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 20
+      }}>
+        {/* Metric Switcher Toggle (% Variation vs Count Rate) */}
+        <div style={{
+          display: 'flex',
+          background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+          padding: 3,
+          borderRadius: 8,
+          border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <button
+            onClick={() => setViewMode('variation')}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              border: 'none',
+              background: viewMode === 'variation'
+                ? (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.15)')
+                : 'transparent',
+              color: viewMode === 'variation'
+                ? (isLight ? '#6D28D9' : '#C084FC')
+                : (isLight ? '#64748B' : '#94A3B8'),
+              borderRadius: 6,
+              cursor: 'pointer',
+              boxShadow: viewMode === 'variation' && isLight ? '0 1px 3px rgba(0,0,0,0.1)' : undefined,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            % VARIATION (RELATIVE)
+          </button>
+          <button
+            onClick={() => setViewMode('rate')}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              border: 'none',
+              background: viewMode === 'rate'
+                ? (isLight ? '#FFFFFF' : 'rgba(255,255,255,0.15)')
+                : 'transparent',
+              color: viewMode === 'rate'
+                ? (isLight ? '#6D28D9' : '#C084FC')
+                : (isLight ? '#64748B' : '#94A3B8'),
+              borderRadius: 6,
+              cursor: 'pointer',
+              boxShadow: viewMode === 'rate' && isLight ? '0 1px 3px rgba(0,0,0,0.1)' : undefined,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            COUNT RATE (COUNTS/S)
+          </button>
+        </div>
+
         <DateRangeToolbar
           limit={limit}
-          onLimitChange={setLimit}
+          onLimitChange={handleLimitChange}
           appliedRange={appliedRange}
           onApplyRange={setAppliedRange}
           accentColor={isLight ? '#7C3AED' : '#C084FC'}
           loading={loading}
+          presets={[1440, 4320, 10080]}
         />
       </div>
 
-      {/* Modern Station Selector Toolbar */}
-      <div style={{
-        marginBottom: 20,
-        background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-        border: `1px solid ${isLight ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.08)'}`,
-        borderRadius: 8,
-        padding: '14px 16px',
-        boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.04)' : undefined
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{
-              fontSize: 13,
-              color: isLight ? '#6D28D9' : '#C084FC',
-              fontFamily: 'var(--font-mono)',
-              letterSpacing: 0.5,
-              fontWeight: 700
-            }}>
-              ACTIVE MONITORING STATIONS ({activeCount}/{STATIONS.length})
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              onClick={selectKeyStations}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px',
-                background: isLight ? '#F5F3FF' : 'rgba(124, 58, 237, 0.15)',
-                border: `1px solid ${isLight ? '#DDD6FE' : 'rgba(124, 58, 237, 0.35)'}`,
-                color: isLight ? '#6D28D9' : '#C084FC',
-                borderRadius: 4, cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600
-              }}
-            >
-              <Sparkles size={13} />
-              <span>KEY NETWORK STATIONS</span>
-            </button>
-            <button
-              onClick={selectAllStations}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px',
-                background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.1)'}`,
-                color: isLight ? '#334155' : '#CBD5E1',
-                borderRadius: 4, cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600
-              }}
-            >
-              <CheckSquare size={13} />
-              <span>SELECT ALL</span>
-            </button>
-            <button
-              onClick={clearAllStations}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px',
-                background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.1)'}`,
-                color: isLight ? '#64748B' : '#94A3B8',
-                borderRadius: 4, cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600
-              }}
-            >
-              <Square size={13} />
-              <span>CLEAR</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Station grid chips */}
+      {/* 2-Column Split Layout: Left 30% (Station Selector & Remote Fetch) | Right 70% (Metrics & Chart) */}
+      <div
+        className="neutron-split-layout"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: 20,
+          alignItems: 'flex-start',
+          width: '100%',
+          marginBottom: 24
+        }}
+      >
+        {/* LEFT COLUMN (30%): Stations Sidebar */}
         <div
-          className="station-grid-scroll"
+          className="neutron-left-col"
           style={{
-            maxHeight: 180, overflowY: 'auto',
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6,
-            padding: '4px'
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            width: '30%',
+            minWidth: 280,
+            maxWidth: 360,
+            flexShrink: 0,
+            boxSizing: 'border-box',
+            position: 'sticky',
+            top: 20
           }}
         >
-          {STATIONS.map(s => {
-            const isOn = active[s.id]
-            const color = STATION_COLORS[s.id]
-            return (
-              <button
-                key={s.id}
-                onClick={() => toggleStation(s.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '7px 10px',
-                  background: isOn
-                    ? (isLight ? `${color}18` : `${color}20`)
-                    : (isLight ? '#F8FAFC' : 'rgba(255,255,255,0.02)'),
-                  border: `1px solid ${isOn ? color : (isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)')}`,
-                  borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
-                  boxShadow: isOn && isLight ? `0 1px 4px ${color}20` : undefined
-                }}
-              >
-                <div style={{ textAlign: 'left', overflow: 'hidden' }}>
-                  <div style={{
-                    fontSize: 13,
-                    fontFamily: 'var(--font-mono)',
-                    color: isOn ? color : (isLight ? '#475569' : '#94A3B8'),
-                    fontWeight: isOn ? 800 : 500,
-                    letterSpacing: 0.5
-                  }}>
-                    {s.id}
-                  </div>
-                  <div style={{
-                    fontSize: 11,
-                    color: isLight ? '#64748B' : '#64748B',
-                    fontFamily: 'var(--font-mono)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 105
-                  }}>
-                    {s.label}
-                  </div>
-                </div>
-                <div style={{
-                  flexShrink: 0,
-                  width: 7, height: 7, borderRadius: '50%',
-                  background: isOn ? color : (isLight ? '#CBD5E1' : '#334155'),
-                  boxShadow: isOn ? `0 0 6px ${color}` : 'none',
-                  transition: 'all 0.15s',
-                }} />
-              </button>
-            )
-          })}
-        </div>
-      </div>
+          {/* Station Selector Card */}
+          <div style={{
+            background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
+            border: `1px solid ${isLight ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.08)'}`,
+            borderRadius: 8,
+            padding: '14px',
+            boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.04)' : undefined,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            {/* Header & Quick Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <span style={{
+                fontSize: 12,
+                color: isLight ? '#6D28D9' : '#C084FC',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: 0.5,
+                fontWeight: 700
+              }}>
+                STATIONS ({activeCount}/{STATIONS.length})
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {/* Multi-Select Toggle Function */}
+                <button
+                  onClick={() => setIsMultiSelect(!isMultiSelect)}
+                  title={isMultiSelect ? "Switch back to Single Select (Click station = select only that one)" : "Enable Multi-Select mode"}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 7px',
+                    background: isMultiSelect
+                      ? (isLight ? '#7C3AED' : '#9333EA')
+                      : (isLight ? '#F1F5F9' : 'rgba(255,255,255,0.06)'),
+                    border: `1px solid ${isMultiSelect ? '#7C3AED' : (isLight ? '#CBD5E1' : 'rgba(255,255,255,0.15)')}`,
+                    color: isMultiSelect ? '#FFFFFF' : (isLight ? '#475569' : '#CBD5E1'),
+                    borderRadius: 4, cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Layers size={11} />
+                  <span>{isMultiSelect ? 'MULTI ON' : '+ MULTI'}</span>
+                </button>
 
-      {/* Fetch controls */}
-      <div style={{
-        display: 'flex', gap: 14, marginBottom: 20,
-        padding: '10px 16px',
-        background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-        border: `1px solid ${isLight ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.08)'}`,
-        borderRadius: 8, flexWrap: 'wrap', alignItems: 'center',
-        boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.04)' : undefined
-      }}>
-        <span style={{
-          fontSize: 12,
-          color: isLight ? '#6D28D9' : '#C084FC',
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: 0.5,
-          fontWeight: 700
-        }}>
-          FETCH REMOTE NMDB TELEMETRY:
-        </span>
-        <select
-          value={fetchStation}
-          onChange={e => setFetchStation(e.target.value)}
-          style={{
-            background: isLight ? '#F8FAFC' : '#0F172A',
-            border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255,255,255,0.15)'}`,
-            borderRadius: 6,
-            color: isLight ? '#0F172A' : '#F8FAFC',
-            padding: '6px 12px',
-            fontFamily: 'var(--font-mono)', fontSize: 13, cursor: 'pointer'
-          }}
-        >
-          {STATIONS.map(s => <option key={s.id} value={s.id}>{s.label} ({s.id}) — {s.country}</option>)}
-        </select>
-        <select
-          value={hours}
-          onChange={e => setHours(Number(e.target.value))}
-          style={{
-            background: isLight ? '#F8FAFC' : '#0F172A',
-            border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255,255,255,0.15)'}`,
-            borderRadius: 6,
-            color: isLight ? '#0F172A' : '#F8FAFC',
-            padding: '6px 12px',
-            fontFamily: 'var(--font-mono)', fontSize: 13, cursor: 'pointer'
-          }}
-        >
-          <option value={6}>6 hours</option>
-          <option value={24}>24 hours</option>
-          <option value={72}>72 hours</option>
-          <option value={168}>7 days</option>
-        </select>
-        <button
-          onClick={fetch_}
-          disabled={fetching}
-          style={{
-            padding: '6px 16px',
-            background: isLight ? '#7C3AED' : '#C084FC',
-            border: 'none',
-            borderRadius: 6,
-            color: '#FFFFFF',
-            fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
-            cursor: fetching ? 'not-allowed' : 'pointer', opacity: fetching ? 0.6 : 1,
-            boxShadow: isLight ? '0 2px 6px rgba(124, 58, 237, 0.25)' : undefined
-          }}
-        >
-          {fetching ? 'FETCHING DATA...' : 'FETCH REMOTE'}
-        </button>
-      </div>
-
-      {/* Telemetry Metrics Strip */}
-      {activeStationList.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 12,
-          marginBottom: 20
-        }}>
-          {activeStationList.map(s => {
-            const sData = data[s.id] || []
-            const latest = sData[sData.length - 1]
-            const color = STATION_COLORS[s.id]
-            const valid = sData.filter((d: any) => d && d.count_rate > 0)
-            const base = valid.length > 0
-              ? valid.reduce((sum: number, d: any) => sum + d.count_rate, 0) / valid.length
-              : null
-            const pct = (base && latest?.count_rate)
-              ? ((latest.count_rate - base) / base) * 100
-              : null
-
-            return (
-              <div
-                key={s.id}
-                style={{
-                  padding: '12px 16px',
-                  background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-                  border: `1px solid ${isLight ? 'rgba(124, 58, 237, 0.12)' : 'rgba(255, 255, 255, 0.08)'}`,
-                  borderLeft: `4px solid ${color}`,
-                  borderRadius: 6,
-                  boxShadow: isLight ? '0 2px 6px rgba(0,0,0,0.03)' : undefined
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color, fontFamily: 'var(--font-mono)' }}>
-                    {s.id}
-                  </span>
-                  <span style={{ fontSize: 11, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                    {s.label}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
-                  <div>
-                    <span style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      fontFamily: "'Orbitron', var(--font-sans), monospace",
-                      color: isLight ? '#0F172A' : '#F8FAFC'
-                    }}>
-                      {latest?.count_rate ? latest.count_rate.toFixed(1) : '—'}
-                    </span>
-                    <span style={{ fontSize: 11, color: isLight ? '#64748B' : '#94A3B8', marginLeft: 4, fontFamily: 'var(--font-mono)' }}>
-                      counts/min
-                    </span>
-                  </div>
-                  {pct !== null && (
-                    <span style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-mono)',
-                      color: pct < -3 ? '#EF4444' : (pct > 0 ? (isLight ? '#059669' : '#34D399') : (isLight ? '#475569' : '#94A3B8'))
-                    }}>
-                      {pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Main Chart */}
-      {loading ? <LoadingSpinner /> : (
-        <Card
-          title="NEUTRON COUNT RATE — MULTI STATION VARIATION"
-          subtitle="SECONDARY NEUTRON FLUX VARIATION RELATIVE TO BASELINE (NMDB NETWORK)"
-          style={{
-            marginBottom: 20,
-            background: isLight ? '#FFFFFF' : undefined,
-            boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
-            border: isLight ? '1px solid rgba(124, 58, 237, 0.18)' : undefined,
-          }}
-        >
-          {series.length === 0 ? (
-            <div style={{ padding: '70px 20px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 14, color: isLight ? '#64748B' : '#94A3B8', letterSpacing: 0.5 }}>
-              <div style={{ color: isLight ? '#0F172A' : '#F8FAFC', marginBottom: 8, fontWeight: 700, fontSize: 16 }}>
-                NO REAL-TIME BROADCAST DATA FOR SELECTED STATION(S)
-              </div>
-              <div style={{ color: isLight ? '#64748B' : '#64748B', fontSize: 13, maxWidth: 500, margin: '0 auto' }}>
-                Please select an active station from the network list above or click "FETCH REMOTE" to poll live NMDB telemetry.
+                {/* Quick actions for multi-select */}
+                {isMultiSelect && (
+                  <>
+                    <button
+                      onClick={selectKeyStations}
+                      title="Select Key Stations"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 2,
+                        padding: '3px 6px',
+                        background: isLight ? '#F5F3FF' : 'rgba(124, 58, 237, 0.15)',
+                        border: `1px solid ${isLight ? '#DDD6FE' : 'rgba(124, 58, 237, 0.35)'}`,
+                        color: isLight ? '#6D28D9' : '#C084FC',
+                        borderRadius: 4, cursor: 'pointer',
+                        fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700
+                      }}
+                    >
+                      <Sparkles size={10} />
+                      <span>KEY</span>
+                    </button>
+                    <button
+                      onClick={selectAllStations}
+                      title="Select All"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 2,
+                        padding: '3px 6px',
+                        background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.1)'}`,
+                        color: isLight ? '#334155' : '#CBD5E1',
+                        borderRadius: 4, cursor: 'pointer',
+                        fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700
+                      }}
+                    >
+                      <CheckSquare size={10} />
+                      <span>ALL</span>
+                    </button>
+                    <button
+                      onClick={clearAllStations}
+                      title="Clear All"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 2,
+                        padding: '3px 6px',
+                        background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.1)'}`,
+                        color: isLight ? '#64748B' : '#94A3B8',
+                        borderRadius: 4, cursor: 'pointer',
+                        fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700
+                      }}
+                    >
+                      <Square size={10} />
+                      <span>CLEAR</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-          ) : (
-            <ReactECharts
-              option={option}
-              style={{ height: 520, width: '100%' }}
-              notMerge={true}
-            />
+
+            {/* Quick Search */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 10px',
+              background: isLight ? '#F8FAFC' : '#0F172A',
+              border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255,255,255,0.12)'}`,
+              borderRadius: 6
+            }}>
+              <Search size={13} style={{ color: isLight ? '#94A3B8' : '#64748B', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={stationSearch}
+                onChange={e => setStationSearch(e.target.value)}
+                placeholder="Search station or city..."
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: isLight ? '#0F172A' : '#F8FAFC',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-mono)',
+                  width: '100%'
+                }}
+              />
+            </div>
+
+            {/* Status Filter Segment Tabs (ALL / ACTIVE / OFFLINE) */}
+            <div style={{
+              display: 'flex',
+              background: isLight ? '#F1F5F9' : 'rgba(0,0,0,0.3)',
+              padding: 3,
+              borderRadius: 6,
+              border: `1px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.08)'}`,
+              gap: 3
+            }}>
+              {[
+                { key: 'active', label: 'ACTIVE', count: activeStationsTotal, color: '#10B981' },
+                { key: 'offline', label: 'OFFLINE', count: offlineStationsTotal, color: '#64748B' },
+                { key: 'all', label: 'ALL', count: STATIONS.length, color: isLight ? '#6D28D9' : '#C084FC' }
+              ].map(tab => {
+                const isSelected = statusFilter === tab.key
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setStatusFilter(tab.key as any)}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      padding: '5px 4px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-sans), system-ui, sans-serif',
+                      border: 'none',
+                      borderBottom: isSelected && !isLight ? '2px solid #C084FC' : '2px solid transparent',
+                      background: isSelected
+                        ? (isLight ? '#FFFFFF' : 'rgba(124, 58, 237, 0.25)')
+                        : 'transparent',
+                      color: isSelected
+                        ? (isLight ? '#6D28D9' : '#C084FC')
+                        : (isLight ? '#64748B' : '#94A3B8'),
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      boxShadow: isSelected && isLight ? '0 1px 3px rgba(0,0,0,0.08)' : undefined,
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <span>{tab.label}</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: 10,
+                      background: isSelected
+                        ? (isLight ? 'rgba(109, 40, 217, 0.12)' : 'rgba(192, 132, 252, 0.2)')
+                        : (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'),
+                      color: isSelected
+                        ? (isLight ? '#6D28D9' : '#E9D5FF')
+                        : (isLight ? '#64748B' : '#94A3B8')
+                    }}>
+                      {tab.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Station List */}
+            <div
+              className="station-grid-scroll"
+              style={{
+                maxHeight: 540,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 5,
+                paddingRight: 4
+              }}
+            >
+              {filteredStations.map(s => {
+                const isOn = active[s.id]
+                const color = STATION_COLORS[s.id]
+                const isStationOnline = (STATION_STATUS_MAP[s.id] || 'offline') === 'active'
+
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => handleStationClick(s.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '6px 10px',
+                      background: isOn
+                        ? (isLight ? `${color}18` : `${color}20`)
+                        : (isLight ? '#F8FAFC' : 'rgba(255,255,255,0.02)'),
+                      border: `1px solid ${isOn ? color : (isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)')}`,
+                      borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
+                      boxShadow: isOn && isLight ? `0 1px 4px ${color}20` : undefined,
+                      width: '100%'
+                    }}
+                  >
+                    <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+                      <div style={{
+                        fontSize: 12.5,
+                        fontFamily: 'var(--font-mono)',
+                        color: isOn ? color : (isLight ? '#475569' : '#94A3B8'),
+                        fontWeight: isOn ? 800 : 600,
+                        letterSpacing: 0.5
+                      }}>
+                        {s.id}
+                        <span style={{
+                          fontSize: 11,
+                          color: isLight ? '#64748B' : '#94A3B8',
+                          fontWeight: 400,
+                          marginLeft: 6
+                        }}>
+                          {s.label}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: 10.5,
+                        color: isLight ? '#94A3B8' : '#64748B',
+                        fontFamily: 'var(--font-mono)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                      }}>
+                        {s.country}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 6 }}>
+                      {/* LIVE vs OFFLINE Status Pill */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '2px 5px',
+                        borderRadius: 4,
+                        background: isStationOnline
+                          ? (isLight ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.15)')
+                          : (isLight ? 'rgba(148, 163, 184, 0.12)' : 'rgba(255, 255, 255, 0.04)'),
+                        border: `1px solid ${isStationOnline ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.2)'}`
+                      }}>
+                        <span style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: isStationOnline ? '#10B981' : '#64748B',
+                          boxShadow: isStationOnline ? '0 0 5px #10B981' : 'none'
+                        }} />
+                        <span style={{
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-mono)',
+                          color: isStationOnline ? (isLight ? '#059669' : '#34D399') : (isLight ? '#64748B' : '#94A3B8'),
+                          letterSpacing: 0.3
+                        }}>
+                          {isStationOnline ? 'LIVE' : 'OFFLINE'}
+                        </span>
+                      </div>
+
+                      {/* Active Indicator Dot (when selected) */}
+                      {isOn && (
+                        <div style={{
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: color,
+                          boxShadow: `0 0 6px ${color}`,
+                          transition: 'all 0.15s'
+                        }} />
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+              {filteredStations.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 12, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+                  No station found
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN (70%): Chart */}
+        <div
+          className="neutron-right-col"
+          style={{ flex: '1 1 0%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, boxSizing: 'border-box' }}
+        >
+          {/* Main Chart */}
+          {loading && series.length === 0 ? <LoadingSpinner /> : (
+            <Card
+              title={viewMode === 'variation' ? "NEUTRON COUNT RATE — MULTI STATION VARIATION" : "NEUTRON COUNT RATE — ABSOLUTE FLUX"}
+              subtitle="SECONDARY NEUTRON FLUX (PRESSURE CORRECTED · NMDB NETWORK)"
+              style={{
+                background: isLight ? '#FFFFFF' : undefined,
+                boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
+                border: isLight ? '1px solid rgba(124, 58, 237, 0.18)' : undefined,
+              }}
+              extra={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <ExportChartMenu
+                    chartRef={chartRef}
+                    data={exportData}
+                    columns={exportColumns}
+                    metadata={{
+                      station: 'NMDB COSMIC RAY NETWORK',
+                      viewTitle: viewMode === 'variation' ? 'MULTI-STATION RELATIVE VARIATION (%)' : 'MULTI-STATION ABSOLUTE COUNT RATE',
+                      description: 'Secondary Cosmic Ray Neutron Monitor Flux (Pressure Corrected · NMDB Worldwide Stations)',
+                      timeRangeText: exportTimeRange,
+                      totalRecords: exportData.length
+                    }}
+                    filenameBase={`NMDB_MULTI_STATION_${viewMode.toUpperCase()}_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                    accentColor={isLight ? '#7C3AED' : '#C084FC'}
+                  />
+                </div>
+              }
+            >
+              {series.length === 0 ? (
+                <div style={{ padding: '70px 20px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 14, color: isLight ? '#64748B' : '#94A3B8', letterSpacing: 0.5 }}>
+                  <div style={{ color: isLight ? '#0F172A' : '#F8FAFC', marginBottom: 8, fontWeight: 700, fontSize: 16 }}>
+                    NO REAL-TIME BROADCAST DATA FOR SELECTED STATION(S)
+                  </div>
+                  <div style={{ color: isLight ? '#64748B' : '#64748B', fontSize: 13, maxWidth: 500, margin: '0 auto' }}>
+                    Please select an active station from the network list on the left or click "FETCH" to poll live NMDB telemetry.
+                  </div>
+                </div>
+              ) : (
+                <ReactECharts
+                  ref={chartRef}
+                  key={`${viewMode}-${limit}-${appliedRange ? 'custom' : 'preset'}`}
+                  option={option}
+                  style={{ height: 530, width: '100%' }}
+                  notMerge={true}
+                  lazyUpdate={true}
+                />
+              )}
+            </Card>
           )}
-        </Card>
-      )}
+        </div>
+      </div>
 
       {/* Refined Instrument Info Guide */}
       <InstrumentInfoGuide

@@ -328,16 +328,33 @@ export default React.memo(function MoonOrbitBackground({
         const ry = 190
         const gx = EARTH_X + rx * Math.cos(goesAngle)
         const gy = CY + ry * Math.sin(goesAngle)
-        goesSatRef.current.setAttribute('transform', `translate(${gx.toFixed(2)}, ${gy.toFixed(2)})`)
+        const toEarthAngle = Math.atan2(CY - gy, EARTH_X - gx)
+        const rotateDeg = (toEarthAngle * 180) / Math.PI + 90
+        goesSatRef.current.setAttribute(
+          'transform',
+          `translate(${gx.toFixed(2)}, ${gy.toFixed(2)}) rotate(${rotateDeg.toFixed(2)})`
+        )
       }
 
-      // ISS fast LEO orbit
+      // ISS fast LEO orbit (accurately mapped to the 28° tilted ellipse)
       if (issSatRef.current) {
-        const issAngle = t * 0.22
+        const issAngle = -t * 0.18 + Math.PI * 0.35
         const rLeo = 158
-        const ix = EARTH_X + rLeo * Math.cos(issAngle)
-        const iy = CY + rLeo * Math.sin(issAngle)
-        issSatRef.current.setAttribute('transform', `translate(${ix.toFixed(2)}, ${iy.toFixed(2)}) rotate(28, ${EARTH_X}, ${CY})`)
+        const tiltRad = (28 * Math.PI) / 180
+
+        const x0 = rLeo * Math.cos(issAngle)
+        const y0 = rLeo * Math.sin(issAngle)
+
+        const ix = EARTH_X + (x0 * Math.cos(tiltRad) - y0 * Math.sin(tiltRad))
+        const iy = CY + (x0 * Math.sin(tiltRad) + y0 * Math.cos(tiltRad))
+
+        const toEarthAngle = Math.atan2(CY - iy, EARTH_X - ix)
+        const rotateDeg = (toEarthAngle * 180) / Math.PI + 90
+
+        issSatRef.current.setAttribute(
+          'transform',
+          `translate(${ix.toFixed(2)}, ${iy.toFixed(2)}) rotate(${rotateDeg.toFixed(2)})`
+        )
       }
 
       // ── 1-ROUND INTRO REVOLUTION SWEEP (360° ORBIT AROUND EARTH) ──

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveElectron, loadElectron } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -8,7 +8,10 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
-import { formatPowerOf10 } from '../../utils/formatters'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
+import { formatPowerOf10, formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 import { useTheme } from '../../context/ThemeContext'
 
 const getEnergyColor = (e: string, isLight: boolean): string => {
@@ -26,7 +29,7 @@ export default function ElectronFlux() {
   const [energies, setEnergies] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
   const chartRef = useRef<any>(null)
@@ -89,7 +92,11 @@ export default function ElectronFlux() {
     await load(false)
   }, 60000, !appliedRange)
 
+  const { minTs, maxTs } = getTimeDomain(data)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -102,15 +109,16 @@ export default function ElectronFlux() {
       axisPointer: { type: 'line', lineStyle: { color: isLight ? '#7C3AED' : '#C084FC', type: 'dashed', width: 1.5 } },
       formatter: (params: any) => {
         if (!params || !Array.isArray(params) || params.length === 0) return ''
-        const title = params[0]?.axisValueLabel || params[0]?.name || ''
-        let res = `<div style="color: ${isLight ? '#7C3AED' : '#C084FC'}; font-weight:700; margin-bottom: 6px">${title}</div>`
+        const rawTime = params[0]?.data?.[0] || params[0]?.axisValue
+        const dateStr = formatUTCTime(rawTime, true)
+        let res = `<div style="font-family:var(--font-mono);font-size:13px;color: ${isLight ? '#7C3AED' : '#C084FC'}; font-weight:700; margin-bottom: 6px">🕒 ${dateStr}</div>`
         params.forEach((p: any) => {
           if (!p || p.value === undefined || p.value === null) return
           const rawVal = Array.isArray(p.value) ? p.value[1] : p.value
           const val = (rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal)))
             ? Number(rawVal).toExponential(2)
             : 'N/A'
-          res += `<div style="display:flex; justify-content:space-between; gap:16px; margin-top:3px;">
+          res += `<div style="display:flex; justify-content:space-between; gap:16px; margin-top:3px; font-family:var(--font-mono); font-size:12px;">
                     <span style="color:${p.color}">${p.seriesName || ''}:</span>
                     <span style="font-weight:bold; color:${isLight ? '#0F172A' : '#F8FAFC'}">${val} pfu</span>
                   </div>`
@@ -118,7 +126,7 @@ export default function ElectronFlux() {
         return res
       }
     },
-    grid: { top: 35, right: 20, bottom: 30, left: 85 },
+    grid: { top: 35, right: 20, bottom: 45, left: 85 },
     dataZoom: [
       {
         type: 'inside',
@@ -133,7 +141,7 @@ export default function ElectronFlux() {
     xAxis: {
       type: 'time',
       splitLine: { show: true, lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' } },
-      axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' },
+      axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange),
       axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
     },
     yAxis: {
@@ -151,7 +159,7 @@ export default function ElectronFlux() {
       axisLabel: { color: isLight ? '#475569' : '#E2E8F0', fontSize: 13, fontFamily: 'monospace, sans-serif', formatter: formatPowerOf10 },
       axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
     },
-    series: energies.map(e => {
+    series: energies.map((e, idx) => {
       const color = getEnergyColor(e, isLight)
       return {
         name: e,
@@ -160,10 +168,28 @@ export default function ElectronFlux() {
         connectNulls: true,
         lineStyle: { width: 2.2, opacity: 1 },
         itemStyle: { color },
-        data: data.map(d => [d.time_tag, d[e]])
+        data: data.map(d => [d.time_tag, d[e]]),
+        markLine: idx === 0 ? combineMarkLines(midnightDividers) : undefined,
       }
     })
   }
+
+  const exportColumns = useMemo((): ExportColumn[] => {
+    const base: ExportColumn[] = [
+      { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+      { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') }
+    ]
+    const energyCols = energies.map(e => ({
+      key: e,
+      label: e.replace(/\s+/g, '_').replace(/>=/g, 'ge_'),
+      width: 16
+    }))
+    return [...base, ...energyCols]
+  }, [energies])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -236,11 +262,29 @@ export default function ElectronFlux() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#7C3AED' : '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#7C3AED' : '#C084FC', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={data}
+                columns={exportColumns}
+                metadata={{
+                  station: 'GOES (GEOSTATIONARY ORBIT)',
+                  viewTitle: 'GOES RELATIVISTIC ELECTRON FLUX',
+                  description: 'Radiation Belt Relativistic Electron Flux (≥800 keV, ≥2 MeV, ≥4 MeV)',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: data.length
+                }}
+                filenameBase={`GOES_ELECTRON_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#7C3AED' : '#C084FC'}
+              />
+            </div>
+          }
         >
           <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
             {energies.map(e => {
@@ -253,6 +297,7 @@ export default function ElectronFlux() {
             })}
           </div>
           <ReactECharts
+            ref={chartRef}
             option={option}
             style={{ height: 520, width: '100%' }}
             onChartReady={onChartReady}

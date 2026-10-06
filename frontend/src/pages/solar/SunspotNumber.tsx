@@ -1,21 +1,23 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
-import { loadMonthlySunspot, loadLatestSunspot, triggerFetchSunspot, SunspotRecord, SunspotLatestResponse } from '../../services/sunspotService'
+import { loadMonthlySunspot, triggerFetchSunspot, SunspotRecord } from '../../services/sunspotService'
 import { loadNeutron } from '../../services/cosmicService'
 import StatusBadge from '../../components/ui/StatusBadge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import Card from '../../components/ui/Card'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
 import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useTheme } from '../../context/ThemeContext'
-import { RefreshCw, Download, Layers } from 'lucide-react'
+import { formatPowerOf10 } from '../../utils/formatters'
+import { RefreshCw } from 'lucide-react'
 
 export default function SunspotNumber() {
   const { theme } = useTheme()
   const isLight = theme === 'light'
 
   const [data, setData] = useState<SunspotRecord[]>([])
-  const [latestStats, setLatestStats] = useState<SunspotLatestResponse | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [fetching, setFetching] = useState<boolean>(false)
   const [timeRange, setTimeRange] = useState<'10Y' | '50Y' | '100Y' | 'ALL'>('50Y')
@@ -25,8 +27,6 @@ export default function SunspotNumber() {
   const [thuleMonthlyMap, setThuleMonthlyMap] = useState<Record<string, number>>({})
   const [cosmicLoading, setCosmicLoading] = useState<boolean>(false)
   const [activeTab, setActiveTab] = useState<string>('usage')
-  const [page, setPage] = useState<number>(1)
-  const pageSize = 15
   const chartRef = useRef<any>(null)
 
   useEffect(() => {
@@ -68,12 +68,8 @@ export default function SunspotNumber() {
     else startYear = undefined
 
     try {
-      const [records, latestRes] = await Promise.all([
-        loadMonthlySunspot(startYear),
-        loadLatestSunspot()
-      ])
+      const records = await loadMonthlySunspot({ startYear })
       setData(records)
-      setLatestStats(latestRes)
     } catch (e) {
       console.error('Failed to load sunspot data:', e)
     } finally {
@@ -113,6 +109,37 @@ export default function SunspotNumber() {
     }
     return result
   }, [data, showSmooth])
+
+  const exportColumns: ExportColumn[] = useMemo(() => [
+    { key: 'time_tag', label: 'Time Tag (YYYY-MM)', width: 18 },
+    { key: 'year', label: 'Year', width: 6 },
+    { key: 'month', label: 'Month', width: 6 },
+    { key: 'fractional_year', label: 'Frac Year', width: 12, format: (v) => v != null ? Number(v).toFixed(3) : 'N/A' },
+    { key: 'sunspot_number', label: 'SSN (Total)', width: 12, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+    { key: 'ssn_smoothed', label: 'SSN (13M Smooth)', width: 16, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' },
+    { key: 'std_dev', label: 'Std Dev', width: 10, format: (v) => v != null && v >= 0 ? Number(v).toFixed(1) : 'N/A' },
+    { key: 'obs_count', label: 'Observations', width: 14 },
+    { key: 'cosmic_ray_thule', label: 'Thule CR (cts/min)', width: 18, format: (v) => v != null ? Number(v).toFixed(1) : 'N/A' }
+  ], [])
+
+  const exportData = useMemo(() => {
+    return data.map((d, i) => {
+      const ym = `${d.year}-${String(d.month).padStart(2, '0')}`
+      return {
+        ...d,
+        ssn_smoothed: smoothedData[i] ?? null,
+        cosmic_ray_thule: thuleMonthlyMap[ym] ?? null,
+      }
+    })
+  }, [data, smoothedData, thuleMonthlyMap])
+
+  const exportMetadata = useMemo(() => ({
+    station: 'WDC-SILSO / Royal Observatory of Belgium',
+    viewTitle: 'SILSO Monthly Total Sunspot Number Index',
+    description: 'International Sunspot Number (ISN v2.0) monthly mean values with standard deviations and optional cosmic ray overlay.',
+    timeRangeText: `${timeRange} (${data.length > 0 ? `${data[0].year}-${String(data[0].month).padStart(2, '0')} to ${data[data.length - 1].year}-${String(data[data.length - 1].month).padStart(2, '0')}` : 'N/A'})`,
+    totalRecords: data.length
+  }), [timeRange, data])
 
   const option = useMemo(() => {
     return {
@@ -214,7 +241,12 @@ export default function SunspotNumber() {
             lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' }
           },
           axisLine: { lineStyle: { color: isLight ? 'rgba(217,119,6,0.4)' : 'rgba(245,158,11,0.4)' } },
-          axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
+          axisLabel: {
+            color: isLight ? '#475569' : '#CBD5E1',
+            fontSize: 13,
+            fontFamily: 'var(--font-mono)',
+            formatter: scaleType === 'log' ? formatPowerOf10 : undefined
+          }
         },
         {
           type: 'value',
@@ -248,7 +280,12 @@ export default function SunspotNumber() {
           lineStyle: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', type: 'dashed' }
         },
         axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
-        axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
+        axisLabel: {
+          color: isLight ? '#475569' : '#CBD5E1',
+          fontSize: 13,
+          fontFamily: 'var(--font-mono)',
+          formatter: scaleType === 'log' ? formatPowerOf10 : undefined
+        }
       },
       series: [
         {
@@ -299,31 +336,6 @@ export default function SunspotNumber() {
     }
   }, [data, smoothedData, scaleType, showSmooth, showCosmicOverlay, thuleMonthlyMap, isLight])
 
-  const totalPages = Math.ceil(data.length / pageSize) || 1
-  const paginatedData = useMemo(() => {
-    const reversed = [...data].reverse()
-    const start = (page - 1) * pageSize
-    return reversed.slice(start, start + pageSize)
-  }, [data, page])
-
-  const exportCSV = () => {
-    if (data.length === 0) return
-    const headers = ['Year', 'Month', 'Date_Fractional', 'Sunspot_Number', 'Std_Dev', 'Obs_Count', 'Definitive']
-    const rows = data.map(d => [
-      d.year, d.month, d.fractional_year, d.sunspot_number, d.std_dev, d.obs_count, d.is_definitive ? 1 : 0
-    ].join(','))
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n')
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `SILSO_Sunspot_Data_${timeRange}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
-  const latest = latestStats?.latest
-
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
       {/* Header Bar */}
@@ -370,48 +382,6 @@ export default function SunspotNumber() {
             <span>{fetching ? 'FETCHING SILSO...' : 'REFRESH'}</span>
           </button>
         </div>
-      </div>
-
-      {/* Sunspot Metrics Strip */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 16,
-        marginBottom: 24
-      }}>
-        {[
-          { label: 'LATEST MONTHLY SSN', value: latest?.sunspot_number?.toFixed(1), unit: 'SSN', color: isLight ? '#D97706' : '#F59E0B', sub: latest ? `${latest.year}-${String(latest.month).padStart(2, '0')}` : '' },
-          { label: '12-MONTH AVERAGE', value: latestStats?.avg_12m?.toFixed(1), unit: 'SSN', color: isLight ? '#0284C7' : '#38BDF8', sub: 'Moving Avg' },
-          { label: '12-MONTH PEAK', value: latestStats?.max_12m?.toFixed(1), unit: 'SSN', color: isLight ? '#EA580C' : '#FB923C', sub: 'Solar Max Trend' },
-          { label: 'SOLAR CYCLE', value: 'CYCLE 25', unit: 'ACTIVE', color: isLight ? '#059669' : '#10B981', sub: '2019 – Present' },
-        ].map(s => (
-          <div
-            key={s.label}
-            style={{
-              padding: '14px 18px',
-              background: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.65)',
-              border: `1px solid ${isLight ? 'rgba(217, 119, 6, 0.12)' : 'rgba(255, 255, 255, 0.08)'}`,
-              borderLeft: `4px solid ${s.color}`,
-              borderRadius: 6,
-              boxShadow: isLight ? '0 2px 6px rgba(0,0,0,0.03)' : undefined
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 700, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)', letterSpacing: 0.5 }}>
-              {s.label}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Orbitron', var(--font-sans), monospace", color: s.color }}>
-                {s.value ?? '—'}
-              </span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                {s.unit}
-              </span>
-            </div>
-            <div style={{ fontSize: 11, color: isLight ? '#64748B' : '#64748B', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-              {s.sub}
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Main Chart Card */}
@@ -495,6 +465,14 @@ export default function SunspotNumber() {
                 >
                   {scaleType.toUpperCase()} SCALE
                 </button>
+                <ExportChartMenu
+                  chartRef={chartRef}
+                  data={exportData}
+                  columns={exportColumns}
+                  metadata={exportMetadata}
+                  filenameBase={`sunspot_number_${timeRange.toLowerCase()}`}
+                  accentColor={isLight ? '#D97706' : '#F59E0B'}
+                />
               </div>
             </div>
           }
@@ -502,130 +480,6 @@ export default function SunspotNumber() {
           <ReactECharts ref={chartRef} option={option} style={{ height: 520, width: '100%' }} notMerge={true} />
         </Card>
       )}
-
-      {/* Raw Data Table Card */}
-      <Card
-        title="SILSO MONTHLY DATA ARCHIVE"
-        subtitle="FILTERED RECORD ENTRIES FOR SELECTED TEMPORAL RESOLUTION"
-        style={{
-          marginBottom: 24,
-          background: isLight ? '#FFFFFF' : undefined,
-          boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
-          border: isLight ? '1px solid rgba(217, 119, 6, 0.18)' : undefined,
-        }}
-        extra={
-          <button
-            onClick={exportCSV}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '6px 12px',
-              background: isLight ? '#FEF3C7' : 'rgba(230, 126, 34, 0.15)',
-              border: `1px solid ${isLight ? '#FDE68A' : 'rgba(230, 126, 34, 0.4)'}`,
-              borderRadius: 4,
-              color: isLight ? '#B45309' : '#E67E22',
-              fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            <Download size={14} />
-            <span>EXPORT CSV</span>
-          </button>
-        }
-      >
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-mono)' }}>
-            <thead>
-              <tr style={{
-                borderBottom: `2px solid ${isLight ? '#E2E8F0' : 'rgba(255,255,255,0.1)'}`,
-                color: isLight ? '#64748B' : '#94A3B8',
-                textAlign: 'left'
-              }}>
-                <th style={{ padding: '10px 12px' }}>YEAR-MONTH</th>
-                <th style={{ padding: '10px 12px' }}>FRACTIONAL YEAR</th>
-                <th style={{ padding: '10px 12px' }}>SUNSPOT NUMBER</th>
-                <th style={{ padding: '10px 12px' }}>STD DEV (±)</th>
-                <th style={{ padding: '10px 12px' }}>OBSERVATION COUNT</th>
-                <th style={{ padding: '10px 12px' }}>STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((d, i) => (
-                <tr
-                  key={`${d.year}-${d.month}`}
-                  style={{
-                    borderBottom: `1px solid ${isLight ? '#F1F5F9' : 'rgba(255,255,255,0.04)'}`,
-                    background: i % 2 === 0 ? 'transparent' : (isLight ? '#F8FAFC' : 'rgba(255,255,255,0.015)')
-                  }}
-                >
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: isLight ? '#0F172A' : '#F8FAFC' }}>
-                    {d.year}-{String(d.month).padStart(2, '0')}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: isLight ? '#64748B' : '#94A3B8' }}>
-                    {d.fractional_year.toFixed(3)}
-                  </td>
-                  <td style={{ padding: '10px 12px', fontWeight: 800, color: isLight ? '#D97706' : '#F59E0B' }}>
-                    {d.sunspot_number.toFixed(1)}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: isLight ? '#64748B' : '#94A3B8' }}>
-                    {d.std_dev >= 0 ? `±${d.std_dev.toFixed(1)}` : '—'}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: isLight ? '#64748B' : '#94A3B8' }}>
-                    {d.obs_count > 0 ? d.obs_count : '—'}
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-                      background: d.is_definitive ? (isLight ? '#DCFCE7' : 'rgba(34, 197, 94, 0.15)') : (isLight ? '#FEF3C7' : 'rgba(245, 158, 11, 0.15)'),
-                      color: d.is_definitive ? (isLight ? '#166534' : '#4ADE80') : (isLight ? '#B45309' : '#FBBF24')
-                    }}>
-                      {d.is_definitive ? 'DEFINITIVE' : 'PROVISIONAL'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Table Pagination */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
-          <span style={{ fontSize: 12, color: isLight ? '#64748B' : '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-            Page {page} of {totalPages} ({data.length} total entries)
-          </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              style={{
-                padding: '4px 12px',
-                background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 4,
-                color: page <= 1 ? (isLight ? '#CBD5E1' : '#475569') : (isLight ? '#0F172A' : '#F8FAFC'),
-                fontFamily: 'var(--font-mono)', fontSize: 12,
-                cursor: page <= 1 ? 'not-allowed' : 'pointer'
-              }}
-            >
-              PREV
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              style={{
-                padding: '4px 12px',
-                background: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 4,
-                color: page >= totalPages ? (isLight ? '#CBD5E1' : '#475569') : (isLight ? '#0F172A' : '#F8FAFC'),
-                fontFamily: 'var(--font-mono)', fontSize: 12,
-                cursor: page >= totalPages ? 'not-allowed' : 'pointer'
-              }}
-            >
-              NEXT
-            </button>
-          </div>
-        </div>
-      </Card>
 
       {/* Refined Instrument Info Guide */}
       <InstrumentInfoGuide

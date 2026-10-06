@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { fetchAndSaveXray, loadXray } from '../../services/goesService'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -8,7 +8,10 @@ import { useAutoFetch } from '../../hooks/useAutoFetch'
 import { useChartPan } from '../../hooks/useChartPan'
 import InstrumentInfoGuide from '../../components/ui/InstrumentInfoGuide'
 import DateRangeToolbar, { TimeRange } from '../../components/ui/DateRangeToolbar'
-import { formatPowerOf10 } from '../../utils/formatters'
+import ExportChartMenu from '../../components/ui/ExportChartMenu'
+import { ExportColumn } from '../../utils/exportHelpers'
+import { formatPowerOf10, formatUTCTime } from '../../utils/formatters'
+import { createTimeAxisLabel, getMidnightTimestamps, getMidnightDividerMarkLines, combineMarkLines, getTimeDomain } from '../../utils/chartHelpers'
 import { useTheme } from '../../context/ThemeContext'
 
 // ── Flare classification ───────────────────────────────────────────
@@ -97,9 +100,10 @@ export default function XrayFlux() {
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
-  const [limit, setLimit] = useState<TimeRange>(360)
+  const [limit, setLimit] = useState<TimeRange>(1440)
   const [appliedRange, setAppliedRange] = useState<{ startDate: string; endDate: string } | null>(null)
   const [activeTab, setActiveTab] = useState('usage')
+  const chartRef = useRef(null)
 
   const [selectedClasses, setSelectedClasses] = useState<string[]>(['M', 'X'])
 
@@ -162,7 +166,11 @@ export default function XrayFlux() {
   const flareEvents = detectFlares(data, selectedClasses)
   const bandZones = getBandZones(isLight)
 
+  const { minTs, maxTs } = getTimeDomain(data)
+  const midnightDividers = getMidnightDividerMarkLines(getMidnightTimestamps(minTs, maxTs), isLight)
+
   const option = {
+    useUTC: true,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -175,8 +183,9 @@ export default function XrayFlux() {
       axisPointer: { type: 'line', lineStyle: { color: isLight ? '#1A6DB5' : '#38BDF8', type: 'dashed', width: 1.5 } },
       formatter: (params: any[]) => {
         if (!params || !params.length) return ''
-        const date = params[0].axisValueLabel || params[0].data?.[0]
-        let html = `<div style="font-size:12px;color:${isLight ? '#475569' : '#94A3B8'};margin-bottom:6px;">${date}</div>`
+        const rawTime = params[0].data?.[0] || params[0].axisValue
+        const dateStr = formatUTCTime(rawTime, true)
+        let html = `<div style="font-family:var(--font-mono);font-size:13px;color:${isLight ? '#0284C7' : '#38BDF8'};font-weight:700;margin-bottom:6px;">🕒 ${dateStr}</div>`
         params.forEach(p => {
           if (!p.seriesName.startsWith('_')) {
             const val = p.data ? (p.data[1] != null ? p.data[1].toExponential(3) : 'null') : 'null'
@@ -193,7 +202,7 @@ export default function XrayFlux() {
         return html
       }
     },
-    grid: { top: 35, right: 90, bottom: 30, left: 85 },
+    grid: { top: 35, right: 90, bottom: 45, left: 85 },
     dataZoom: [
       {
         type: 'inside',
@@ -210,7 +219,7 @@ export default function XrayFlux() {
       splitLine: { show: false },
       axisLine: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
       axisTick: { lineStyle: { color: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' } },
-      axisLabel: { color: isLight ? '#475569' : '#CBD5E1', fontSize: 13, fontFamily: 'var(--font-mono)' }
+      axisLabel: createTimeAxisLabel(isLight, limit > 1440 || !!appliedRange)
     },
     yAxis: [
       {
@@ -311,28 +320,31 @@ export default function XrayFlux() {
         markLine: {
           silent: true,
           symbol: ['none', 'none'],
-          data: BAND_LABELS.map(b => ([
-            { coord: [tStart, b.yMid], lineStyle: { opacity: 0 } },
-            {
-              coord: [tEnd, b.yMid],
-              lineStyle: { opacity: 0 },
-              label: {
-                show: true,
-                position: 'end',
-                distance: 8,
-                formatter: b.label === 'A0' ? 'A0' : `Class ${b.label}`,
-                color: b.color,
-                fontSize: 14,
-                fontFamily: 'var(--font-mono), monospace',
-                fontWeight: 700,
-                backgroundColor: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.9)',
-                borderColor: `${b.color}aa`,
-                borderWidth: 1,
-                borderRadius: 4,
-                padding: [2, 6],
+          data: [
+            ...midnightDividers,
+            ...BAND_LABELS.map(b => ([
+              { coord: [tStart, b.yMid], lineStyle: { opacity: 0 } },
+              {
+                coord: [tEnd, b.yMid],
+                lineStyle: { opacity: 0 },
+                label: {
+                  show: true,
+                  position: 'end',
+                  distance: 8,
+                  formatter: b.label === 'A0' ? 'A0' : `Class ${b.label}`,
+                  color: b.color,
+                  fontSize: 14,
+                  fontFamily: 'var(--font-mono), monospace',
+                  fontWeight: 700,
+                  backgroundColor: isLight ? '#FFFFFF' : 'rgba(15, 23, 42, 0.9)',
+                  borderColor: `${b.color}aa`,
+                  borderWidth: 1,
+                  borderRadius: 4,
+                  padding: [2, 6],
+                }
               }
-            }
-          ]))
+            ]))
+          ]
         }
       },
       {
@@ -345,6 +357,18 @@ export default function XrayFlux() {
       }
     ]
   }
+
+  const exportColumns = useMemo((): ExportColumn[] => [
+    { key: 'date', label: 'Date_UTC', width: 12, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(0, 10) : '') },
+    { key: 'time', label: 'Time_UTC', width: 10, formatter: (_: any, r?: any) => (r && r.time_tag ? r.time_tag.substring(11, 19) : '') },
+    { key: 'flux_long', label: '1-8A_Long(W/m2)', width: 18 },
+    { key: 'flux_short', label: '0.5-4A_Short(W/m2)', width: 18 },
+    { key: 'flare_class', label: 'Flare_Class', width: 14, formatter: (_: any, r?: any) => getFlareClass(r?.flux_long).label }
+  ], [])
+
+  const exportTimeRange = appliedRange
+    ? `${appliedRange.startDate} to ${appliedRange.endDate}`
+    : `Past ${limit / 1440} Day(s)`
 
   return (
     <div style={{ maxWidth: 'min(96%, 1640px)', margin: '0 auto', padding: '24px 20px 60px', width: '100%', boxSizing: 'border-box' }}>
@@ -418,11 +442,29 @@ export default function XrayFlux() {
             boxShadow: isLight ? '0 4px 20px rgba(0,0,0,0.06)' : undefined,
             border: isLight ? '1px solid rgba(26, 109, 181, 0.18)' : undefined,
           }}
-          extra={panLoading ? (
-            <span style={{ fontSize: 13, color: isLight ? '#1A6DB5' : '#3498DB', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              ◀ LOADING HISTORICAL DATA...
-            </span>
-          ) : null}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {panLoading && (
+                <span style={{ fontSize: 13, color: isLight ? '#1A6DB5' : '#3498DB', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  ◀ LOADING HISTORICAL DATA...
+                </span>
+              )}
+              <ExportChartMenu
+                chartRef={chartRef}
+                data={data}
+                columns={exportColumns}
+                metadata={{
+                  station: 'GOES (GEOSTATIONARY ORBIT)',
+                  viewTitle: 'SOLAR X-RAY FLUX',
+                  description: 'Solar X-Ray Radiation Monitor: 1-8 Å (Long) and 0.5-4 Å (Short) Flux',
+                  timeRangeText: exportTimeRange,
+                  totalRecords: data.length
+                }}
+                filenameBase={`GOES_XRAY_FLUX_${appliedRange ? `${appliedRange.startDate}_to_${appliedRange.endDate}` : `${limit / 1440}D`}`}
+                accentColor={isLight ? '#0284C7' : '#3498DB'}
+              />
+            </div>
+          }
         >
           {/* Legend & Flare Filter Control */}
           <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -509,6 +551,7 @@ export default function XrayFlux() {
             </div>
           </div>
           <ReactECharts
+            ref={chartRef}
             option={option}
             style={{ height: 560, width: '100%' }}
             onChartReady={onChartReady}

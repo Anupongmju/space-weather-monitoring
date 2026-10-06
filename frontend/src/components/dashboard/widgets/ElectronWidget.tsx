@@ -25,6 +25,7 @@ export default function ElectronWidget() {
   }, []);
 
   const option = {
+    useUTC: true,
     grid: { top: 10, right: 10, bottom: 20, left: 45 },
     xAxis: { type: 'time', splitLine, axisLabel: { color: axisLabelColor, fontSize: 12 } },
     yAxis: {
@@ -62,10 +63,10 @@ export default function ElectronWidget() {
 
   return (
     <div style={containerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div 
           onClick={() => navigate('/goes/electron')}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
           title="Click to view GOES Electron Flux details"
         >
           <span style={{ fontSize: 13, color: isLight ? '#2E5B8A' : 'var(--text-secondary, #94A3B8)', fontFamily: 'var(--font-mono)', letterSpacing: 1, fontWeight: isLight ? 600 : 400 }}>
@@ -75,7 +76,7 @@ export default function ElectronWidget() {
             DETAIL ↗
           </span>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: isLight ? '#7C3AED' : '#A855F7' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Orbitron', monospace", color: isLight ? '#7C3AED' : '#A855F7', flexShrink: 0 }}>
           {latestTwoMev != null ? `${Number(latestTwoMev).toExponential(1)}` : '—'}
         </div>
       </div>

@@ -71,18 +71,49 @@ def fetch_solar1_stis_particles():
 
     return count
 
+PROPAGATED_SOLAR_WIND_URL = "https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind.json"
+
 def fetch_solar1_swips_plasma():
     """
-    Fetches real-time SOLAR-1 / L1 SWiPS Solar Wind Plasma Data (Speed, Density, Temp).
+    Fetches real-time and 7-day SOLAR-1 / L1 SWiPS Solar Wind Plasma Data (Speed, Density, Temp).
     Inserts/updates into solar1_rtsw DB table.
     """
     count = 0
+    records_dict = {}
+
+    # 1. Fetch 7-day propagated solar wind data (fills historical gaps for 1D, 3D, 7D)
+    try:
+        r_prop = httpx.get(PROPAGATED_SOLAR_WIND_URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+        if r_prop.status_code == 200:
+            prop_data = r_prop.json()
+            if prop_data and len(prop_data) > 1:
+                for row in prop_data[1:]:
+                    try:
+                        time_tag = row[0]
+                        if not time_tag:
+                            continue
+                        if 'Z' not in time_tag and '+' not in time_tag:
+                            time_tag += 'Z'
+                        speed = float(row[1]) if row[1] is not None and 0 <= float(row[1]) < 1e8 else None
+                        density = float(row[2]) if row[2] is not None and 0 <= float(row[2]) < 1e8 else None
+                        temp = float(row[3]) if row[3] is not None and 0 <= float(row[3]) < 1e8 else None
+                        if any(v is not None for v in [speed, density, temp]):
+                            records_dict[time_tag] = (time_tag, density, speed, temp, True)
+                    except Exception:
+                        continue
+    except Exception as e:
+        print(f"[SOLAR-1 SWiPS Propagated Fetch Error]: {e}")
+
+    # 2. Fetch latest real-time 1m data (up to the current minute)
     try:
         r = httpx.get(RTSW_PLASMA_URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
         if r.status_code == 200:
             data = r.json()
-            records_dict = {}
             for d in data:
+                # Only accept records specifically from SOLAR-1 (prevents mixing with IMAP or ACE)
+                if d.get('source', '').upper() != 'SOLAR1':
+                    continue
+
                 time_tag = d.get('time_tag')
                 if not time_tag:
                     continue
@@ -102,29 +133,29 @@ def fetch_solar1_swips_plasma():
 
                 if any(v is not None for v in [speed, density, temp]):
                     records_dict[time_tag] = (time_tag, density, speed, temp, True)
-
-            records = list(records_dict.values())
-            if records:
-                conn = get_conn()
-                try:
-                    cur = conn.cursor()
-                    execute_values(cur, """
-                        INSERT INTO solar1_rtsw
-                        (time_tag, proton_density, proton_speed, proton_temperature, active)
-                        VALUES %s
-                        ON CONFLICT (time_tag) DO UPDATE SET
-                        proton_density=EXCLUDED.proton_density,
-                        proton_speed=EXCLUDED.proton_speed,
-                        proton_temperature=EXCLUDED.proton_temperature,
-                        active=EXCLUDED.active
-                    """, records)
-                    conn.commit()
-                    count = len(records)
-                    print(f"[SOLAR-1 SWiPS Fetcher] Upserted {count} records into solar1_rtsw.")
-                finally:
-                    conn.close()
     except Exception as e:
         print(f"[SOLAR-1 SWiPS Fetcher Error]: {e}")
+
+    records = list(records_dict.values())
+    if records:
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            execute_values(cur, """
+                INSERT INTO solar1_rtsw
+                (time_tag, proton_density, proton_speed, proton_temperature, active)
+                VALUES %s
+                ON CONFLICT (time_tag) DO UPDATE SET
+                proton_density=COALESCE(EXCLUDED.proton_density, solar1_rtsw.proton_density),
+                proton_speed=COALESCE(EXCLUDED.proton_speed, solar1_rtsw.proton_speed),
+                proton_temperature=COALESCE(EXCLUDED.proton_temperature, solar1_rtsw.proton_temperature),
+                active=EXCLUDED.active
+            """, records)
+            conn.commit()
+            count = len(records)
+            print(f"[SOLAR-1 SWiPS Fetcher] Upserted {count} records into solar1_rtsw.")
+        finally:
+            conn.close()
 
     return count
 
@@ -140,6 +171,10 @@ def fetch_solar1_mag():
             data = r.json()
             records_dict = {}
             for d in data:
+                # Only accept records specifically from SOLAR-1 (prevents mixing with IMAP or ACE)
+                if d.get('source', '').upper() != 'SOLAR1':
+                    continue
+
                 time_tag = d.get('time_tag')
                 if not time_tag:
                     continue

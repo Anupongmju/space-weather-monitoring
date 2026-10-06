@@ -19,15 +19,19 @@ export interface SuviWlItem {
   desc: string;
   url: string;
   temp: string;
+  posterUrl?: string;
+  fov?: string;
+  gifUrl?: string;
 }
 
 interface SuviFullscreenModalProps {
   isOpen: boolean;
   onClose: () => void;
-  source: 'sdo' | 'suvi';
-  setSource: (s: 'sdo' | 'suvi') => void;
+  source: 'sdo' | 'suvi' | 'lasco';
+  setSource: (s: 'sdo' | 'suvi' | 'lasco') => void;
   suviWavelengths: SuviWlItem[];
   sdoWavelengths: SuviWlItem[];
+  lascoWavelengths?: SuviWlItem[];
   initialWlCode?: string;
   cacheBuster: number;
 }
@@ -39,6 +43,7 @@ export default function SuviFullscreenModal({
   setSource,
   suviWavelengths,
   sdoWavelengths,
+  lascoWavelengths = [],
   initialWlCode = '171',
   cacheBuster,
 }: SuviFullscreenModalProps) {
@@ -56,7 +61,7 @@ export default function SuviFullscreenModal({
   const [isControlsOpen, setIsControlsOpen] = useState(false);
 
   // Sync active satellite list
-  const currentList = source === 'suvi' ? suviWavelengths : sdoWavelengths;
+  const currentList = source === 'suvi' ? suviWavelengths : source === 'lasco' ? lascoWavelengths : sdoWavelengths;
 
   // Sync initial code if modal is opened with a specific wavelength
   useEffect(() => {
@@ -146,20 +151,47 @@ export default function SuviFullscreenModal({
     setCount(next.length);
   };
 
-  // Preset count selection (1, 2, 4, 6)
+  // Registry of all channels across missions
+  const allAvailableItems = [
+    ...sdoWavelengths.map(w => ({ ...w, mission: 'sdo' as const })),
+    ...lascoWavelengths.map(w => ({ ...w, mission: 'lasco' as const })),
+    ...suviWavelengths.map(w => ({ ...w, mission: 'suvi' as const })),
+  ];
+
+  // Preset count selection (1, 2, 3, 4, 6)
   const applyPresetCount = (targetCount: number) => {
     setCount(targetCount);
     if (targetCount === 1) {
-      setSelectedCodes([selectedCodes[0] || currentList[0].code]);
+      setSelectedCodes([selectedCodes[0] || (source === 'lasco' ? 'c2' : source === 'suvi' ? '171' : '0171')]);
     } else if (targetCount === 2) {
-      const first2 = currentList.slice(0, 2).map(w => w.code);
-      setSelectedCodes(first2);
+      if (source === 'lasco') {
+        setSelectedCodes(['c2', 'c3']);
+      } else {
+        // SDO (or SUVI) 2 Dual: SDO + LASCO C2 side-by-side!
+        setSelectedCodes([source === 'suvi' ? '171' : '0171', 'c2']);
+      }
+    } else if (targetCount === 3) {
+      if (source === 'lasco') {
+        setSelectedCodes(['c2', 'c3', '0171']);
+      } else {
+        setSelectedCodes([source === 'suvi' ? '171' : '0171', source === 'suvi' ? '304' : '0304', 'c2']);
+      }
     } else if (targetCount === 4) {
-      const first4 = currentList.slice(0, 4).map(w => w.code);
-      setSelectedCodes(first4);
+      if (source === 'lasco') {
+        setSelectedCodes(['c2', 'c3', '0171', '0304']);
+      } else {
+        // 4 Quad: 2 SDO + 2 LASCO!
+        setSelectedCodes([source === 'suvi' ? '171' : '0171', source === 'suvi' ? '304' : '0304', 'c2', 'c3']);
+      }
     } else if (targetCount >= 6) {
-      const first6 = currentList.slice(0, Math.min(6, currentList.length)).map(w => w.code);
-      setSelectedCodes(first6);
+      if (source === 'lasco') {
+        setSelectedCodes(['c2', 'c3', '0171', '0304', '0193', '0211']);
+      } else if (source === 'suvi') {
+        setSelectedCodes(['094', '131', '171', '195', '284', '304']);
+      } else {
+        // 4 SDO + LASCO C2 + LASCO C3!
+        setSelectedCodes(['0171', '0304', '0193', '0211', 'c2', 'c3']);
+      }
     }
   };
 
@@ -169,8 +201,10 @@ export default function SuviFullscreenModal({
     setCount(1);
   };
 
-  // Active wavelength items
-  const activeItems = currentList.filter(item => selectedCodes.includes(item.code));
+  // Active wavelength items (resolved across SDO, LASCO, and SUVI)
+  const activeItems = selectedCodes
+    .map(code => allAvailableItems.find(item => item.code === code))
+    .filter(Boolean) as (SuviWlItem & { mission?: 'sdo' | 'suvi' | 'lasco' })[];
 
   // Determine grid template: seamless edge-to-edge pure black layout
   const getGridStyle = () => {
@@ -438,6 +472,26 @@ export default function SuviFullscreenModal({
               >
                 NASA SDO (9 Å)
               </button>
+              <button
+                onClick={() => {
+                  setSource('lasco');
+                  setSelectedCodes(['c2']);
+                  setCount(1);
+                }}
+                style={{
+                  padding: '5px 13px',
+                  borderRadius: 4,
+                  border: 'none',
+                  background: source === 'lasco' ? '#0284C7' : 'transparent',
+                  color: source === 'lasco' ? '#FFFFFF' : '#94A3B8',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                SOHO LASCO (C2/C3)
+              </button>
             </div>
           </div>
 
@@ -458,9 +512,22 @@ export default function SuviFullscreenModal({
             >
               {[
                 { label: '1 View', val: 1 },
-                { label: '2 Dual', val: 2 },
-                { label: '4 Quad', val: 4 },
-                { label: 'All 6', val: 6 },
+                {
+                  label: source === 'sdo' ? '2 Dual (SDO+C2)' : source === 'lasco' ? '2 Dual (C2+C3)' : '2 Dual',
+                  val: 2,
+                },
+                {
+                  label: source === 'sdo' ? '3 Triple (+C2)' : '3 Triple',
+                  val: 3,
+                },
+                {
+                  label: source === 'sdo' ? '4 Quad (SDO+LASCO)' : source === 'lasco' ? '4 Quad (LASCO+SDO)' : '4 Quad',
+                  val: 4,
+                },
+                {
+                  label: source === 'suvi' ? 'All 6 SUVI' : '6 Multi',
+                  val: 6,
+                },
               ].map(preset => (
                 <button
                   key={preset.val}
@@ -544,58 +611,168 @@ export default function SuviFullscreenModal({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#38BDF8', fontWeight: 700, letterSpacing: '0.5px' }}>
-              CHOOSE WAVELENGTHS TO DISPLAY (คลิกเพื่อเลือกแสดงแต่ละ Å):
+              CHOOSE CHANNELS TO DISPLAY (คลิกเลือกดูหลายช่องสัญญาณพร้อมกัน):
             </span>
             <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#94A3B8' }}>
-              Selected: {count} of {currentList.length} wavelengths
+              Selected: {selectedCodes.length} channels
             </span>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            {currentList.map(wl => {
-              const isSelected = selectedCodes.includes(wl.code);
-              return (
-                <button
-                  key={wl.code}
-                  onClick={() => toggleWavelength(wl.code)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    border: `1px solid ${isSelected ? wl.color : 'rgba(56, 189, 248, 0.15)'}`,
-                    background: isSelected ? `${wl.color}25` : 'rgba(8, 22, 44, 0.6)',
-                    color: isSelected ? '#FFFFFF' : '#94A3B8',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: isSelected ? `0 0 12px ${wl.color}44` : 'none',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: wl.color,
-                      boxShadow: isSelected ? `0 0 6px ${wl.color}` : 'none',
-                    }}
-                  />
-                  <span>{wl.name}</span>
-                  <span style={{ fontSize: 10, opacity: 0.75 }}>({wl.temp})</span>
-                  {isSelected && <Check size={13} strokeWidth={3} color={wl.color} />}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Primary Mission Channel Chips */}
+            <div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#38bdf8', marginBottom: 5, fontWeight: 700, letterSpacing: '0.5px' }}>
+                {source === 'sdo' ? '☀️ NASA SDO (SOLAR DISK & CORONA)' : source === 'suvi' ? '🛰️ GOES-R SUVI (SOLAR DISK)' : '🛰️ SOHO LASCO (CORONAGRAPHS)'}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(source === 'sdo' ? sdoWavelengths : source === 'suvi' ? suviWavelengths : lascoWavelengths).map(wl => {
+                  const isSelected = selectedCodes.includes(wl.code);
+                  return (
+                    <button
+                      key={wl.code}
+                      onClick={() => toggleWavelength(wl.code)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: `1px solid ${isSelected ? wl.color : 'rgba(56, 189, 248, 0.15)'}`,
+                        background: isSelected ? `${wl.color}25` : 'rgba(8, 22, 44, 0.6)',
+                        color: isSelected ? '#FFFFFF' : '#94A3B8',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: isSelected ? `0 0 12px ${wl.color}44` : 'none',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: wl.color,
+                          boxShadow: isSelected ? `0 0 6px ${wl.color}` : 'none',
+                        }}
+                      />
+                      <span>{wl.name}</span>
+                      <span style={{ fontSize: 10, opacity: 0.75 }}>({wl.temp})</span>
+                      {isSelected && <Check size={13} strokeWidth={3} color={wl.color} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Cross-Mission: SOHO LASCO Coronagraphs when in SDO or SUVI mode */}
+            {source !== 'lasco' && lascoWavelengths.length > 0 && (
+              <div style={{ paddingTop: 8, borderTop: '1px dashed rgba(56, 189, 248, 0.2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#f87171', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    🛰️ SOHO LASCO (CORONAGRAPH & CME - เลือกดูร่วมกับ {source === 'sdo' ? 'SDO' : 'SUVI'} ได้พร้อมกัน):
+                  </span>
+                  <span style={{ fontSize: 9, background: 'rgba(239, 68, 68, 0.15)', color: '#fca5a5', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(239, 68, 68, 0.3)', fontFamily: 'var(--font-mono)' }}>
+                    CROSS-MISSION
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {lascoWavelengths.map(wl => {
+                    const isSelected = selectedCodes.includes(wl.code);
+                    return (
+                      <button
+                        key={wl.code}
+                        onClick={() => toggleWavelength(wl.code)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: `1px solid ${isSelected ? wl.color : 'rgba(239, 68, 68, 0.3)'}`,
+                          background: isSelected ? `${wl.color}25` : 'rgba(30, 10, 15, 0.5)',
+                          color: isSelected ? '#FFFFFF' : '#cbd5e1',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? `0 0 12px ${wl.color}44` : 'none',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: wl.color,
+                            boxShadow: isSelected ? `0 0 6px ${wl.color}` : 'none',
+                          }}
+                        />
+                        <span>{wl.name}</span>
+                        <span style={{ fontSize: 10, opacity: 0.75 }}>({wl.temp})</span>
+                        {isSelected && <Check size={13} strokeWidth={3} color={wl.color} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Cross-Mission: NASA SDO Channels when in LASCO mode */}
+            {source === 'lasco' && sdoWavelengths.length > 0 && (
+              <div style={{ paddingTop: 8, borderTop: '1px dashed rgba(56, 189, 248, 0.2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#38bdf8', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    ☀️ NASA SDO (SOLAR DISK - เลือกดูคู่กับ LASCO CME):
+                  </span>
+                  <span style={{ fontSize: 9, background: 'rgba(56, 189, 248, 0.15)', color: '#7dd3fc', padding: '1px 6px', borderRadius: 3, border: '1px solid rgba(56, 189, 248, 0.3)', fontFamily: 'var(--font-mono)' }}>
+                    CROSS-MISSION
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {sdoWavelengths.map(wl => {
+                    const isSelected = selectedCodes.includes(wl.code);
+                    return (
+                      <button
+                        key={wl.code}
+                        onClick={() => toggleWavelength(wl.code)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: `1px solid ${isSelected ? wl.color : 'rgba(56, 189, 248, 0.2)'}`,
+                          background: isSelected ? `${wl.color}25` : 'rgba(8, 22, 44, 0.6)',
+                          color: isSelected ? '#FFFFFF' : '#cbd5e1',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? `0 0 12px ${wl.color}44` : 'none',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: wl.color,
+                            boxShadow: isSelected ? `0 0 6px ${wl.color}` : 'none',
+                          }}
+                        />
+                        <span>{wl.name}</span>
+                        <span style={{ fontSize: 10, opacity: 0.75 }}>({wl.temp})</span>
+                        {isSelected && <Check size={13} strokeWidth={3} color={wl.color} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -625,13 +802,26 @@ export default function SuviFullscreenModal({
       {/* ── 3. Solar Multi-Grid (Proportional Fit: เห็นดวงอาทิตย์ครบทั้งดวง พอดิบพอดีกับวิดีโอ) ── */}
       <div style={gridLayout}>
         {activeItems.map((wl) => {
-          const photoUrl = source === 'suvi'
-            ? `${wl.url}?t=${cacheBuster}`
-            : `https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_${wl.code}.jpg?t=${cacheBuster}`;
+          const itemMission = wl.mission || (
+            sdoWavelengths.some(s => s.code === wl.code) ? 'sdo' :
+            lascoWavelengths.some(l => l.code === wl.code) ? 'lasco' : 'suvi'
+          );
 
-          const streamVideoUrl = source === 'sdo'
+          const isItemSdo = itemMission === 'sdo';
+          const isItemLasco = itemMission === 'lasco';
+          const isItemSuvi = itemMission === 'suvi';
+
+          const photoUrl = isItemSuvi
             ? `${wl.url}?t=${cacheBuster}`
-            : `${wl.url}?t=${cacheBuster}`;
+            : isItemLasco
+              ? `${wl.posterUrl || wl.url}?t=${cacheBuster}`
+              : `https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_${wl.code}.jpg?t=${cacheBuster}`;
+
+          const streamVideoUrl = isItemSdo
+            ? `${wl.url}?t=${cacheBuster}`
+            : isItemLasco
+              ? (wl.gifUrl ? `${wl.gifUrl}?t=${cacheBuster}` : `https://soho.nascom.nasa.gov/data/LATEST/current_${wl.code}.gif?t=${cacheBuster}`)
+              : `${wl.url}?t=${cacheBuster}`;
 
           return (
             <div
@@ -667,6 +857,33 @@ export default function SuviFullscreenModal({
                   boxShadow: '0 4px 15px rgba(0, 0, 0, 0.7)',
                 }}
               >
+                {/* Mission Badge */}
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: isItemSdo
+                      ? 'rgba(56, 189, 248, 0.18)'
+                      : isItemLasco
+                        ? 'rgba(239, 68, 68, 0.2)'
+                        : 'rgba(34, 197, 94, 0.2)',
+                    color: isItemSdo ? '#38bdf8' : isItemLasco ? '#f87171' : '#4ade80',
+                    border: `1px solid ${
+                      isItemSdo
+                        ? 'rgba(56, 189, 248, 0.4)'
+                        : isItemLasco
+                          ? 'rgba(239, 68, 68, 0.4)'
+                          : 'rgba(34, 197, 94, 0.4)'
+                    }`,
+                    fontFamily: "'Orbitron', monospace",
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  {isItemSdo ? 'SDO' : isItemLasco ? 'LASCO' : 'SUVI'}
+                </span>
+
                 <span
                   style={{
                     width: 7,
@@ -720,8 +937,8 @@ export default function SuviFullscreenModal({
                 )}
               </div>
 
-              {/* Media Content: Proportional fit (พอดีกับวิดีโอ ไม่โดนตัดขอบ) */}
-              {displayMode === 'stream' && source === 'sdo' ? (
+              {/* Media Content: Proportional fit (SDO streams MP4, LASCO streams GIF loop, Photo displays HD still) */}
+              {displayMode === 'stream' && isItemSdo ? (
                 <video
                   key={`${wl.code}-${cacheBuster}`}
                   src={streamVideoUrl}
@@ -742,7 +959,7 @@ export default function SuviFullscreenModal({
                 />
               ) : (
                 <img
-                  src={photoUrl}
+                  src={displayMode === 'stream' && isItemLasco ? streamVideoUrl : photoUrl}
                   alt={`${wl.name} Solar Corona`}
                   style={{
                     width: '100%',

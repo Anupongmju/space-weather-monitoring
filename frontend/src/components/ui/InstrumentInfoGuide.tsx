@@ -12,7 +12,7 @@ interface InstrumentInfoGuideProps {
   onTabChange: (tabId: string) => void;
   tabs?: TabItem[];
   accentColor?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const DEFAULT_TABS: TabItem[] = [

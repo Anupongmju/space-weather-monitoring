@@ -68,11 +68,16 @@ export const fetchAllCosmic = (): Promise<any> =>
   fetch(`${BASE}/fetch`, { method: 'POST' }).then(r => r.json())
 
 // ── Load from SQLite ──
-export const loadNeutron = (station = 'OULU', limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
+export const loadNeutron = async (station = 'OULU', limit = 1440, startDate?: string, endDate?: string): Promise<any[]> => {
   const url = (startDate && endDate)
     ? `${BASE}/neutron?station=${encodeURIComponent(station)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`
     : `${BASE}/neutron?station=${encodeURIComponent(station)}&limit=${limit}`
-  return fetch(url).then(r => r.json())
+  const r = await fetch(url)
+  if (!r.ok) {
+    const text = await r.text().catch(() => '')
+    throw new Error(`HTTP ${r.status}: ${text || r.statusText}`)
+  }
+  return r.json()
 }
 
 
@@ -92,5 +97,40 @@ export const loadNeutronWithFallback = async (
     }
   }
   return { station: stations[0], data: [] }
+}
+
+export interface GLE77TimelinePayload {
+  window: number;
+  stations: string[];
+  timestamps: string[];
+  data: number[][];
+  stats: {
+    totalFrames: number;
+    startTime: string;
+    endTime: string;
+    peakTime: string;
+    peakStation: string;
+    peakValue: number;
+    peakFrame: number;
+  };
+}
+
+export const loadGLE77Timeline = async (window: 10 | 20 | 30 = 10): Promise<GLE77TimelinePayload> => {
+  // First attempt backend API
+  try {
+    const res = await fetch(`${BASE}/gle77/timeline?window=${window}`)
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch (err) {
+    console.warn(`[cosmicService] Backend timeline fetch failed, falling back to static json:`, err)
+  }
+
+  // Fallback to precomputed static file
+  const fallbackRes = await fetch(`/data/gle77_${window}m.json`)
+  if (!fallbackRes.ok) {
+    throw new Error(`Failed to load GLE77 timeline for window ${window}m`)
+  }
+  return fallbackRes.json()
 }
 

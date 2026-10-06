@@ -127,6 +127,69 @@ const css = `
     transform: translateY(0);
     background: rgba(239, 68, 68, 0.95);
   }
+
+  .dashboard-hero {
+    position: relative;
+    min-height: calc(100vh - 60px);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    overflow: hidden;
+    pointer-events: none;
+    padding: 30px 16px 50px;
+    box-sizing: border-box;
+  }
+  @media (max-height: 800px) {
+    .dashboard-hero {
+      min-height: 580px;
+      padding: 20px 16px 36px;
+    }
+  }
+
+  .dashboard-section {
+    width: 100%;
+    padding: 50px 5vw;
+    position: relative;
+    z-index: 10;
+    box-sizing: border-box;
+    transition: background-color 0.3s ease;
+  }
+  @media (max-width: 1536px) {
+    .dashboard-section {
+      padding: 36px 24px;
+    }
+  }
+  @media (max-width: 768px) {
+    .dashboard-section {
+      padding: 24px 12px;
+    }
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 68fr) minmax(0, 32fr);
+    gap: 24px;
+  }
+  @media (max-width: 1200px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+  }
+
+  .telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  @media (max-width: 640px) {
+    .telemetry-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 `
 
 import OrbitBackground from '../components/space/OrbitBackground'
@@ -300,18 +363,10 @@ export default function Dashboard() {
       <style>{css}</style>
 
       {/* ── Hero with Orbit Background ── */}
-      <section style={{
-        position: 'relative',
-        minHeight: '100vh',
-        width: '100%',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        background: 'transparent', overflow: 'hidden',
-        pointerEvents: 'none',
-      }}>
+      <section className="dashboard-hero">
 
         {/* Text content */}
-        <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 32px', pointerEvents: 'auto' }} className="fadein">
+        <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 16px', pointerEvents: 'auto' }} className="fadein">
 
           {/* Badge */}
           <div style={{
@@ -331,7 +386,7 @@ export default function Dashboard() {
           {/* Title */}
           <div style={{ marginBottom: 12 }}>
             <h1 style={{
-              fontSize: 'clamp(40px, 8vw, 80px)',
+              fontSize: 'clamp(36px, 6vw, 80px)',
               fontWeight: 800, letterSpacing: '-0.04em',
               color: 'white', margin: 0, lineHeight: 1,
               fontFamily: 'var(--font-sans)',
@@ -340,7 +395,7 @@ export default function Dashboard() {
               SPACE WEATHER
             </h1>
             <h1 className="shimmer-text" style={{
-              fontSize: 'clamp(28px, 5vw, 52px)',
+              fontSize: 'clamp(24px, 4vw, 52px)',
               fontWeight: 800, letterSpacing: '-0.03em',
               margin: 0, lineHeight: 1.1,
               fontFamily: 'var(--font-sans)',
@@ -351,9 +406,9 @@ export default function Dashboard() {
 
           {/* Subtitle */}
           <p style={{
-            fontSize: 13, color: 'rgba(255,255,255,0.35)',
-            letterSpacing: 4, textTransform: 'uppercase',
-            fontFamily: 'var(--font-mono)', marginBottom: 20,
+            fontSize: 12, color: 'rgba(255,255,255,0.35)',
+            letterSpacing: 3, textTransform: 'uppercase',
+            fontFamily: 'var(--font-mono)', marginBottom: 16,
           }}>
             ACE · GOES · COSMIC RAY
           </p>
@@ -387,13 +442,13 @@ export default function Dashboard() {
       </section>
 
       {/* ── Dashboard Content ── */}
-      <section style={{
-        width: '100%', padding: '60px 5vw', position: 'relative', zIndex: 10,
-        background: isLight ? 'var(--bg-base, #EEF4FB)' : '#03060C',
-        borderTop: 'none',
-        boxSizing: 'border-box',
-        transition: 'background-color 0.3s ease',
-      }}>
+      <section
+        className="dashboard-section"
+        style={{
+          background: isLight ? 'var(--bg-base, #EEF4FB)' : '#03060C',
+          borderTop: 'none',
+        }}
+      >
         {/* ── TOP SEAM FADE DOWN: Deep orbit dark fades DOWN into dashboard (54px) ── */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
@@ -415,7 +470,7 @@ export default function Dashboard() {
               Live <em style={{ color: 'var(--primary, #3498DB)', fontStyle: 'normal' }}>sensor</em> readings.
             </h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 7fr) minmax(0, 3fr)', gap: '30px' }}>
+          <div className="dashboard-grid">
             <LeftColumn />
             <RightColumn />
           </div>

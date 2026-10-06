@@ -1,0 +1,16 @@
+{
+  "system_telemetry": "SYSTEM TELEMETRY",
+  "realtime_sensor_data": "REAL-TIME SENSOR DATA",
+  "solar_imagery": "SOLAR IMAGERY",
+  "quick_facts": "QUICK FACTS & SUMMARY",
+  "widgets": {
+    "mag": "ACE Magnetic Field (B_z)",
+    "swepam": "ACE Solar Wind Speed",
+    "proton": "GOES High-Energy Protons",
+    "cosmic": "Cosmic Ray Intensity",
+    "xray": "Solar X-ray Flux",
+    "electron": "Relativistic Electrons",
+    "kp": "Geomagnetic Kp Index",
+    "thule": "Thule Riometer Absorption"
+  }
+}
